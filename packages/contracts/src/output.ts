@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SETUP_WARNINGS } from './settings.js';
 import {
   IdSchema,
   IsoDateSchema,
@@ -52,6 +53,7 @@ const organizerShape = {
   }),
   /** Masked organizer plays with participant parity; null if not bound to a roster entry. */
   me: MeSchema.nullable(),
+  warnings: z.array(z.enum(SETUP_WARNINGS)),
 };
 
 export const ParticipantEventStateSchema = z.strictObject({

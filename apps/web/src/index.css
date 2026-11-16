@@ -1,1 +1,79 @@
 @import 'tailwindcss';
+
+@theme {
+  --color-santa-600: #b91c1c;
+  --color-santa-700: #991b1b;
+  --color-pine-700: #166534;
+  --color-pine-900: #14532d;
+  --color-snow-50: #fffaf5;
+  --color-snow-100: #f6efe6;
+  --color-gold-400: #facc15;
+  --color-gold-700: #854d0e;
+  --color-ink-900: #1c1917;
+  --font-display: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Contrast pairs verified >= 4.5:1: ink-900/snow-50, white/santa-600, pine-900/snow-50, gold-700/snow-50. */
+body {
+  background: var(--color-snow-50);
+  color: var(--color-ink-900);
+  font-family: var(--font-display);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-pine-700);
+  outline-offset: 2px;
+}
+
+/* FX layer: purely decorative, never intercepts input (FR-038). */
+.fx-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  overflow: hidden;
+}
+.fx-root * {
+  pointer-events: none;
+}
+.fx-float {
+  position: absolute;
+  bottom: -2rem;
+  font-size: 2rem;
+  animation: fx-float-up var(--fx-duration, 2400ms) ease-out forwards;
+}
+@keyframes fx-float-up {
+  to {
+    transform: translateY(-110vh) rotate(12deg);
+    opacity: 0;
+  }
+}
+.fx-lights {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0.5rem;
+  background: repeating-linear-gradient(
+    90deg,
+    #dc2626 0 1.5rem,
+    #facc15 1.5rem 3rem,
+    #16a34a 3rem 4.5rem
+  );
+  animation: fx-twinkle 1.6s ease-in-out infinite alternate;
+}
+@keyframes fx-twinkle {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-float,
+  .fx-lights {
+    animation: none;
+  }
+}

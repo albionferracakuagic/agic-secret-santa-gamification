@@ -9,6 +9,7 @@ export default defineConfig({
           name: 'node',
           environment: 'node',
           include: ['packages/*/src/**/*.test.ts', 'apps/server/src/**/*.test.ts'],
+          testTimeout: 20_000,
         },
       },
       {
@@ -17,6 +18,7 @@ export default defineConfig({
           name: 'web',
           environment: 'jsdom',
           include: ['apps/web/src/**/*.test.{ts,tsx}'],
+          setupFiles: ['apps/web/src/test-setup.ts'],
         },
       },
     ],

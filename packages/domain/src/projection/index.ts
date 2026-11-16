@@ -17,6 +17,7 @@ import {
 } from './sources.js';
 
 import { levelFromXp } from '../xp.js';
+import { setupWarnings } from '../phases.js';
 
 export interface EventStateInput {
   event: EventSource;
@@ -81,6 +82,7 @@ export function projectEventState(
     },
     milestones: { ...e.milestones },
     me: me(input, viewer.participantId),
+    warnings: setupWarnings(input.participants.filter((p) => p.status !== 'removed').length),
   };
   if (viewer.role === 'organizer_masked') return { ...base, role: 'organizer_masked', organizer };
   const grant = assertActiveGrant(viewer, now);

@@ -5,8 +5,8 @@ type RouteKey = 'organizer' | 'participant' | 'display' | 'join';
 export function Placeholder({ routeKey }: { routeKey: RouteKey }) {
   const { t } = useTranslation();
   return (
-    <main className="p-4">
+    <section className="p-4">
       <h1 className="text-xl font-semibold">{t(`route.${routeKey}`)}</h1>
-    </main>
+    </section>
   );
 }

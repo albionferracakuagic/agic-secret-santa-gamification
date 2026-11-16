@@ -20,15 +20,19 @@ declare module 'fastify' {
 export interface AuthModule {
   auth: Auth;
   organizerSessions: OrganizerSessions;
+  /** Which social sign-in buttons the web app may show (derived from env credentials). */
+  providers: { google: boolean; microsoft: boolean };
 }
 
 export function createAuthModule(
   auth: Auth,
   db: Db,
   clock: () => Date = () => new Date(),
+  providers: AuthModule['providers'] = { google: false, microsoft: false },
 ): AuthModule {
   return {
     auth,
+    providers,
     organizerSessions: {
       async fromCookieHeader(header) {
         if (!header) return null;
@@ -80,6 +84,8 @@ export function registerAuthRoutes(app: FastifyInstance, mod: AuthModule) {
       return reply.send(response.body ? await response.text() : null);
     },
   });
+
+  app.get('/api/config', async () => ({ providers: mod.providers }));
 
   app.get('/api/organizer/me', { preHandler: requireOrganizer(mod) }, async (req) => ({
     userId: req.organizer!.userId,

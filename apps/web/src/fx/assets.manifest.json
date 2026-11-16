@@ -1,0 +1,53 @@
+{
+  "$comment": "Every FX asset must be procedurally generated in code or CC0. No third-party/copyrighted media.",
+  "assets": [
+    {
+      "id": "sfx.bell",
+      "type": "audio",
+      "source": "procedural: fx/audio.ts SFX_DEFS.bell",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "sfx.chime",
+      "type": "audio",
+      "source": "procedural: fx/audio.ts SFX_DEFS.chime",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "sfx.whoosh",
+      "type": "audio",
+      "source": "procedural: fx/audio.ts SFX_DEFS.whoosh",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "sfx.sparkle",
+      "type": "audio",
+      "source": "procedural: fx/audio.ts SFX_DEFS.sparkle",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "music.arpeggio",
+      "type": "audio",
+      "source": "procedural: fx/audio.ts MUSIC_DEF (original pentatonic arpeggio)",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "visual.emoji",
+      "type": "glyphs",
+      "source": "Unicode emoji rendered by the OS font; no image files shipped",
+      "license": "n/a (system font)"
+    },
+    {
+      "id": "visual.confetti",
+      "type": "library",
+      "source": "canvas-confetti (ISC)",
+      "license": "ISC"
+    },
+    {
+      "id": "visual.snow-lights",
+      "type": "code",
+      "source": "canvas + CSS gradients in fx/host.ts and index.css",
+      "license": "CC0-1.0"
+    }
+  ]
+}

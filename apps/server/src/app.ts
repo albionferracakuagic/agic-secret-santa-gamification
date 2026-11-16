@@ -9,6 +9,7 @@ import { DbPrincipalStore, type OrganizerSessions } from './principal.js';
 import { RealtimeHub, type HubOptions, type SnapshotProvider } from './realtime/hub.js';
 import { DbSnapshotProvider } from './realtime/snapshots.js';
 import { registerAuthRoutes, type AuthModule } from './auth/routes.js';
+import { registerOrganizerRoutes } from './routes/organizer.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -85,6 +86,17 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     });
     hub.attach(app.server);
     app.decorate('hub', hub);
+    const sessions = opts.auth?.organizerSessions ?? opts.organizerSessions;
+    if (sessions) {
+      registerOrganizerRoutes(app, {
+        db: opts.db,
+        sessions,
+        principals,
+        hub,
+        guardEnv,
+        clock: opts.clock ?? (() => new Date()),
+      });
+    }
     app.addHook('preClose', async () => {
       hub.io.local.disconnectSockets(true);
     });

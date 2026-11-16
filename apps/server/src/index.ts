@@ -25,19 +25,26 @@ async function connect(): Promise<Db> {
 }
 
 const db = await connect();
+const social = socialFromEnv(env);
 const auth = createAuth({
   db,
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET ?? 'dev-only-secret-dev-only-secret-0000',
   email: new ConsoleEmailTransport(),
-  ...socialFromEnv(env),
+  ...social,
 });
-const app = buildApp({ db, auth: createAuthModule(auth, db) });
+const app = buildApp({
+  db,
+  auth: createAuthModule(auth, db, undefined, {
+    google: !!social.google,
+    microsoft: !!social.microsoft,
+  }),
+});
 
 const runner = new JobRunner(db, {
   onError: (job, err) => console.error('job failed', job.kind, err),
 });
-registerRealtimeJobs(runner, app.hub!);
+registerRealtimeJobs(runner, app.hub!, db);
 
 try {
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
