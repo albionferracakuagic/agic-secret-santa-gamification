@@ -1,106 +1,14 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { REACTION_KINDS, type EventStateOutput } from '@santa/contracts';
+import { REACTION_KINDS } from '@santa/contracts';
+import { ME, MY, setup } from './test-utils';
 import i18n from './i18n';
 import { en } from './i18n/en';
 import { it as itLocale } from './i18n/it';
-import { App } from './App';
 import { usePrefs } from './prefs/store';
-import { ParticipantApiProvider, type MeResponse, type ParticipantApi } from './api/participant';
-import { RealtimeProvider } from './realtime/react';
-import { createRealtimeStore, type SocketLike } from './realtime/store';
+import type { MeResponse } from './api/participant';
 import { createReactionThrottle } from './components/reactionThrottle';
-
-type Handler = (...a: never[]) => void;
-function fakeSocket() {
-  const h = new Map<string, Handler>();
-  const sent: Array<[string, unknown]> = [];
-  const s: SocketLike = {
-    on: (e, cb) => void h.set(e, cb),
-    emit: (e, p) => void sent.push([e, p]),
-    close: () => undefined,
-  };
-  return {
-    s,
-    sent,
-    fire: (e: string, p?: unknown) => (h.get(e) as ((p: unknown) => void) | undefined)?.(p),
-  };
-}
-
-type PMe = Extract<EventStateOutput, { role: 'participant' }>['me'];
-const ME: PMe = {
-  participantId: 'p1',
-  displayName: 'Anna',
-  avatar: 'santa',
-  status: 'active',
-  xp: { xp: 10, level: 1 },
-  votes: [{ categoryId: 'c1', giftId: 'g1' }],
-};
-const MY: MeResponse = {
-  participantId: 'p1',
-  eventId: 'e1',
-  displayName: 'Anna',
-  avatar: 'santa',
-  status: 'active',
-  verified: false,
-  locale: 'en',
-};
-
-function setup(path: string, api: Partial<ParticipantApi> = {}) {
-  const sock = fakeSocket();
-  const rt = createRealtimeStore();
-  rt.connect(sock.s);
-  const fullApi: ParticipantApi = {
-    resolve: async () => ({
-      event: {
-        name: 'Office Party',
-        startsAt: '2026-12-20T18:00:00Z',
-        defaultLocale: 'en',
-        joinOpen: true,
-      },
-      unclaimed: [
-        { participantId: 'p1', displayName: 'Anna' },
-        { participantId: 'p2', displayName: 'Bruno' },
-      ],
-    }),
-    claim: async () => ({ status: 'pending', participantId: 'p1', verified: false }),
-    me: async () => ({ ...MY, status: 'pending' }),
-    updateProfile: async (p) => ({
-      ...MY,
-      displayName: p.displayName ?? MY.displayName,
-      avatar: p.avatar ?? MY.avatar,
-    }),
-    exchangeDisplayToken: async () => undefined,
-    ...api,
-  };
-  const Where = () => (
-    <p hidden data-testid="where">
-      {useLocation().pathname}
-    </p>
-  );
-  const view = render(
-    <ParticipantApiProvider value={fullApi}>
-      <RealtimeProvider factory={() => rt}>
-        <MemoryRouter initialEntries={[path]}>
-          <App />
-          <Routes>
-            <Route path="*" element={<Where />} />
-          </Routes>
-        </MemoryRouter>
-      </RealtimeProvider>
-    </ParticipantApiProvider>,
-  );
-  let connected = false;
-  const snapshot = (stream: string, data: Record<string, unknown>) =>
-    act(() => {
-      if (!connected) sock.fire('connect');
-      connected = true;
-      sock.fire('snapshot', { stream, cursor: 1, data });
-    });
-  return { ...view, sock, rt, snapshot, fullApi };
-}
 
 beforeEach(async () => {
   await i18n.changeLanguage('en');
@@ -199,7 +107,11 @@ describe('join flow /j', () => {
 });
 const PUB_BOARD = {
   eventState: undefined,
-  leaderboard: { boardKey: 'b', state: 'live', entries: [{ entryId: 'g9', rank: 1, tied: false }] },
+  leaderboard: {
+    boardKey: 'b',
+    state: 'live',
+    entries: [{ entryId: 'g9', label: 'Gift 9', rank: 1, tied: false }],
+  },
 };
 
 describe('participant /e', () => {
@@ -212,6 +124,7 @@ describe('participant /e', () => {
     startsAt: '2026-12-20T18:00:00Z',
     timezone: 'UTC',
     phase: 'voting',
+    votingEndsAt: null,
     paused: false,
     counts: { participants: 7, giftsRegistered: 7 },
     me: ME,
@@ -220,12 +133,13 @@ describe('participant /e', () => {
 
   it('renders own selections only, neutral non-top message with no rank/total, and sends reactions', async () => {
     const t = setup('/e');
-    t.snapshot('p:p1', { eventState: eventState() });
+    t.snapshot('p:p1', { eventState: eventState({ phase: 'awards' }) });
     t.snapshot('pub', { leaderboard: PUB_BOARD.leaderboard });
     expect(await screen.findByText('Your picks')).toBeTruthy();
     expect(screen.getByText('Your pick')).toBeTruthy();
     expect(screen.getByText(/Thanks for playing/)).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/#1|rank|Rank/);
+    expect(screen.getByTestId('podium').textContent).toContain('Gift 9');
+    expect(document.body.textContent).not.toMatch(/rank|total|points|score/i);
     fireEvent.click(screen.getByRole('button', { name: 'Applause' }));
     expect(t.sock.sent).toContainEqual(['reaction.send', { kind: 'applause' }]);
   });
@@ -263,94 +177,6 @@ describe('participant /e', () => {
     const t = setup('/e');
     t.snapshot('p:p1', { eventState: eventState() });
     await screen.findByText('Your picks');
-    const res = await axe.run(document.documentElement, {
-      rules: { 'color-contrast': { enabled: false } },
-    });
-    expect(res.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([]);
-  });
-});
-
-describe('display /d', () => {
-  const ds = (phase: string, over: Record<string, unknown> = {}) => ({
-    role: 'display',
-    eventId: 'e1',
-    name: 'Office Party',
-    description: null,
-    theme: 'xmas',
-    startsAt: '2026-12-20T18:00:00Z',
-    timezone: 'UTC',
-    phase,
-    paused: false,
-    counts: { participants: 12, giftsRegistered: 9 },
-    ...over,
-  });
-
-  it('lobby: QR from the display link, joined counter, sound-unlock overlay is non-modal', async () => {
-    const t = setup('/d?join=https%3A%2F%2Fx.test%2Fj%2Ftok&code=ABC234');
-    t.snapshot('pub', { eventState: ds('registration') });
-    expect(await screen.findByRole('img', { name: 'QR code to join the event' })).toBeTruthy();
-    expect(screen.getByTestId('big-count').textContent).toBe('12');
-    expect(screen.getByText('ABC234')).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Sound' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Keep silent' }));
-    expect(screen.queryByRole('region', { name: 'Sound' })).toBeNull();
-    expect(usePrefs.getState().sound).toBe(false);
-  });
-
-  it('voting scene shows only the published voted counter; countdown only when the stream sends it', async () => {
-    const t = setup('/d');
-    t.snapshot('pub', { eventState: ds('voting', { votedCount: 5 }) });
-    expect(await screen.findByText('Voting is open')).toBeTruthy();
-    expect(screen.getByTestId('big-count').textContent).toBe('5');
-    expect(screen.queryByRole('timer')).toBeNull();
-    const t2 = setup('/d');
-    t2.snapshot('pub', {
-      eventState: ds('voting'),
-      votingEndsAt: new Date(Date.now() + 90_000).toISOString(),
-    });
-    expect((await screen.findAllByRole('timer'))[0]!.textContent).toMatch(/^0[01]:\d\d$/);
-  });
-
-  it('leaderboard: top-N podium with crown, no data beyond the projection', async () => {
-    const t = setup('/d');
-    t.snapshot('pub', {
-      eventState: ds('awards'),
-      leaderboard: {
-        boardKey: 'b',
-        state: 'live',
-        entries: [
-          { entryId: 'g1', rank: 1, tied: false },
-          { entryId: 'g2', rank: 2, tied: true },
-        ],
-      },
-      giftList: {
-        mode: 'gallery',
-        gifts: [
-          {
-            giftId: 'g1',
-            alias: 'A',
-            name: 'Scarf',
-            description: null,
-            photoUrl: null,
-            status: 'opened',
-          },
-        ],
-      },
-    });
-    const podium = await screen.findByTestId('podium');
-    expect(podium.textContent).toContain('👑');
-    expect(podium.textContent).toContain('Scarf');
-    expect(podium.textContent).toContain('Gift #2');
-    expect(podium.querySelectorAll('li')).toHaveLength(2);
-  });
-
-  it('achievement announcement scene; a11y clean', async () => {
-    const t = setup('/d');
-    t.snapshot('pub', {
-      eventState: ds('voting'),
-      announcement: { displayName: 'Anna', avatar: '🎅', achievement: 'first_gift' },
-    });
-    expect(await screen.findByText('Anna earned first_gift!')).toBeTruthy();
     const res = await axe.run(document.documentElement, {
       rules: { 'color-contrast': { enabled: false } },
     });

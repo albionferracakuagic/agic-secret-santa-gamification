@@ -45,11 +45,61 @@ function fakeApi(over: Partial<OrganizerApi> = {}): OrganizerApi {
     approve: vi.fn(async () => undefined),
     setReactionsEnabled: vi.fn(async () => undefined),
     muteParticipant: vi.fn(async () => undefined),
+    openingState: vi.fn(async () => ({
+      mode: 'random' as const,
+      openedCount: 0,
+      total: 3,
+      currentGiftId: null,
+      allOpened: false,
+    })),
+    openingNext: vi.fn(async () => ({
+      mode: 'random' as const,
+      openedCount: 1,
+      total: 3,
+      currentGiftId: 'g1',
+      allOpened: false,
+    })),
+    openingOrder: vi.fn(async () => ({
+      mode: 'manual' as const,
+      openedCount: 0,
+      total: 3,
+      currentGiftId: null,
+      allOpened: false,
+    })),
+    listGifts: async () => [
+      {
+        giftId: 'g1',
+        alias: 'Gift 1',
+        name: 'Scarf',
+        description: null,
+        photoUrl: null,
+        status: 'registered' as const,
+        hidden: false,
+      },
+      {
+        giftId: 'g2',
+        alias: 'Gift 2',
+        name: 'Mug',
+        description: null,
+        photoUrl: null,
+        status: 'registered' as const,
+        hidden: false,
+      },
+    ],
+    openVoting: vi.fn(async () => ({
+      status: 'open' as const,
+      endsAt: null,
+      votedCount: null,
+      categories: [],
+    })),
+    closeVoting: vi.fn(async () => ({ categoriesLocked: 2, categoriesPublishable: 1 })),
+    revealGift: vi.fn(async () => undefined),
+    revealAll: vi.fn(async () => ({ revealed: 2 })),
     ...over,
   };
 }
 
-function mount(org: OrganizerApi) {
+function mount(org: OrganizerApi, phase = 'registration') {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -60,7 +110,7 @@ function mount(org: OrganizerApi) {
               role: 'organizer_masked',
               eventState: {
                 name: 'Office Party',
-                phase: 'registration',
+                phase,
                 paused: false,
                 counts: { participants: 3, giftsRegistered: 0 },
                 organizer: {
@@ -183,6 +233,48 @@ describe('organizer console: approvals and reactions', () => {
       rules: { 'color-contrast': { enabled: false } },
     });
     expect(res.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([]);
+  });
+});
+
+describe('organizer console: opening, voting, reveal', () => {
+  it('opening: next gift, progress, manual order saved as a permutation of unopened gifts', async () => {
+    const org = fakeApi();
+    mount(org, 'gift_opening');
+    expect(await screen.findByText('0 of 3 gifts opened')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open next gift' }));
+    await waitFor(() => expect(org.openingNext).toHaveBeenCalledWith('e1'));
+    fireEvent.click(screen.getByLabelText('Manual order'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Move down Gift 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
+    await waitFor(() =>
+      expect(org.openingOrder).toHaveBeenCalledWith('e1', { mode: 'manual', order: ['g2', 'g1'] }),
+    );
+  });
+
+  it('voting: opens with a timer from the opening phase', async () => {
+    const org = fakeApi();
+    mount(org, 'gift_opening');
+    fireEvent.change(await screen.findByLabelText('Voting time (minutes)'), {
+      target: { value: '15' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open voting' }));
+    await waitFor(() => expect(org.openVoting).toHaveBeenCalledWith('e1', 15));
+  });
+
+  it('voting: closes and reports locked/publishable categories', async () => {
+    const org = fakeApi();
+    mount(org, 'voting');
+    fireEvent.click(await screen.findByRole('button', { name: 'Close voting' }));
+    expect(await screen.findByText('2 categories locked, 1 can be published.')).toBeTruthy();
+  });
+
+  it('reveal: per gift and all at once, aliases only', async () => {
+    const org = fakeApi();
+    mount(org, 'reveal');
+    fireEvent.click(await screen.findByRole('button', { name: 'Reveal giver Gift 1' }));
+    await waitFor(() => expect(org.revealGift).toHaveBeenCalledWith('e1', 'g1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal all givers' }));
+    expect(await screen.findByText('2 givers revealed.')).toBeTruthy();
   });
 });
 

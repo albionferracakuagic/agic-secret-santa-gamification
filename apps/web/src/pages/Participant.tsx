@@ -4,8 +4,15 @@ import type {
   EventStateOutput,
   PublicGiftListOutput,
   PublicLeaderboardOutput,
+  SceneOutput,
 } from '@santa/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { useParticipantApi } from '../api/participant';
+import { usePlayApi } from '../api/play';
+import { GiftForm, AssignmentView } from '../components/play/GiftForm';
+import { VotingPanel } from '../components/play/Voting';
+import { OpeningStage } from '../components/OpeningStage';
+import { Podium } from '../components/Podium';
 import { AVATAR_GLYPH, avatarGlyph } from '../fx/avatars';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { ReactionBar } from '../components/ReactionBar';
@@ -21,8 +28,10 @@ export default function Participant() {
   const es = surfaceOf<PState>(state, 'participant', 'eventState');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const board = surfaceOf<PublicLeaderboardOutput>(state, 'pub', 'leaderboard');
+  const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const [saved, setSaved] = useState<Saved>();
   const shown = es?.me && { ...es.me, ...saved };
+  const now = () => rt?.serverNow() ?? Date.now();
 
   const seen = useRef(0);
   useEffect(() => {
@@ -31,6 +40,8 @@ export default function Participant() {
     fresh.forEach((r) => floatReaction(r.kind));
   }, [state.reactions]);
 
+  const phase = es?.phase;
+  const active = shown?.status === 'active';
   return (
     <section aria-labelledby="part-title" className="space-y-6">
       <h1 id="part-title" className="text-2xl font-bold">
@@ -47,19 +58,51 @@ export default function Participant() {
             <p>{t('participant.phase', { phase: t(`phase.${es.phase}`) })}</p>
             {es.paused && <p role="status">{t('console.paused')}</p>}
             <p>{t('participant.counts', { n: es.counts.participants })}</p>
+            {phase === 'gift_registration' && (
+              <p>{t('gift.countOnly', { count: es.counts.giftsRegistered })}</p>
+            )}
             {shown.status === 'pending' && <p role="status">{t('join.pending')}</p>}
             <p>{t('participant.xp', { xp: shown.xp.xp, level: shown.xp.level })}</p>
           </header>
-          <Profile me={shown} onSaved={setSaved} />
-          <OwnSelections me={shown} gifts={gifts} />
+          {active && phase === 'gift_registration' && <GiftForm canEdit />}
+          {active && phase !== 'preparation' && phase !== 'registration' && <AssignmentView />}
+          {active && phase === 'gift_opening' && (
+            <section aria-labelledby="open-title" className="space-y-2">
+              <h2 id="open-title" className="font-semibold">
+                {t('opening.title')}
+              </h2>
+              {scene?.scene === 'opening' ? (
+                <OpeningStage
+                  current={scene.current}
+                  openedCount={scene.openedCount}
+                  total={scene.total}
+                />
+              ) : (
+                <p>{t('opening.waiting')}</p>
+              )}
+              <GiftForm canEdit={false} />
+            </section>
+          )}
+          {active && phase === 'voting' && (
+            <VotingPanel
+              gifts={gifts}
+              votedCount={es.votedCount}
+              endsAt={es.votingEndsAt}
+              now={now}
+            />
+          )}
+          {phase !== 'voting' && <OwnSelections me={shown} gifts={gifts} />}
+          {(phase === 'reveal' || phase === 'awards' || phase === 'completed') && (
+            <RevealList gifts={gifts} />
+          )}
           <Standing board={board} />
-          {shown.status === 'active' && <ReactionBar send={(k) => rt?.sendReaction(k)} />}
+          {active && <ReactionBar send={(k) => rt?.sendReaction(k)} />}
+          <Profile me={shown} onSaved={setSaved} />
         </>
       )}
     </section>
   );
 }
-
 function Profile({ me, onSaved }: { me: Me; onSaved: (m: Saved) => void }) {
   const { t } = useTranslation();
   const api = useParticipantApi();
@@ -149,16 +192,48 @@ function OwnSelections({ me, gifts }: { me: Me; gifts: PublicGiftListOutput | un
   );
 }
 
-/** FR-046: no ranks/totals for non-top; the participant app shows a neutral, encouraging message only. */
+function RevealList({ gifts }: { gifts: PublicGiftListOutput | undefined }) {
+  const { t } = useTranslation();
+  const list = gifts?.mode === 'gallery' ? gifts.gifts.filter((g) => g.status === 'revealed') : [];
+  if (list.length === 0) return null;
+  return (
+    <section aria-labelledby="reveal-title" className="space-y-2">
+      <h2 id="reveal-title" className="font-semibold">
+        {t('reveal.title')}
+      </h2>
+      <ul className="space-y-1" data-testid="reveal-list">
+        {list.map((g) =>
+          g.status === 'revealed' ? (
+            <li key={g.giftId}>
+              {g.alias}: {g.name} — {t('reveal.from')}{' '}
+              <span aria-hidden="true">{avatarGlyph(g.giver.avatar)}</span> {g.giver.displayName}
+            </li>
+          ) : null,
+        )}
+      </ul>
+    </section>
+  );
+}
+
+/** FR-046: only the published top-N is shown; everyone else gets a neutral, encouraging message (no rank, no totals). */
 function Standing({ board }: { board: PublicLeaderboardOutput | undefined }) {
   const { t } = useTranslation();
+  const api = usePlayApi();
+  const mine = useQuery({ queryKey: ['gift'], queryFn: () => api.getGift() });
   if (!board || board.state === 'hidden') return null;
+  const myId = mine.data?.gift?.giftId;
+  const onBoard = !!myId && board.entries.some((e) => e.entryId === myId);
   return (
     <section aria-labelledby="board-title" className="space-y-2">
       <h2 id="board-title" className="font-semibold">
         {t('participant.boardTitle')}
       </h2>
-      <p>{t('participant.encourage')}</p>
+      {board.entries.length > 0 && (
+        <div className="rounded bg-pine-900 p-3 text-white">
+          <Podium board={board} />
+        </div>
+      )}
+      <p>{t(onBoard ? 'participant.onBoard' : 'participant.encourage')}</p>
     </section>
   );
 }

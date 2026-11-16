@@ -117,11 +117,17 @@ export function ApprovalPanel({ eventId }: { eventId: string }) {
 }
 
 /** Event-wide reactions switch plus per-person mute (names only, no data beyond the roster). */
-export function ReactionSettings({ eventId }: { eventId: string }) {
+export function ReactionSettings({
+  eventId,
+  initial,
+}: {
+  eventId: string;
+  initial?: boolean | undefined;
+}) {
   const { t } = useTranslation();
   const api = useOrganizerApi();
   const qc = useQueryClient();
-  const [enabled, setEnabled] = useState<boolean>();
+  const [enabled, setEnabled] = useState<boolean | undefined>(initial);
   const roster = useQuery({
     queryKey: ['roster', eventId],
     queryFn: () => api.listRoster(eventId),
@@ -163,10 +169,11 @@ export function ReactionSettings({ eventId }: { eventId: string }) {
                 type="button"
                 className={btn}
                 aria-pressed={p.reactionsMuted}
+                aria-label={`${t(p.reactionsMuted ? 'reactionSettings.unmute' : 'reactionSettings.mute')} ${p.displayName}`}
+
                 onClick={() => mute.mutate({ id: p.participantId, muted: !p.reactionsMuted })}
               >
                 {t(p.reactionsMuted ? 'reactionSettings.unmute' : 'reactionSettings.mute')}
-                <span className="sr-only"> {p.displayName}</span>
               </button>
             </li>
           ))}
