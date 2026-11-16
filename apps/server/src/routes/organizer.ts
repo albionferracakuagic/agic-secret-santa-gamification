@@ -1,5 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   AddOrganizerRequestSchema,
   AuditListResponseSchema,
@@ -15,12 +14,10 @@ import {
   type GuardEnv,
 } from '@santa/contracts';
 import {
-  EventError,
   addCoOrganizer,
   changePhase,
   createEvent,
   createUnmaskGrant,
-  eventOrganizers,
   listAudit,
   listEventsForUser,
   loadPairingsUnmasked,
@@ -35,12 +32,7 @@ import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
 import { broadcastEventState } from '../realtime/broadcast.js';
 import { DbSnapshotProvider } from '../realtime/snapshots.js';
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    org?: { userId: string; sessionId: string };
-  }
-}
+import { fail, makeGuards } from './guards.js';
 
 export interface OrganizerRouteDeps {
   db: Db;
@@ -51,72 +43,9 @@ export interface OrganizerRouteDeps {
   clock: () => Date;
 }
 
-const STATUS: Record<string, number> = {
-  not_found: 404,
-  user_not_found: 404,
-  invalid_settings: 400,
-  max_below_roster: 409,
-  paused: 409,
-  invalid_step: 409,
-  same_phase: 409,
-  pairing_not_ready: 409,
-  backstep_after_reveal: 409,
-  use_reopen_voting: 409,
-  voting_not_closed: 409,
-};
-
-const fail = (reply: FastifyReply, status: number, code: string, message = code) =>
-  reply.status(status).send({ error: { code, message } });
-
 export function registerOrganizerRoutes(app: FastifyInstance, d: OrganizerRouteDeps) {
   const snapshots = new DbSnapshotProvider(d.db);
-
-  const authed = async (req: FastifyRequest, reply: FastifyReply) => {
-    const s = await d.sessions.fromCookieHeader(req.headers.cookie);
-    if (!s) return fail(reply, 401, 'unauthenticated', 'Sign in required');
-    req.org = s;
-  };
-  const eventParams = (req: FastifyRequest) => (req.params as { eventId: string }).eventId;
-
-  /** Membership gate: non-members get 403 (never confirms the event exists). */
-  const member = async (req: FastifyRequest, reply: FastifyReply) => {
-    const ok = await d.principals.isOrganizerOf(req.org!.userId, eventParams(req));
-    if (!ok) return fail(reply, 403, 'forbidden');
-  };
-  const owner = async (req: FastifyRequest, reply: FastifyReply) => {
-    const [row] = await d.db
-      .select({ role: eventOrganizers.role })
-      .from(eventOrganizers)
-      .where(
-        and(
-          eq(eventOrganizers.eventId, eventParams(req)),
-          eq(eventOrganizers.userId, req.org!.userId),
-        ),
-      );
-    if (row?.role !== 'owner') return fail(reply, 403, 'forbidden', 'Owner only');
-  };
-  const pre = [authed, member];
-
-  const run = async (reply: FastifyReply, fn: () => Promise<unknown>) => {
-    try {
-      return await fn();
-    } catch (e) {
-      if (e instanceof EventError) return fail(reply, STATUS[e.code] ?? 400, e.code, e.message);
-      throw e;
-    }
-  };
-  const body = <T>(
-    reply: FastifyReply,
-    schema: { safeParse(v: unknown): { success: boolean; data?: T } },
-    v: unknown,
-  ) => {
-    const r = schema.safeParse(v);
-    if (!r.success) {
-      void fail(reply, 400, 'bad_request');
-      return undefined;
-    }
-    return r.data as T;
-  };
+  const { authed, member, owner, pre, run, body, eventParams } = makeGuards(d);
 
   /* ---------- events ---------- */
   app.post('/api/events', { preHandler: authed }, async (req, reply) => {
@@ -287,15 +216,13 @@ export function registerOrganizerRoutes(app: FastifyInstance, d: OrganizerRouteD
       reason: b.reason,
       now: d.clock(),
     });
-    return reply
-      .status(201)
-      .send(
-        UnmaskGrantResponseSchema.parse({
-          grantId: g.grantId,
-          expiresAt: g.expiresAt.toISOString(),
-          banner: true,
-        }),
-      );
+    return reply.status(201).send(
+      UnmaskGrantResponseSchema.parse({
+        grantId: g.grantId,
+        expiresAt: g.expiresAt.toISOString(),
+        banner: true,
+      }),
+    );
   });
 
   app.post(

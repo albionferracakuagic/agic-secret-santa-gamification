@@ -19,7 +19,14 @@ export const EventSettingsSchema = z.strictObject({
       voted: z.number().int().min(0).default(10),
     })
     .prefault({}),
-  features: z.strictObject({ xpBoard: z.boolean().default(false) }).prefault({}),
+  features: z
+    .strictObject({
+      xpBoard: z.boolean().default(false),
+      reactionsEnabled: z.boolean().default(true),
+      /** Auto-approve picked roster names: base access only, never secrets (`verified: false`). */
+      autoApproveJoin: z.boolean().default(false),
+    })
+    .prefault({}),
   retention: z.strictObject({ photoDays: z.number().int().min(1).default(90) }).prefault({}),
 });
 export type EventSettings = z.infer<typeof EventSettingsSchema>;

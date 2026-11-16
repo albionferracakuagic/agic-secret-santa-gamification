@@ -8,23 +8,9 @@ export const ErrorResponseSchema = z.strictObject({
   error: z.strictObject({ code: z.string(), message: z.string() }),
 });
 
-export const JoinRequestSchema = z.strictObject({
-  token: z.string().min(16).max(128).optional(),
-  shortCode: z
-    .string()
-    .regex(/^[A-Z0-9]{6,8}$/)
-    .optional(),
-});
-
-export const ClaimRequestSchema = z.discriminatedUnion('method', [
-  z.strictObject({ method: z.literal('email_link'), token: z.string().min(16).max(256) }),
-  z.strictObject({
-    method: z.literal('personal_code'),
-    participantId: IdSchema,
-    code: z.string().min(6).max(32),
-  }),
-  z.strictObject({ method: z.literal('organizer_approved'), participantId: IdSchema }),
-]);
+/** Organizer reaction controls (event-wide switch + per-participant mute). */
+export const ReactionSettingsRequestSchema = z.strictObject({ enabled: z.boolean() });
+export const MuteParticipantRequestSchema = z.strictObject({ muted: z.boolean() });
 
 /** One active selection per category; response echoes only the caller's own selection. */
 export const CastVoteRequestSchema = z.strictObject({ categoryId: IdSchema, giftId: IdSchema });

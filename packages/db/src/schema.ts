@@ -190,6 +190,8 @@ export const participants = pgTable(
     sessionTokenHash: text('session_token_hash'),
     locale: text('locale').notNull().default('en'),
     prefs: jsonb('prefs').$type<Record<string, unknown>>().notNull().default({}),
+    /** Organizer mute: this participant's reactions are silently dropped. */
+    reactionsMuted: boolean('reactions_muted').notNull().default(false),
     userId: text('user_id').references(() => user.id),
     createdAt: createdAt(),
   },
@@ -199,6 +201,23 @@ export const participants = pgTable(
     uniqueIndex('participants_session_uq').on(t.sessionTokenHash),
     unique('participants_event_id_uq').on(t.eventId, t.id),
   ],
+);
+
+/** Single-use personal claim credentials (emailed link token or printed code); only hashes are stored. */
+export const claimTokens = pgTable(
+  'claim_tokens',
+  {
+    id: id(),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    method: claimMethod('method').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('claim_tokens_participant_idx').on(t.participantId)],
 );
 
 export const pairingImports = pgTable('pairing_imports', {

@@ -11,16 +11,21 @@
     "@better-auth/drizzle-adapter": "1.7.25",
     "@fastify/cookie": "^11.1.5",
     "@fastify/helmet": "^13.2.0",
+    "@fastify/multipart": "^10.1.9",
     "@fastify/rate-limit": "^11.2.2",
     "@santa/contracts": "*",
     "@santa/db": "*",
     "@santa/domain": "*",
     "better-auth": "1.7.25",
     "fastify": "^5.12.8",
+    "papaparse": "^5.7.1",
+    "read-excel-file": "^9.3.17",
     "socket.io": "^4.8.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "socket.io-client": "^4.8.4"
+    "@types/papaparse": "^5.5.2",
+    "socket.io-client": "^4.8.4",
+    "write-excel-file": "^4.1.1"
   }
 }

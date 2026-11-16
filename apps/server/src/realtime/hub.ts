@@ -10,6 +10,7 @@ import {
   type Surface,
 } from '@santa/contracts';
 import type { Principal, PrincipalStore } from '../principal.js';
+import { ReactionService, type ReactionPolicy } from './reactions.js';
 
 export interface SnapshotProvider {
   /** Returns projected payloads keyed by surface; the hub guards every value before sending. */
@@ -22,8 +23,12 @@ export interface HubOptions {
   guardEnv: GuardEnv;
   alert?: (v: PrivacyViolationError) => void;
   clock?: () => Date;
-  /** Per-socket budgets (events/second): generic messages and reactions. */
+  /** Per-socket message budget and per-PARTICIPANT reaction budget (events/second). */
   rate?: { messagesPerSec: number; reactionsPerSec: number };
+  /** Decides whether a participant's reaction counts right now (event switch, mute, phase). Default: allow. */
+  reactionPolicy?: ReactionPolicy;
+  /** Aggregation window for reaction bursts (ms). */
+  reactionWindowMs?: number;
 }
 
 export type RevokeReason = 'expired' | 'revoked' | 'membership' | 'session';
@@ -32,7 +37,7 @@ interface SocketData {
   principal: Principal;
   eventId?: string;
   grants: Set<string>;
-  buckets: { msg: Bucket; reaction: Bucket };
+  buckets: { msg: Bucket };
 }
 
 class Bucket {
@@ -71,10 +76,17 @@ export class RealtimeHub {
   private readonly cursors = new Map<string, number>();
   private readonly clock: () => Date;
   private readonly rate: { messagesPerSec: number; reactionsPerSec: number };
+  readonly reactions: ReactionService;
 
   constructor(private readonly o: HubOptions) {
     this.clock = o.clock ?? (() => new Date());
     this.rate = o.rate ?? { messagesPerSec: 20, reactionsPerSec: 5 };
+    this.reactions = new ReactionService({
+      perParticipantPerSec: this.rate.reactionsPerSec,
+      windowMs: o.reactionWindowMs ?? 300,
+      policy: o.reactionPolicy ?? (async () => true),
+      emit: (eventId, burst) => this.io.to(roomFor(eventId, 'pub')).emit('reaction', burst),
+    });
   }
 
   attach(httpServer: HttpServer): Server {
@@ -87,10 +99,7 @@ export class RealtimeHub {
           (socket as Sock).data = {
             principal,
             grants: new Set(),
-            buckets: {
-              msg: new Bucket(this.rate.messagesPerSec),
-              reaction: new Bucket(this.rate.reactionsPerSec),
-            },
+            buckets: { msg: new Bucket(this.rate.messagesPerSec) },
           };
           next();
         })
@@ -115,9 +124,9 @@ export class RealtimeHub {
     }
 
     const guarded =
-      <T>(bucket: 'msg' | 'reaction', fn: (payload: T) => Promise<void> | void) =>
+      <T>(fn: (payload: T) => Promise<void> | void) =>
       (payload: T) => {
-        if (!socket.data.buckets[bucket].take()) {
+        if (!socket.data.buckets.msg.take()) {
           socket.emit('error', { code: 'rate_limited' });
           return;
         }
@@ -126,15 +135,15 @@ export class RealtimeHub {
 
     socket.on(
       'subscribe',
-      guarded('msg', (raw: unknown) => this.onSubscribe(socket, raw)),
+      guarded((raw: unknown) => this.onSubscribe(socket, raw)),
     );
     socket.on(
       'grant.subscribe',
-      guarded('msg', (raw: unknown) => this.onGrantSubscribe(socket, raw)),
+      guarded((raw: unknown) => this.onGrantSubscribe(socket, raw)),
     );
     socket.on(
       'time.ping',
-      guarded('msg', (raw: unknown) => {
+      guarded((raw: unknown) => {
         const m = ClientEvents['time.ping'].safeParse(raw);
         if (m.success)
           socket.emit('time.sync', {
@@ -145,12 +154,12 @@ export class RealtimeHub {
     );
     socket.on(
       'reaction.send',
-      guarded('reaction', (raw: unknown) => {
+      guarded(async (raw: unknown) => {
         const m = ClientEvents['reaction.send'].safeParse(raw);
         const eventId = socket.data.eventId;
         if (!m.success || !eventId || principal.kind !== 'guest') return;
-        // ephemeral: no cursor, no identity, no per-gift counters
-        this.io.to(roomFor(eventId, 'pub')).emit('reaction', { kind: m.data.kind });
+        // Per-participant bucket + policy + aggregation; no identity, no per-gift counters.
+        await this.reactions.submit(eventId, principal.participantId, m.data.kind);
       }),
     );
   }
@@ -318,7 +327,16 @@ export class RealtimeHub {
     );
   }
 
+  /** Display token revoked => drop that event's display sockets. */
+  dropDisplays(eventId: string) {
+    this.disconnectWhere(
+      (s) => s.data.principal.kind === 'display' && s.data.principal.eventId === eventId,
+      'revoked',
+    );
+  }
+
   async close() {
+    this.reactions.close();
     await new Promise<void>((resolve) => this.io.close(() => resolve()));
   }
 }

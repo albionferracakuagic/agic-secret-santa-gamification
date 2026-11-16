@@ -75,15 +75,13 @@ describe('event setup', () => {
 
   it('update merges settings (deep) and refuses maxParticipants below the roster', async () => {
     const e = await newEvent();
-    await db
-      .insert(s.participants)
-      .values(
-        Array.from({ length: 6 }, (_, i) => ({
-          eventId: e.id,
-          displayName: `P${i}`,
-          source: 'import' as const,
-        })),
-      );
+    await db.insert(s.participants).values(
+      Array.from({ length: 6 }, (_, i) => ({
+        eventId: e.id,
+        displayName: `P${i}`,
+        source: 'import' as const,
+      })),
+    );
     const u = await updateEvent(db, {
       eventId: e.id,
       actor: 'owner',
@@ -159,16 +157,14 @@ describe('phase changes', () => {
       .update(s.events)
       .set({ phase: 'games', votingClosedAt: NOW })
       .where(eq(s.events.id, e.id));
-    await db
-      .insert(s.awards)
-      .values({
-        eventId: e.id,
-        boardKey: 'best_gift',
-        votingRound: 1,
-        winners: ['g1'],
-        publishable: true,
-        lockedAt: NOW,
-      });
+    await db.insert(s.awards).values({
+      eventId: e.id,
+      boardKey: 'best_gift',
+      votingRound: 1,
+      winners: ['g1'],
+      publishable: true,
+      lockedAt: NOW,
+    });
     const job = await enqueueJob(db, {
       eventId: e.id,
       kind: 'ceremony.step',

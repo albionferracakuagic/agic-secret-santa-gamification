@@ -31,6 +31,14 @@ Status: Accepted
 
 **Controls**: rate-limit join/claim/code endpoints per IP+event; constant-time compare; hashed tokens/codes (claim codes high-entropy + lockout after N tries); CSRF via SameSite + `Origin` check on mutations; helmet CSP; logs redact votes/pairings/missions/tokens.
 
+## Implementation notes (invites-join, 2026-11-16)
+- Credentials (join token 256-bit, display token, emailed claim link, printed 10-char code) are stored as SHA-256 hashes only; links/codes are returned once. Claim credentials are single-use (atomic `UPDATE … WHERE used_at IS NULL`).
+- `pick_name` sets the session cookie immediately but the entry stays `pending`; principals resolve only `active` entries, so a pending cookie has no access until organizer approval (no extra polling secret).
+- `claim_verified_at` marks verified claims (email link, personal code, organizer approval); auto-approve activates without it. Secrets (own recipient, missions) must check it.
+- Re-claim through a verified credential replaces `session_token_hash` (old cookie dead) and force-disconnects old sockets; `pick_name` can never take an already claimed entry.
+- Public endpoints: per-IP rate limits (resolve/display 20/min, claim 10/min), generic 401/404 for wrong/used/expired/revoked credentials. Short code: 7 chars from `[A-Z2-9]`, expiring, revocable.
+- Fix: route-level and global rate limits did not apply before this batch (routes were declared before `@fastify/rate-limit` finished loading); routes are now registered in `app.after()`.
+
 ## Consequences
 - + Frictionless join; knowing a name does not expose secrets.
 - + Organizer parity with participants by default; unmask exceptional and traceable.

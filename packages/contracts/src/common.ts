@@ -22,8 +22,15 @@ export const IsoDateSchema = z.iso.datetime({ offset: true });
 
 export const ParticipantStatusSchema = z.enum(['unclaimed', 'pending', 'active', 'removed']);
 
-/** Fixed positive reaction set (FR-046.7): validated server-side, no free text. */
-export const REACTION_KINDS = ['heart', 'clap', 'sparkle', 'tree', 'gift'] as const;
+/** FR-037: fixed positive reaction set (love, hilarious, amazing, wow, spirit, applause). No free text, no negatives. */
+export const REACTION_KINDS = [
+  'love',
+  'hilarious',
+  'amazing',
+  'wow',
+  'spirit',
+  'applause',
+] as const;
 export const ReactionKindSchema = z.enum(REACTION_KINDS);
 export type ReactionKind = z.infer<typeof ReactionKindSchema>;
 

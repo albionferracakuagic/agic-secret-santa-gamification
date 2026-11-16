@@ -1,8 +1,14 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { HealthResponseSchema, type GuardEnv, type PrivacyViolationError } from '@santa/contracts';
+import {
+  HealthResponseSchema,
+  PAIRING_MAX_FILE_BYTES,
+  type GuardEnv,
+  type PrivacyViolationError,
+} from '@santa/contracts';
 import type { Db } from '@santa/db';
 import { registerIdempotency } from './http/idempotency.js';
 import { DbPrincipalStore, type OrganizerSessions } from './principal.js';
@@ -10,6 +16,10 @@ import { RealtimeHub, type HubOptions, type SnapshotProvider } from './realtime/
 import { DbSnapshotProvider } from './realtime/snapshots.js';
 import { registerAuthRoutes, type AuthModule } from './auth/routes.js';
 import { registerOrganizerRoutes } from './routes/organizer.js';
+import { registerPairingRoutes } from './routes/pairing.js';
+import { registerJoinRoutes } from './routes/join.js';
+import { dbReactionPolicy } from './realtime/reactions.js';
+import { MemoryEmailTransport, type EmailTransport } from './auth/email.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -27,6 +37,13 @@ export interface AppOptions {
   alert?: (v: PrivacyViolationError) => void;
   rate?: HubOptions['rate'];
   clock?: () => Date;
+  /** Claim-link emails (default: in-memory). */
+  email?: EmailTransport;
+  /** Public base URL used in emailed claim links. */
+  baseUrl?: string;
+  reactionWindowMs?: number;
+  /** Public join endpoints: per-IP requests/minute (defaults: resolve/display 20, claim 10). */
+  joinRateLimits?: { resolve: number; claim: number };
   rateLimitMax?: number;
 }
 
@@ -46,6 +63,9 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     },
   });
   void app.register(cookie);
+  void app.register(multipart, {
+    limits: { fileSize: PAIRING_MAX_FILE_BYTES, files: 1, fields: 5, parts: 8 },
+  });
   void app.register(rateLimit, {
     global: true,
     max: opts.rateLimitMax ?? 300,
@@ -61,14 +81,20 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
   registerIdempotency(app);
 
-  app.get('/health', async () => HealthResponseSchema.parse({ status: 'ok' }));
+  // Routes are registered in app.after(): @fastify/rate-limit (and other plugins) must finish loading
+  // first, otherwise their onRoute hooks never see these routes and limits silently don't apply.
+  const routes: Array<() => void> = [
+    () => {
+      app.get('/health', async () => HealthResponseSchema.parse({ status: 'ok' }));
 
-  // Client clock-offset estimation (countdowns use server timestamps).
-  app.get('/api/time', async () => ({
-    serverTime: (opts.clock ?? (() => new Date()))().getTime(),
-  }));
+      // Client clock-offset estimation (countdowns use server timestamps).
+      app.get('/api/time', async () => ({
+        serverTime: (opts.clock ?? (() => new Date()))().getTime(),
+      }));
 
-  if (opts.auth) registerAuthRoutes(app, opts.auth);
+      if (opts.auth) registerAuthRoutes(app, opts.auth);
+    },
+  ];
 
   if (opts.db) {
     const principals = new DbPrincipalStore(
@@ -83,20 +109,31 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       ...(opts.alert ? { alert: opts.alert } : {}),
       ...(opts.clock ? { clock: opts.clock } : {}),
       ...(opts.rate ? { rate: opts.rate } : {}),
+      reactionPolicy: dbReactionPolicy(opts.db),
+      ...(opts.reactionWindowMs ? { reactionWindowMs: opts.reactionWindowMs } : {}),
     });
     hub.attach(app.server);
     app.decorate('hub', hub);
     const sessions = opts.auth?.organizerSessions ?? opts.organizerSessions;
-    if (sessions) {
-      registerOrganizerRoutes(app, {
-        db: opts.db,
-        sessions,
+    const clock = opts.clock ?? (() => new Date());
+    const db = opts.db;
+    routes.push(() => {
+      registerJoinRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
         principals,
         hub,
-        guardEnv,
-        clock: opts.clock ?? (() => new Date()),
+        email: opts.email ?? new MemoryEmailTransport(),
+        baseUrl: opts.baseUrl ?? 'http://localhost:3000',
+        secureCookies: guardEnv === 'production',
+        clock,
+        ...(opts.joinRateLimits ? { limits: opts.joinRateLimits } : {}),
       });
-    }
+      if (sessions) {
+        registerOrganizerRoutes(app, { db, sessions, principals, hub, guardEnv, clock });
+        registerPairingRoutes(app, { db, sessions, principals, hub, clock });
+      }
+    });
     app.addHook('preClose', async () => {
       hub.io.local.disconnectSockets(true);
     });
@@ -104,6 +141,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       hub.io.close();
     });
   }
+
+  app.after(() => {
+    for (const register of routes) register();
+  });
 
   return app;
 }

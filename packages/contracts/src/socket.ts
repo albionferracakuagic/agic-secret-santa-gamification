@@ -18,7 +18,11 @@ export const ServerEvents = {
     surface: SurfaceNameSchema,
     payload: z.unknown(),
   }),
-  reaction: z.strictObject({ kind: ReactionKindSchema }),
+  /**
+   * Aggregated cheer burst (FR-037): `count` reactions of one kind in the last flush window.
+   * Sent to the pub room (participants + display). Never tied to a person or a gift.
+   */
+  reaction: z.strictObject({ kind: ReactionKindSchema, count: z.number().int().min(1).max(500) }),
   'grant.revoked': z.strictObject({
     grantId: IdSchema,
     reason: z.enum(['expired', 'revoked', 'membership', 'session']),
