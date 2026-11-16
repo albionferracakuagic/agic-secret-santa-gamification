@@ -7,5 +7,5 @@ export const setFxEngine = (e: FxEngine | undefined) => {
 };
 
 /** Domain event -> cue. Safe to call anywhere (no-op until the overlay mounts). */
-export const emitFx: FxEngine['emit'] = (event) => engine?.emit(event);
+export const emitFx: FxEngine['emit'] = (event, opts) => engine?.emit(event, opts);
 export const setAmbient: FxEngine['setAmbient'] = (on) => engine?.setAmbient(on);

@@ -9,6 +9,7 @@ export function Layout() {
   const { t, i18n } = useTranslation();
   const main = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
+  const bare = pathname === '/d' || pathname.startsWith('/d/'); // public display: full-screen, no chrome
 
   useEffect(() => {
     document.documentElement.lang = i18n.language;
@@ -31,13 +32,20 @@ export function Layout() {
       >
         {t('a11y.skip')}
       </a>
-      <header className="flex items-center justify-between gap-2 bg-santa-600 px-4 py-3 text-white">
-        <Link to="/" className="text-lg font-bold">
-          {t('app.title')}
-        </Link>
-        <PrefsPanel />
-      </header>
-      <main id="main" ref={main} tabIndex={-1} className="mx-auto max-w-3xl p-4 outline-none">
+      {!bare && (
+        <header className="flex items-center justify-between gap-2 bg-santa-600 px-4 py-3 text-white">
+          <Link to="/" className="text-lg font-bold">
+            {t('app.title')}
+          </Link>
+          <PrefsPanel />
+        </header>
+      )}
+      <main
+        id="main"
+        ref={main}
+        tabIndex={-1}
+        className={bare ? 'outline-none' : 'mx-auto max-w-3xl p-4 outline-none'}
+      >
         <Outlet />
       </main>
       <FxOverlay />
