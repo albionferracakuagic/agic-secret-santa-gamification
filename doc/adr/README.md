@@ -1,0 +1,14 @@
+# Architecture Decision Records
+
+Format: MADR-lite (Status, Context, Decision, Consequences). Scope source: `../Secret_Santa_Games_Functional_Requirements.md`.
+
+| # | Title | Status |
+|---|---|---|
+| [0001](0001-stack-and-libraries.md) | Stack and libraries | Accepted |
+| [0002](0002-realtime-projections-and-recovery.md) | Realtime: projections, cursors, recovery, unmask channel | Accepted |
+| [0003](0003-privacy-publication-policy.md) | Privacy publication policy (`canPublish()`) | Accepted |
+| [0004](0004-identity-and-auth.md) | Identity, auth, claims, unmask grants | Accepted |
+| [0005](0005-azure-hosting-cicd-jobs.md) | Azure hosting, CI/CD, durable jobs | Accepted |
+| [0006](0006-performance-targets.md) | Performance targets (TR-003) | Accepted |
+
+New ADR: next number; never rewrite accepted ones — supersede.
