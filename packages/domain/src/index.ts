@@ -1,13 +1,4 @@
-export const PHASES = [
-  'preparation',
-  'registration',
-  'gift_registration',
-  'gift_opening',
-  'voting',
-  'games',
-  'reveal',
-  'awards',
-  'completed',
-] as const;
-
-export type Phase = (typeof PHASES)[number];
+export * from './ranking.js';
+export * from './projection/index.js';
+export * from './projection/sources.js';
+export { PHASES, type Phase } from '@santa/contracts';

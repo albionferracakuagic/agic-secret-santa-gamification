@@ -31,6 +31,12 @@ Cadence:
 - **Residual timing correlation**: someone who sees a board change at cadence T right after a known person votes (or watches the final vote) can correlate change ↔ voter. Mitigated, not eliminated: quantization to T, batched changes, no per-person indicators, <10-voter default-off. **Owner-accepted for MVP (2026-11-16)**; organizer warned at setup; live boards can be disabled.
 - Tiny events (<5 voters) get no vote-derived winners (owner decision); organizer warned at setup.
 
+## Calibration results (2026-11-16, `packages/domain/src/deduction.test.ts`)
+- Model: n voters (voter 0 = attacker knowing own ballot), m candidate entries, every assignment enumerated; single final projection (`final` purpose, shared ties, topN 3, no totals).
+- n=3..4: nothing published (voter floor). m=4, n=5..12 (up to 16.0 M assignments) and m=5, n=5..9: **0 uniquely-deducible ballots** in all published projections (non-vacuous: 4–65 distinct projections per cell).
+- Result: **floors hold as set (≥5 voters, hiddenMin 2); no recalibration needed.** Re-run on any policy change; raise-only if it ever fails.
+- Not modelled: live (multi-publication) sequences → covered by the accepted timing-correlation risk; own-gift voting restriction; totals toggle (`showTotals`) — enabling it should get its own deduction run before being offered in UI.
+
 ## Consequences
 - + Single audit point; exhaustive tests (fast-check + brute force); forbidden-value contract scan on every projection.
 - − Small family events lose voting suspense; fallback copy must be warm.

@@ -7,6 +7,25 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./seed": {
+      "types": "./dist/seed.d.ts",
+      "default": "./dist/seed.js"
     }
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "seed": "tsx src/seed-cli.ts"
+  },
+  "dependencies": {
+    "@santa/contracts": "*",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16"
   }
 }
