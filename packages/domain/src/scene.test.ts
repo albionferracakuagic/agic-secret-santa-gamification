@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   projectGiftList,
   projectLeaderboard,
+  projectLeaderboards,
   projectScene,
   giftLabel,
   type EventSource,
@@ -9,6 +10,7 @@ import {
   type ParticipantSource,
   type SceneInput,
 } from './index.js';
+import { OutputSchemas } from '@santa/contracts';
 import { canPublishBallots } from './ranking.js';
 
 const people: ParticipantSource[] = [
@@ -192,5 +194,50 @@ describe('gallery + board labels', () => {
     expect(JSON.stringify(board)).not.toMatch(/Secret Giver|P1/);
     const unknown = projectLeaderboard({ boardKey: 'b', state: 'live', lastPublished: result });
     expect(unknown.entries[0]!.label).toBe('Gift');
+  });
+});
+
+describe('board message + ceremony scene', () => {
+  const unsafe = canPublishBallots(
+    ['A', 'B', 'C'].map((entryId, i) => ({ voterId: `V${i}`, entryId })),
+    { topN: 3 },
+  );
+
+  it('a live board that is unsafe shows the neutral message and no entries; hidden boards are omitted', () => {
+    const live = projectLeaderboard({ boardKey: 'funniest', state: 'live', lastPublished: unsafe });
+    expect(live).toMatchObject({ message: 'christmas_magic', entries: [] });
+    const all = projectLeaderboards(
+      [
+        { boardKey: 'a', state: 'live', lastPublished: unsafe },
+        { boardKey: 'b', state: 'hidden', lastPublished: null },
+      ],
+      () => ({}),
+    );
+    expect(all.boards.map((b) => b.boardKey)).toEqual(['a']);
+  });
+
+  it('a running ceremony replaces the phase scene; idle/cancelled shows the normal scene', () => {
+    const base: SceneInput = {
+      event: event({ phase: 'awards' }),
+      activeParticipants: 2,
+      gifts: [],
+      people,
+      join: null,
+      votedCount: null,
+    };
+    const step = {
+      status: 'running',
+      index: 1,
+      total: 5,
+      endsAt: null,
+      step: { type: 'intro' },
+    } as const;
+    expect(projectScene({ ...base, ceremony: step })).toMatchObject({ scene: 'ceremony' });
+    expect(projectScene({ ...base, ceremony: { ...step, status: 'cancelled' } }).scene).not.toBe(
+      'ceremony',
+    );
+    expect(
+      OutputSchemas.display.scene.parse(projectScene({ ...base, ceremony: step })),
+    ).toBeTruthy();
   });
 });

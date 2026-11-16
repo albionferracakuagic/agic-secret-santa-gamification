@@ -123,6 +123,8 @@ const LabelSchema = z.string().min(1).max(60);
 export const PublicLeaderboardSchema = z.strictObject({
   boardKey: z.string(),
   state: z.enum(['hidden', 'live', 'paused']),
+  /** `christmas_magic` = the board is on but nothing may be shown safely (neutral fallback, no promise of a reveal). */
+  message: z.enum(['christmas_magic']).nullable(),
   entries: z.array(
     z.strictObject({
       entryId: IdSchema,
@@ -131,6 +133,10 @@ export const PublicLeaderboardSchema = z.strictObject({
       tied: z.boolean(),
     }),
   ),
+});
+/** All boards in one payload (surface `leaderboards`): snapshot + every publication. Replaces single `leaderboard`. */
+export const PublicLeaderboardsSchema = z.strictObject({
+  boards: z.array(PublicLeaderboardSchema),
 });
 export const UnmaskedLeaderboardSchema = z.strictObject({
   boardKey: z.string(),
@@ -147,6 +153,60 @@ export const UnmaskedLeaderboardSchema = z.strictObject({
 });
 
 export const ProfileSchema = PersonSchema.extend({ achievements: z.array(z.string()) });
+
+/* ---------------- award ceremony (public; synced to display + participants) ---------------- */
+
+const CeremonyName = z.record(z.string(), z.string());
+const CeremonyEntry = z.strictObject({ entryId: IdSchema, label: LabelSchema });
+
+/** One ceremony step as shown on screen. Winners carry the giver (revealed at that step, never earlier). */
+export const CeremonyStepSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('intro') }),
+  z.strictObject({
+    type: z.literal('category'),
+    boardKey: z.string(),
+    name: CeremonyName,
+    grand: z.boolean(),
+  }),
+  /** Unsafe category: skipped with a neutral message (no promise of a later reveal). */
+  z.strictObject({ type: z.literal('category_skipped'), boardKey: z.string(), name: CeremonyName }),
+  /** Leading gifts, only what canPublish allowed (top-N, no totals, no last place). */
+  z.strictObject({
+    type: z.literal('nominees'),
+    boardKey: z.string(),
+    entries: z.array(CeremonyEntry),
+  }),
+  z.strictObject({ type: z.literal('countdown'), seconds: z.number().int().min(1) }),
+  z.strictObject({
+    type: z.literal('winner'),
+    boardKey: z.string(),
+    name: CeremonyName,
+    grand: z.boolean(),
+    /** Co-winners when the tie rule is "shared". */
+    tied: z.boolean(),
+    winners: z.array(CeremonyEntry.extend({ giver: PersonSchema })),
+  }),
+  z.strictObject({
+    type: z.literal('achievement'),
+    achievementKey: z.string(),
+    recipients: z.array(PersonSchema),
+  }),
+  /** Participation recognition (independent of votes): each earner is also announced on their own stream. */
+  z.strictObject({ type: z.literal('spirit'), recipientCount: Count }),
+  z.strictObject({ type: z.literal('champion'), person: PersonSchema }),
+  z.strictObject({ type: z.literal('outro') }),
+]);
+export const CeremonyStatusSchema = z.enum(['idle', 'running', 'paused', 'done', 'cancelled']);
+export const CeremonyViewSchema = z.strictObject({
+  status: CeremonyStatusSchema,
+  index: z.number().int().min(0),
+  total: z.number().int().min(0),
+  /** Server deadline of an auto-advancing step (countdown); clients count down against server time. */
+  endsAt: IsoDateSchema.nullable(),
+  step: CeremonyStepSchema.nullable(),
+});
+export type CeremonyStepOutput = z.infer<typeof CeremonyStepSchema>;
+export type CeremonyViewOutput = z.infer<typeof CeremonyViewSchema>;
 
 /**
  * Display/pub "scene" payload: what the big screen should show now. Public data only
@@ -174,6 +234,8 @@ export const SceneSchema = z.discriminatedUnion('scene', [
     closed: z.boolean(),
   }),
   z.strictObject({ scene: z.literal('phase'), phase: PhaseSchema }),
+  /** Award ceremony in progress/finished: full-screen show driven by the organizer + durable timers. */
+  z.strictObject({ scene: z.literal('ceremony'), ceremony: CeremonyViewSchema }),
 ]);
 
 /**
@@ -187,7 +249,14 @@ export const AnnouncementSchema = z.strictObject({
   at: IsoDateSchema,
 });
 
-export const SURFACES = ['eventState', 'giftList', 'leaderboard', 'scene', 'announcement'] as const;
+export const SURFACES = [
+  'eventState',
+  'giftList',
+  'leaderboard',
+  'leaderboards',
+  'scene',
+  'announcement',
+] as const;
 export type Surface = (typeof SURFACES)[number];
 
 export type EventStateOutput =
@@ -208,6 +277,7 @@ export const OutputSchemas = {
     eventState: ParticipantEventStateSchema,
     giftList: PublicGiftListSchema,
     leaderboard: PublicLeaderboardSchema,
+    leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
     announcement: AnnouncementSchema,
   },
@@ -215,6 +285,7 @@ export const OutputSchemas = {
     eventState: DisplayEventStateSchema,
     giftList: PublicGiftListSchema,
     leaderboard: PublicLeaderboardSchema,
+    leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
     announcement: AnnouncementSchema,
   },
@@ -222,6 +293,7 @@ export const OutputSchemas = {
     eventState: OrganizerMaskedEventStateSchema,
     giftList: PublicGiftListSchema,
     leaderboard: PublicLeaderboardSchema,
+    leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
     announcement: AnnouncementSchema,
   },
@@ -229,6 +301,7 @@ export const OutputSchemas = {
     eventState: OrganizerUnmaskedEventStateSchema,
     giftList: UnmaskedGiftListSchema,
     leaderboard: UnmaskedLeaderboardSchema,
+    leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
     announcement: AnnouncementSchema,
   },

@@ -6,13 +6,14 @@ import {
   closeVoting,
   enqueueJob,
   events,
+  publishLiveBoards,
   publishVotedCounter,
   votingIsClosed,
   type Db,
 } from '@santa/db';
 import type { JobRunner } from '../jobs/runner.js';
 import type { RealtimeHub } from './hub.js';
-import { broadcastEventState } from './broadcast.js';
+import { broadcastBoards, broadcastEventState } from './broadcast.js';
 
 /**
  * Durable voting timers. Handlers are idempotent (at-least-once delivery):
@@ -43,7 +44,10 @@ export function registerVotingJobs(
     const [e] = await db.select().from(events).where(eq(events.id, job.eventId));
     if (!e || e.phase !== 'voting' || votingIsClosed(e, now)) return; // final publish happens at close
     const r = await publishVotedCounter(db, job.eventId, now);
+    // live boards: only republished when the projection changed AND canPublish passes
+    const boardsChanged = await publishLiveBoards(db, job.eventId, now);
     if (r.changed) await broadcastEventState(hub, db, job.eventId);
+    else if (boardsChanged) await broadcastBoards(hub, db, job.eventId);
     await enqueueJob(db, {
       eventId: job.eventId,
       kind: BOARD_PUBLISH_JOB,

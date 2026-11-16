@@ -338,6 +338,16 @@ export class RealtimeHub {
     );
   }
 
+  /** Takedown: every participant and display socket of the event. */
+  dropEventAudience(eventId: string) {
+    this.disconnectWhere(
+      (s) =>
+        (s.data.principal.kind === 'guest' || s.data.principal.kind === 'display') &&
+        s.data.principal.eventId === eventId,
+      'revoked',
+    );
+  }
+
   async close() {
     this.reactions.close();
     await new Promise<void>((resolve) => this.io.close(() => resolve()));

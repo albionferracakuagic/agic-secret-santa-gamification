@@ -134,6 +134,10 @@ export const events = pgTable(
     votingEndsAt: ts('voting_ends_at'),
     /** Gift currently being opened (opening phase); plain uuid, no FK (gifts reference events). */
     currentGiftId: uuid('current_gift_id'),
+    /** Set when the phase machine reaches `completed` (drives retention). */
+    completedAt: ts('completed_at'),
+    /** Platform-admin takedown: all participant/display access stops while set. */
+    suspendedAt: ts('suspended_at'),
     settings: jsonb('settings').$type<EventSettings>().notNull(),
     defaultLocale: text('default_locale').notNull().default('en'),
     createdAt: createdAt(),
@@ -198,6 +202,8 @@ export const participants = pgTable(
     prefs: jsonb('prefs').$type<Record<string, unknown>>().notNull().default({}),
     /** Organizer mute: this participant's reactions are silently dropped. */
     reactionsMuted: boolean('reactions_muted').notNull().default(false),
+    /** Set by delete-my-data: personal fields erased, entry kept only as "Former player". */
+    anonymizedAt: ts('anonymized_at'),
     userId: text('user_id').references(() => user.id),
     createdAt: createdAt(),
   },
@@ -349,6 +355,8 @@ export const boardPublications = pgTable(
     lastPublished: jsonb('last_published'),
     lastPublishedAt: ts('last_published_at'),
     cursor: integer('cursor').notNull().default(0),
+    /** Organizer enabled the live board despite a small cohort (< liveBoardMinVoters). */
+    forced: boolean('forced').notNull().default(false),
   },
   (t) => [unique('board_publications_event_board_uq').on(t.eventId, t.boardKey)],
 );
@@ -407,7 +415,11 @@ export const awards = pgTable(
     confirmedBy: text('confirmed_by').references(() => user.id),
     revealedAt: ts('revealed_at'),
   },
-  (t) => [index('awards_event_idx').on(t.eventId, t.boardKey, t.votingRound)],
+  (t) => [
+    index('awards_event_idx').on(t.eventId, t.boardKey, t.votingRound),
+    // one award per category per voting round (a reopened round bumps votingRound)
+    unique('awards_event_board_round_uq').on(t.eventId, t.boardKey, t.votingRound),
+  ],
 );
 
 export const ceremonyState = pgTable('ceremony_state', {
@@ -416,6 +428,14 @@ export const ceremonyState = pgTable('ceremony_state', {
     .references(() => events.id, { onDelete: 'cascade' }),
   script: jsonb('script').$type<unknown[]>().notNull().default([]),
   stepIndex: integer('step_index').notNull().default(0),
+  status: text('status')
+    .$type<'idle' | 'running' | 'paused' | 'done' | 'cancelled'>()
+    .notNull()
+    .default('idle'),
+  /** Server deadline of an auto-advancing step (countdown). */
+  stepEndsAt: ts('step_ends_at'),
+  votingRound: integer('voting_round').notNull().default(1),
+  startedAt: ts('started_at'),
 });
 
 export const scheduledJobs = pgTable(

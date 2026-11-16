@@ -7,6 +7,7 @@ export const SurfaceNameSchema = z.enum([
   'eventState',
   'giftList',
   'leaderboard',
+  'leaderboards',
   'scene',
   'announcement',
 ]);

@@ -65,16 +65,14 @@ async function setup(n = 8) {
     )
     .returning();
   ids = rows.map((r) => r.id);
-  await db
-    .insert(s.pairings)
-    .values(
-      ids.map((giverId, i) => ({
-        eventId,
-        giverId,
-        recipientId: ids[(i + 1) % n]!,
-        source: 'import' as const,
-      })),
-    );
+  await db.insert(s.pairings).values(
+    ids.map((giverId, i) => ({
+      eventId,
+      giverId,
+      recipientId: ids[(i + 1) % n]!,
+      source: 'import' as const,
+    })),
+  );
 }
 const phase = (
   p: typeof s.events.$inferInsert.phase,

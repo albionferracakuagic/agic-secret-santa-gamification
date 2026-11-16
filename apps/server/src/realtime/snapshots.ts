@@ -4,6 +4,7 @@ import {
   projectEventState,
   projectGiftList,
   projectLeaderboard,
+  projectLeaderboards,
   projectScene,
   type Viewer,
 } from '@santa/domain';
@@ -21,6 +22,7 @@ const sceneOf = (c: EventContext) =>
     people: c.people,
     join: c.join,
     votedCount: c.votedCount,
+    ceremony: c.ceremony,
   });
 
 /** Public (display-role) projections shared by the pub stream: gifts, board, scene. */
@@ -36,8 +38,10 @@ export function publicSurfaces(c: EventContext, now = new Date()) {
     ),
     scene: sceneOf(c),
   };
-  const board = c.boards[0];
-  if (board) out['leaderboard'] = projectLeaderboard(board, c.labels);
+  out['leaderboards'] = projectLeaderboards(c.boards, c.labelsFor);
+  // deprecated single-board surface, kept for existing clients
+  const board = c.boards.find((b) => b.state !== 'hidden');
+  if (board) out['leaderboard'] = projectLeaderboard(board, c.labelsFor(board.boardKey));
   return out;
 }
 

@@ -74,6 +74,7 @@ export async function resolveJoinTarget(db: Db, t: JoinTarget, now: Date): Promi
   const [row] = await db
     .select({ eventId: s.eventAccess.eventId })
     .from(s.eventAccess)
+    .innerJoin(s.events, and(eq(s.events.id, s.eventAccess.eventId), isNull(s.events.suspendedAt)))
     .where(
       and(
         eq(s.eventAccess.kind, 'join'),
@@ -91,6 +92,7 @@ export async function resolveDisplayToken(db: Db, tokenHash: string, now: Date) 
   const [row] = await db
     .select({ eventId: s.eventAccess.eventId, expiresAt: s.eventAccess.expiresAt })
     .from(s.eventAccess)
+    .innerJoin(s.events, and(eq(s.events.id, s.eventAccess.eventId), isNull(s.events.suspendedAt)))
     .where(
       and(
         eq(s.eventAccess.kind, 'display'),
@@ -314,15 +316,16 @@ export async function approveParticipant(
 
 export async function findParticipantBySession(db: Db, sessionTokenHash: string) {
   const [row] = await db
-    .select()
+    .select({ p: s.participants })
     .from(s.participants)
+    .innerJoin(s.events, and(eq(s.events.id, s.participants.eventId), isNull(s.events.suspendedAt)))
     .where(
       and(
         eq(s.participants.sessionTokenHash, sessionTokenHash),
         ne(s.participants.status, 'removed'),
       ),
     );
-  return row ?? null;
+  return row?.p ?? null;
 }
 
 export async function updateProfile(

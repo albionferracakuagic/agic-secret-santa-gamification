@@ -36,6 +36,13 @@
       "when": 1794864691501,
       "tag": "0004_gift_reveal_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794866016121,
+      "tag": "0005_boards_ceremony_privacy",
+      "breakpoints": true
     }
   ]
 }

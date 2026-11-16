@@ -180,6 +180,7 @@ export async function changePhase(
         ...(m.votingClosedAt ? { votingClosedAt: m.votingClosedAt } : {}),
         ...(m.revealStartedAt ? { revealStartedAt: m.revealStartedAt } : {}),
         ...(m.ceremonyStartedAt ? { ceremonyStartedAt: m.ceremonyStartedAt } : {}),
+        ...(t.patch.phase === 'completed' ? { completedAt: p.now } : { completedAt: null }),
         updatedAt: p.now,
       })
       .where(eq(s.events.id, p.eventId));

@@ -17,6 +17,7 @@ import {
   projectGiftList,
   projectScene,
   projectLeaderboard,
+  projectLeaderboards,
   projectLeaderboardUnmasked,
   type BoardSource,
   type EventSource,
@@ -162,6 +163,11 @@ function project(role: Role, surface: Surface, phase: Phase): unknown {
       at: '2026-12-24T21:00:00Z',
     };
   }
+  if (surface === 'leaderboards')
+    return projectLeaderboards([board('live'), board('hidden')], () => ({
+      'G-2': 'Gift 1',
+      'G-1': 'Gift 3',
+    }));
   if (role === 'organizer_unmasked') {
     return projectLeaderboardUnmasked(
       v,

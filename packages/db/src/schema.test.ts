@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { DEFAULT_CATEGORIES } from '@santa/contracts';
 import { and, eq, getTableColumns, getTableName } from 'drizzle-orm';
 import { createTestDb, type TestDb } from './testing.js';
 import { seedDemoEvent } from './seed.js';
@@ -31,11 +32,9 @@ describe('schema constraints', () => {
       .select()
       .from(s.votingCategories)
       .where(eq(s.votingCategories.eventId, eventId));
-    expect(cats.map((c) => c.name['it']).sort()).toEqual([
-      'Miglior Regalo',
-      'Più Creativo',
-      'Più Divertente',
-    ]);
+    expect(cats.map((c) => c.name['it']).sort()).toEqual(
+      DEFAULT_CATEGORIES.map((c) => c.name.it).sort(),
+    );
     const pairs = await db.select().from(s.pairings).where(eq(s.pairings.eventId, eventId));
     expect(pairs).toHaveLength(8);
     const [ev] = await db.select().from(s.events).where(eq(s.events.id, eventId));

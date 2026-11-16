@@ -31,6 +31,7 @@ export async function broadcastEventState(hub: RealtimeHub, db: Db, eventId: str
   const pub = publicSurfaces(c);
   hub.publish(eventId, 'pub', 'scene', pub['scene']);
   hub.publish(eventId, 'pub', 'giftList', pub['giftList']); // count_only <-> gallery flips with the phase
+  hub.publish(eventId, 'pub', 'leaderboards', pub['leaderboards']);
   hub.publish(
     eventId,
     'org',
@@ -56,4 +57,18 @@ export async function broadcastGifts(hub: RealtimeHub, db: Db, eventId: string) 
   const s = publicSurfaces(c);
   hub.publish(eventId, 'pub', 'giftList', s['giftList']);
   hub.publish(eventId, 'pub', 'scene', s['scene']);
+}
+
+/** Boards changed (cadence tick, enable/pause/hide, final publication). */
+export async function broadcastBoards(hub: RealtimeHub, db: Db, eventId: string) {
+  const c = await loadEventContext(db, eventId, hub.ctx);
+  hub.publish(eventId, 'pub', 'leaderboards', publicSurfaces(c)['leaderboards']);
+}
+
+/** Ceremony step changed: scene to display + participants (pub stream carries both). */
+export async function broadcastCeremony(hub: RealtimeHub, db: Db, eventId: string) {
+  const c = await loadEventContext(db, eventId, hub.ctx);
+  const s = publicSurfaces(c);
+  hub.publish(eventId, 'pub', 'scene', s['scene']);
+  hub.publish(eventId, 'pub', 'giftList', s['giftList']); // winner step reveals the giver
 }

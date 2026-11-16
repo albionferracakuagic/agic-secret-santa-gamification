@@ -186,7 +186,7 @@ describe('opening -> voting -> reveal (end to end, with live streams)', () => {
     const state = open.json();
     expect(state).toMatchObject({ status: 'open', votedCount: null });
     expect(Date.parse(state.endsAt) - before).toBeGreaterThan(299_000);
-    expect(state.categories).toHaveLength(3); // seeded demo event has 3 categories
+    expect(state.categories).toHaveLength(6); // seeded demo event has 6 categories
     await sleep(300);
     expect(latest(displayMsgs, 'pub', 'scene')).toMatchObject({
       scene: 'voting',
@@ -266,16 +266,16 @@ describe('opening -> voting -> reveal (end to end, with live streams)', () => {
 
   it('close locks winners via canPublish and rejects later votes; closing again and a late timer job are harmless', async () => {
     const closed = await call('POST', '/voting/close');
-    expect(closed.json()).toMatchObject({ categoriesLocked: 3, categoriesPublishable: 1 });
+    expect(closed.json()).toMatchObject({ categoriesLocked: 6, categoriesPublishable: 1 });
     const rows = await w.db.select().from(awards).where(eq(awards.eventId, w.eventId));
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(6);
     expect(rows.filter((r) => r.publishable)).toHaveLength(1);
     expect(rows.every((r) => r.lockedAt !== null)).toBe(true);
 
     const again = await call('POST', '/voting/close');
     expect(again.statusCode).toBe(200);
     expect(again.json().categoriesPublishable).toBe(1);
-    expect(await w.db.select().from(awards).where(eq(awards.eventId, w.eventId))).toHaveLength(3);
+    expect(await w.db.select().from(awards).where(eq(awards.eventId, w.eventId))).toHaveLength(6);
 
     const cat = (await me('GET', '/api/me/voting', 0)).json();
     expect(cat.status).toBe('closed');
@@ -293,7 +293,7 @@ describe('opening -> voting -> reveal (end to end, with live streams)', () => {
     const runner = new JobRunner(w.db, { clock: () => new Date(Date.now() + 10 * 60_000) });
     registerVotingJobs(runner, w.app.hub!, w.db, () => new Date(Date.now() + 10 * 60_000));
     await runner.tick();
-    expect(await w.db.select().from(awards).where(eq(awards.eventId, w.eventId))).toHaveLength(3);
+    expect(await w.db.select().from(awards).where(eq(awards.eventId, w.eventId))).toHaveLength(6);
   });
 
   it('reveal: per gift and all-at-once, giver appears only after revealedAt, idempotent, no way back', async () => {
@@ -404,7 +404,7 @@ describe('voting timer (durable autoclose)', () => {
 
       const [e] = await w.db.select().from(events).where(eq(events.id, w.eventId));
       expect(e!.votingClosedAt).not.toBeNull();
-      expect(await w.db.select().from(awards).where(eq(awards.eventId, w.eventId))).toHaveLength(3);
+      expect(await w.db.select().from(awards).where(eq(awards.eventId, w.eventId))).toHaveLength(6);
       const scene = [...msgs].reverse().find((m) => m.surface === 'scene')!.payload;
       expect(scene).toMatchObject({ scene: 'voting', closed: true });
       void byGiver;

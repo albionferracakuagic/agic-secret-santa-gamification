@@ -4,6 +4,7 @@ import type {
   PublicGiftOutput,
   PublicLeaderboardOutput,
   SceneOutput,
+  CeremonyViewOutput,
   UnmaskedGiftListOutput,
   UnmaskedLeaderboardOutput,
 } from '@santa/contracts';
@@ -180,6 +181,8 @@ export function projectLeaderboard(
   return {
     boardKey: board.boardKey,
     state: board.state,
+    // live but nothing may be shown safely => neutral fallback (no promise of a later reveal)
+    message: board.state !== 'hidden' && !published ? 'christmas_magic' : null,
     entries: published
       ? published.entries.map((e) => ({
           entryId: e.entryId,
@@ -188,6 +191,18 @@ export function projectLeaderboard(
           tied: e.tied,
         }))
       : [],
+  };
+}
+
+/** All visible boards (hidden boards are omitted entirely). */
+export function projectLeaderboards(
+  boards: readonly BoardSource[],
+  labelsFor: (boardKey: string) => Readonly<Record<string, string>>,
+): { boards: PublicLeaderboardOutput[] } {
+  return {
+    boards: boards
+      .filter((b) => b.state !== 'hidden')
+      .map((b) => projectLeaderboard(b, labelsFor(b.boardKey))),
   };
 }
 
@@ -216,11 +231,16 @@ export interface SceneInput {
   join: { url: string; shortCode: string } | null;
   /** Published counter (cadence). */
   votedCount: number | null;
+  /** Ceremony view (public payload) when one is running/finished. */
+  ceremony?: CeremonyViewOutput | null;
 }
 
 /** What the display should show now. Public data only; identical for every role. */
 export function projectScene(i: SceneInput): SceneOutput {
   const { event: e } = i;
+  if (i.ceremony && i.ceremony.status !== 'idle' && i.ceremony.status !== 'cancelled') {
+    return { scene: 'ceremony', ceremony: i.ceremony };
+  }
   if (e.phase === 'preparation' || e.phase === 'registration' || e.phase === 'gift_registration') {
     return {
       scene: 'lobby',

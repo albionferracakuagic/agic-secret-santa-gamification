@@ -2,6 +2,7 @@ import { and, desc, eq, gt, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import {
   VOTED_COUNTER_KEY,
   boardPublications,
+  ceremonyView,
   eventAccess,
   events,
   gifts,
@@ -10,6 +11,7 @@ import {
   pairings,
   type Db,
 } from '@santa/db';
+import { XP_BOARD_KEY, type CeremonyViewOutput } from '@santa/contracts';
 import {
   giftLabel,
   type BoardSource,
@@ -97,6 +99,9 @@ export interface EventContext {
   labels: Record<string, string>;
   /** Published boards (excluding the voted-counter row). */
   boards: BoardSource[];
+  /** Labels for a board's entries: gift aliases for categories, display names for the XP board. */
+  labelsFor(boardKey: string): Record<string, string>;
+  ceremony: CeremonyViewOutput | null;
 }
 
 export async function loadEventContext(
@@ -105,7 +110,7 @@ export async function loadEventContext(
   ctx: RealtimeContext,
   now = new Date(),
 ): Promise<EventContext> {
-  const [event, people, giftRows, votedCount, access, boardRows] = await Promise.all([
+  const [event, people, giftRows, votedCount, access, boardRows, ceremony] = await Promise.all([
     loadEventSource(db, eventId),
     loadParticipantSources(db, eventId),
     loadGiftSources(db, eventId, ctx.storage),
@@ -133,6 +138,7 @@ export async function loadEventContext(
           ne(boardPublications.boardKey, VOTED_COUNTER_KEY),
         ),
       ),
+    ceremonyView(db, eventId),
   ]);
   const code = access[0]?.shortCode ?? null;
   return {
@@ -142,6 +148,11 @@ export async function loadEventContext(
     votedCount,
     join: code ? { url: `${ctx.baseUrl}/j?code=${code}`, shortCode: code } : null,
     labels: Object.fromEntries(giftRows.map((g) => [g.id, giftLabel(g)])),
+    labelsFor: (boardKey) =>
+      boardKey === XP_BOARD_KEY
+        ? Object.fromEntries(people.map((p) => [p.id, p.displayName]))
+        : Object.fromEntries(giftRows.map((g) => [g.id, giftLabel(g)])),
+    ceremony,
     boards: boardRows.map((b) => ({
       boardKey: b.boardKey,
       state: b.state,

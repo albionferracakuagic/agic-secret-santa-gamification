@@ -65,6 +65,17 @@ export const STATUS: Record<string, number> = {
   invalid_category: 404,
   verification_required: 403,
   invalid_image: 400,
+  small_cohort_ack_required: 409,
+  board_hidden: 409,
+  ceremony_started: 409,
+  ceremony_not_running: 409,
+  ceremony_not_paused: 409,
+  stale_step: 409,
+  not_in_awards_phase: 409,
+  decisions_pending: 409,
+  nothing_to_show: 409,
+  no_decision_needed: 409,
+  not_a_candidate: 422,
 };
 
 export const fail = (reply: FastifyReply, status: number, code: string, message = code) =>

@@ -20,6 +20,9 @@ import { registerPairingRoutes } from './routes/pairing.js';
 import { registerJoinRoutes } from './routes/join.js';
 import { registerGiftRoutes } from './routes/gifts.js';
 import { registerVotingRoutes } from './routes/voting.js';
+import { registerShowRoutes } from './routes/show.js';
+import { registerAdminRoutes } from './routes/admin.js';
+import { loggerOptions, type LogSink } from './logging.js';
 import { LocalFsStorage, registerMediaRoute } from './storage/local.js';
 import type { StorageAdapter } from './storage/adapter.js';
 import { randomBytes } from 'node:crypto';
@@ -52,6 +55,8 @@ export interface AppOptions {
   /** Public join endpoints: per-IP requests/minute (defaults: resolve/display 20, claim 10). */
   joinRateLimits?: { resolve: number; claim: number };
   rateLimitMax?: number;
+  /** Structured request logging (off by default; tests pass a sink to verify redaction). */
+  logging?: boolean | { sink: LogSink };
 }
 
 const NO_ORGANIZERS: OrganizerSessions = {
@@ -60,7 +65,12 @@ const NO_ORGANIZERS: OrganizerSessions = {
 };
 
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false, trustProxy: true });
+  const app = Fastify({
+    logger: !opts.logging
+      ? false
+      : loggerOptions(typeof opts.logging === 'object' ? opts.logging.sink : undefined),
+    trustProxy: true,
+  });
   const guardEnv: GuardEnv =
     opts.guardEnv ?? (process.env['NODE_ENV'] === 'production' ? 'production' : 'development');
 
@@ -87,6 +97,11 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     return payload;
   });
   registerIdempotency(app);
+
+  // Default 404 handler logs the raw URL (may hold tokens); ours does not.
+  app.setNotFoundHandler((_req, reply) =>
+    reply.status(404).send({ error: { code: 'not_found', message: 'not_found' } }),
+  );
 
   // Routes are registered in app.after(): @fastify/rate-limit (and other plugins) must finish loading
   // first, otherwise their onRoute hooks never see these routes and limits silently don't apply.
@@ -159,6 +174,21 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         sessions: sessions ?? NO_ORGANIZERS,
         principals,
         hub,
+        clock,
+      });
+      registerShowRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
+      });
+      registerAdminRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        storage,
         clock,
       });
       if (sessions) {

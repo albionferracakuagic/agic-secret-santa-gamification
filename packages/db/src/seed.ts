@@ -1,5 +1,5 @@
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import { defaultEventSettings } from '@santa/contracts';
+import { DEFAULT_CATEGORIES, defaultEventSettings } from '@santa/contracts';
 import * as s from './schema.js';
 
 type Db = PgDatabase<PgQueryResultHKT, typeof s>;
@@ -59,11 +59,9 @@ export async function seedDemoEvent(db: Db) {
     })),
   );
 
-  await db.insert(s.votingCategories).values([
-    { eventId, key: 'best_gift', name: { en: 'Best Gift', it: 'Miglior Regalo' }, sort: 1 },
-    { eventId, key: 'most_creative', name: { en: 'Most Creative', it: 'Più Creativo' }, sort: 2 },
-    { eventId, key: 'funniest', name: { en: 'Funniest', it: 'Più Divertente' }, sort: 3 },
-  ]);
+  await db
+    .insert(s.votingCategories)
+    .values(DEFAULT_CATEGORIES.map((c, i) => ({ eventId, key: c.key, name: c.name, sort: i + 1 })));
 
   await db.insert(s.xpLedger).values(
     people.map((p) => ({

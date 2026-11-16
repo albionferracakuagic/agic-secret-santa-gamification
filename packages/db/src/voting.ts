@@ -6,6 +6,7 @@ import { writeAudit } from './audit.js';
 import { awardXp } from './xp.js';
 import { cancelJobs, enqueueJob } from './jobs.js';
 import { changePhase, EventError } from './events.js';
+import { freezeBoards } from './boards.js';
 
 export const VOTING_AUTOCLOSE_JOB = 'voting.autoclose';
 export const BOARD_PUBLISH_JOB = 'board.publish';
@@ -115,16 +116,28 @@ export async function closeVoting(
         .filter((v) => v.categoryId === c.id)
         .map((v) => ({ voterId: v.voterId, entryId: v.giftId }));
       const result = canPublishBallots(ballots, cfg, { purpose: 'final' });
-      const ok = result.ok;
+      let ok = result.ok;
+      let winners = result.ok
+        ? result.entries.filter((x) => x.rank === 1).map((x) => x.entryId)
+        : [];
+      let tieInfo: Record<string, unknown> = { tied: winners.length > 1 };
+      if (!result.ok && result.reason === 'organizer_decision_required') {
+        // Floors passed but the tie rule wants a human: candidates wait for POST .../awards/:boardKey/decide.
+        const live = canPublishBallots(ballots, cfg, { purpose: 'live' });
+        const candidates = live.ok
+          ? live.entries.filter((x) => x.rank === 1).map((x) => x.entryId)
+          : [];
+        ok = candidates.length > 0;
+        winners = [];
+        tieInfo = { tied: true, needsDecision: true, candidates };
+      }
       if (ok) publishable++;
       await tx.insert(s.awards).values({
         eventId: p.eventId,
         boardKey: c.key,
         votingRound: e.votingRound,
-        winners: result.ok ? result.entries.filter((x) => x.rank === 1).map((x) => x.entryId) : [],
-        tieInfo: {
-          tied: result.ok ? result.entries.filter((x) => x.rank === 1).length > 1 : false,
-        },
+        winners,
+        tieInfo,
         publishable: ok,
         lockedAt: p.now,
       });
@@ -132,6 +145,7 @@ export async function closeVoting(
 
     await cancelJobs(tx, p.eventId, [VOTING_AUTOCLOSE_JOB]);
     await publishVotedCounter(tx, p.eventId, p.now);
+    await freezeBoards(tx, p.eventId);
     await writeAudit(tx, {
       eventId: p.eventId,
       actor: p.actor,

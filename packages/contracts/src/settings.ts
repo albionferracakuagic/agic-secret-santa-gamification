@@ -29,7 +29,17 @@ export const EventSettingsSchema = z.strictObject({
       autoApproveJoin: z.boolean().default(false),
     })
     .prefault({}),
-  retention: z.strictObject({ photoDays: z.number().int().min(1).default(90) }).prefault({}),
+  retention: z
+    .strictObject({
+      /** Gift photos are deleted this many days after the event completes (default 90). */
+      photoDays: z.number().int().min(1).default(90),
+      /** Roster emails are erased this many days after completion (data minimisation). */
+      emailDays: z.number().int().min(1).default(30),
+    })
+    .prefault({}),
+  /** Category whose winner is the Grand Champion in the ceremony. */
+  grandChampionBoard: z.string().default('best_overall'),
+  ceremonyCountdownSeconds: z.number().int().min(3).max(30).default(5),
 });
 export type EventSettings = z.infer<typeof EventSettingsSchema>;
 
@@ -37,7 +47,7 @@ export const defaultEventSettings = (): EventSettings => EventSettingsSchema.par
 
 /** Default voting categories (EN/IT) created with every event; all vote-derived output goes via canPublish(). */
 export const DEFAULT_CATEGORIES = [
-  { key: 'best_gift', name: { en: 'Best Gift', it: 'Miglior Regalo' } },
+  { key: 'most_thoughtful', name: { en: 'Most Thoughtful', it: 'Più Premuroso' } },
   { key: 'most_creative', name: { en: 'Most Creative', it: 'Più Creativo' } },
   { key: 'funniest', name: { en: 'Funniest', it: 'Più Divertente' } },
   { key: 'best_presentation', name: { en: 'Best Presentation', it: 'Miglior Confezione' } },
