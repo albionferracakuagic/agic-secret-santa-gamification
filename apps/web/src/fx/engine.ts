@@ -39,7 +39,7 @@ export function createFxEngine(d: FxEngineDeps) {
   const level = () => effectiveIntensity(d.getPrefs(), d.getCap(), d.systemReduce?.());
 
   return {
-    emit(event: FxEvent) {
+    emit(event: FxEvent, opts: { glyph?: string } = {}) {
       const cue = FX_CATALOG[EVENT_TO_CUE[event]];
       const t = now();
       if (t - (lastAt.get(cue.id) ?? -Infinity) < gap) return;
@@ -53,7 +53,7 @@ export function createFxEngine(d: FxEngineDeps) {
       if (d.getPrefs().sound && 'sfx' in cue) d.host.play(cue.sfx);
       const v = cue.visual;
       if (v.kind === 'emoji')
-        d.host.emoji(v.glyph, Math.max(1, Math.round(v.count * f)), v.durationMs);
+        d.host.emoji(opts.glyph ?? v.glyph, Math.max(1, Math.round(v.count * f)), v.durationMs);
       else if (v.kind === 'confetti') d.host.confetti(Math.max(10, Math.round(v.count * f)));
       else d.host.fireworks(Math.max(1, Math.round(v.bursts * f)));
     },

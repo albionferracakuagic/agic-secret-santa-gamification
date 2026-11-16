@@ -67,7 +67,10 @@ export function FxOverlay() {
         <canvas ref={conf} aria-hidden="true" className="absolute inset-0 h-full w-full" />
         <div ref={lights} aria-hidden="true" className="fx-lights" style={{ display: 'none' }} />
         {visualsOff && caption && (
-          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded bg-ink-900 px-4 py-2 text-white">
+          <p
+            aria-hidden="true"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded bg-ink-900 px-4 py-2 text-white"
+          >
             {caption}
           </p>
         )}
