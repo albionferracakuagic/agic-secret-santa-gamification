@@ -1,25 +1,30 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useParticipantApi } from '../api/participant';
-import { avatarGlyph } from '../fx/avatars';
-import { floatReaction } from '../fx/reactions';
 import type {
+  AnnouncementOutput,
   EventStateOutput,
   PublicGiftListOutput,
   PublicLeaderboardOutput,
+  SceneOutput,
 } from '@santa/contracts';
+import { useParticipantApi } from '../api/participant';
+import { avatarGlyph } from '../fx/avatars';
+import { floatReaction } from '../fx/reactions';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { Qr } from '../components/Qr';
+import { Countdown } from '../components/Countdown';
+import { OpeningStage } from '../components/OpeningStage';
+import { Podium } from '../components/Podium';
 import { emitFx } from '../fx/bus';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
 
 type DState = Extract<EventStateOutput, { role: 'display' }>;
-type Announcement = { displayName: string; avatar: string | null; achievement: string };
 
 const STAGE_W = 1920;
 const STAGE_H = 1080;
+const ANNOUNCE_MS = 8000;
 
 /** Fit the fixed 1080p stage to any viewport (letterboxed, never cropped). */
 function useStageScale() {
@@ -33,7 +38,7 @@ function useStageScale() {
   return s;
 }
 
-/** Fires cues only on changes after the first snapshot, never on initial load. */
+/** Fires only on changes after the first snapshot, never on initial load. */
 function usePrevEffect<T>(v: T | undefined, fn: (prev: T, next: T | undefined) => void) {
   const prev = useRef<T | undefined>(undefined);
   const first = useRef(true);
@@ -43,13 +48,6 @@ function usePrevEffect<T>(v: T | undefined, fn: (prev: T, next: T | undefined) =
     prev.current = v;
   }, [v]);
 }
-
-const asAnnouncement = (x: unknown): Announcement | undefined => {
-  const a = x as Partial<Announcement> | undefined;
-  return a && typeof a.displayName === 'string' && typeof a.achievement === 'string'
-    ? { displayName: a.displayName, avatar: a.avatar ?? null, achievement: a.achievement }
-    : undefined;
-};
 
 /** /d[/<token>] — exchanges the display token for its cookie first, and only then opens the realtime stream. */
 export default function Display() {
@@ -63,17 +61,18 @@ export default function Display() {
   return token ? null : <DisplayStage />;
 }
 
-/** Renders only what the display projection sent; join link/code come from the display URL. */
+/** Renders only the display projection (scene, event state, gift list, leaderboard, announcement). */
 function DisplayStage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const { rt, state } = useRealtime();
   const es = surfaceOf<DState>(state, 'pub', 'eventState');
+  const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const board = surfaceOf<PublicLeaderboardOutput>(state, 'pub', 'leaderboard');
-  const announcement = asAnnouncement(state.surfaces['pub']?.['announcement']);
-  const endsAt = state.surfaces['pub']?.['votingEndsAt'];
+  const announcement = surfaceOf<AnnouncementOutput>(state, 'pub', 'announcement');
   const scale = useStageScale();
+  const now = () => rt?.serverNow() ?? Date.now();
 
   usePrevEffect(
     es?.counts.participants,
@@ -84,25 +83,71 @@ function DisplayStage() {
     (p, n) => n !== undefined && p < n && emitFx('gift_registered'),
   );
   usePrevEffect(es?.votedCount, (p, n) => n !== undefined && p < n && emitFx('vote_submitted'));
-  usePrevEffect(es?.phase, (_p, n) => {
-    if (n === 'voting') emitFx('voting_started');
-    if (n === 'awards') emitFx('grand_winner');
-  });
+  usePrevEffect(scene?.scene, (_p, n) => n === 'voting' && emitFx('voting_started'));
+  usePrevEffect(es?.phase, (_p, n) => n === 'awards' && emitFx('grand_winner'));
   usePrevEffect(
     es && (board?.entries[0]?.entryId ?? ''),
     (_p, n) => n && emitFx('leaderboard_entry'),
   );
   usePrevEffect(
-    es && (announcement ? announcement.displayName + '|' + announcement.achievement : ''),
-    (_p, n) => n && emitFx('achievement_earned'),
+    gifts &&
+      (gifts.mode === 'gallery' ? gifts.gifts.filter((g) => g.status === 'revealed').length : 0),
+    (p, n) => n !== undefined && p < n && emitFx('correct_guess'),
   );
   usePrevEffect(state.reactions.at(-1)?.seq ?? 0, () => {
     const last = state.reactions.at(-1);
     if (last) floatReaction(last.kind);
   });
 
-  const joinUrl = params.get('join') ?? `${location.origin}/j`;
+  const joinUrl = params.get('join');
   const shortCode = params.get('code');
+
+  let body: ReactNode;
+  if (!es || !scene) body = <Scene title={t('display.waiting')} />;
+  else if (scene.scene === 'lobby')
+    body = (
+      <LobbyScene
+        name={es.name}
+        participants={scene.participants}
+        joinUrl={scene.joinUrl ?? joinUrl ?? `${location.origin}/j`}
+        code={scene.shortCode ?? shortCode}
+      />
+    );
+  else if (scene.scene === 'opening')
+    body = (
+      <Scene title={t('display.openingTitle')}>
+        <OpeningStage
+          big
+          current={scene.current}
+          openedCount={scene.openedCount}
+          total={scene.total}
+        />
+      </Scene>
+    );
+  else if (scene.scene === 'voting')
+    body = (
+      <Scene title={t(scene.closed ? 'display.votingClosed' : 'display.votingTitle')}>
+        {!scene.closed && scene.endsAt && (
+          <Countdown endsAt={scene.endsAt} now={now} className="text-[12rem]" />
+        )}
+        {scene.votedCount !== null && <Big n={scene.votedCount} label={t('display.voted')} />}
+      </Scene>
+    );
+  else if (scene.phase === 'gift_registration')
+    body = (
+      <Scene title={t('display.registrationTitle')}>
+        <Big n={es.counts.giftsRegistered} label={t('display.giftsRegistered')} />
+        <p className="text-4xl">{t('display.outOf', { n: es.counts.participants })}</p>
+      </Scene>
+    );
+  else if (scene.phase === 'reveal') body = <RevealScene gifts={gifts} board={board} />;
+  else if (['games', 'awards', 'completed'].includes(scene.phase))
+    body = (
+      <Scene title={t('display.boardTitle')}>
+        <Podium big board={board} />
+      </Scene>
+    );
+  else body = <Scene title={t(`phase.${scene.phase}`)} />;
 
   return (
     <div
@@ -119,28 +164,8 @@ function DisplayStage() {
         }}
         data-testid="display-stage"
       >
-        {!es ? (
-          <Scene title={t('display.waiting')} />
-        ) : announcement ? (
-          <AchievementScene a={announcement} />
-        ) : es.phase === 'voting' ? (
-          <VotingScene
-            es={es}
-            endsAt={typeof endsAt === 'string' ? endsAt : undefined}
-            now={() => rt?.serverNow() ?? Date.now()}
-          />
-        ) : es.phase === 'gift_registration' ? (
-          <RegistrationScene es={es} />
-        ) : es.phase === 'gift_opening' ? (
-          <GiftOpeningScene es={es} gifts={gifts} />
-        ) : es.phase === 'reveal' ||
-          es.phase === 'awards' ||
-          es.phase === 'completed' ||
-          es.phase === 'games' ? (
-          <BoardScene board={board} gifts={gifts} />
-        ) : (
-          <LobbyScene es={es} joinUrl={joinUrl} code={shortCode} />
-        )}
+        {body}
+        <AnnouncementOverlay announcement={announcement} ready={!!es} />
       </div>
       <SoundUnlock />
     </div>
@@ -168,10 +193,20 @@ const Big = ({ n, label }: { n: number; label: string }) => (
   </p>
 );
 
-function LobbyScene({ es, joinUrl, code }: { es: DState; joinUrl: string; code: string | null }) {
+function LobbyScene({
+  name,
+  participants,
+  joinUrl,
+  code,
+}: {
+  name: string;
+  participants: number;
+  joinUrl: string;
+  code: string | null;
+}) {
   const { t } = useTranslation();
   return (
-    <Scene title={t('display.welcome', { event: es.name })}>
+    <Scene title={t('display.welcome', { event: name })}>
       <div className="flex items-center gap-24">
         <div className="h-[420px] w-[420px] rounded-2xl bg-white p-4 text-ink-900">
           <Qr value={joinUrl} label={t('display.qrLabel')} />
@@ -179,142 +214,95 @@ function LobbyScene({ es, joinUrl, code }: { es: DState; joinUrl: string; code: 
         <div className="space-y-6 text-left">
           <p className="text-4xl">{t('display.scanToJoin')}</p>
           {code && <p className="text-7xl font-bold tracking-widest">{code}</p>}
-          <Big n={es.counts.participants} label={t('display.joined')} />
+          <Big n={participants} label={t('display.joined')} />
         </div>
       </div>
     </Scene>
   );
 }
 
-function RegistrationScene({ es }: { es: DState }) {
+function RevealScene({
+  gifts,
+  board,
+}: {
+  gifts: PublicGiftListOutput | undefined;
+  board: PublicLeaderboardOutput | undefined;
+}) {
   const { t } = useTranslation();
+  const revealed =
+    gifts?.mode === 'gallery' ? gifts.gifts.filter((g) => g.status === 'revealed') : [];
   return (
-    <Scene title={t('display.registrationTitle')}>
-      <Big n={es.counts.giftsRegistered} label={t('display.giftsRegistered')} />
-      <p className="text-4xl">{t('display.outOf', { n: es.counts.participants })}</p>
-    </Scene>
-  );
-}
-
-function GiftOpeningScene({ es, gifts }: { es: DState; gifts: PublicGiftListOutput | undefined }) {
-  const { t } = useTranslation();
-  const opened = gifts?.mode === 'gallery' ? gifts.gifts : undefined;
-  return (
-    <Scene title={t('display.openingTitle')}>
-      {opened ? (
-        <ul className="flex max-w-[1600px] flex-wrap justify-center gap-8 text-4xl">
-          {opened.map((g) => (
-            <li key={g.giftId} className="rounded-2xl bg-white/15 px-8 py-4">
-              🎁 {g.name}
-            </li>
-          ))}
+    <Scene title={t('display.revealTitle')}>
+      {revealed.length > 0 ? (
+        <ul
+          className="flex max-w-[1700px] flex-wrap justify-center gap-6 text-4xl"
+          data-testid="reveal-grid"
+        >
+          {revealed.map((g) =>
+            g.status === 'revealed' ? (
+              <li key={g.giftId} className="rounded-2xl bg-white/15 px-8 py-4">
+                🎁 {g.name}
+                <br />
+                <span className="text-3xl">
+                  {t('reveal.from')} <span aria-hidden="true">{avatarGlyph(g.giver.avatar)}</span>{' '}
+                  {g.giver.displayName}
+                </span>
+              </li>
+            ) : null,
+          )}
         </ul>
       ) : (
-        <Big
-          n={gifts?.mode === 'count_only' ? gifts.count : es.counts.giftsRegistered}
-          label={t('display.giftsOpened')}
-        />
+        <Podium big board={board} />
       )}
     </Scene>
   );
 }
 
-function VotingScene({
-  es,
-  endsAt,
-  now,
+/** One-off celebration for a new announcement (non-blocking; text is also announced via the FX live region). */
+function AnnouncementOverlay({
+  announcement,
+  ready,
 }: {
-  es: DState;
-  endsAt: string | undefined;
-  now: () => number;
+  announcement: AnnouncementOutput | undefined;
+  ready: boolean;
 }) {
   const { t } = useTranslation();
-  return (
-    <Scene title={t('display.votingTitle')}>
-      {endsAt && <Countdown endsAt={endsAt} now={now} />}
-      {es.votedCount !== undefined && <Big n={es.votedCount} label={t('display.voted')} />}
-    </Scene>
-  );
-}
-
-export function Countdown({ endsAt, now }: { endsAt: string; now: () => number }) {
-  const { t } = useTranslation();
-  const [, tick] = useState(0);
+  const [shown, setShown] = useState<AnnouncementOutput>();
+  const baseline = useRef<{ set: boolean; at?: string | undefined }>({ set: false });
   useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const left = Math.max(0, Math.ceil((Date.parse(endsAt) - now()) / 1000));
-  const mm = String(Math.floor(left / 60)).padStart(2, '0');
-  const ss = String(left % 60).padStart(2, '0');
+    if (!ready) return;
+    if (!baseline.current.set) {
+      baseline.current = { set: true, at: announcement?.at }; // whatever the first snapshot held is history
+      return;
+    }
+    if (!announcement || announcement.at === baseline.current.at) return;
+    baseline.current.at = announcement.at;
+    setShown(announcement);
+    emitFx('achievement_earned');
+    const id = setTimeout(() => setShown(undefined), ANNOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [announcement, ready]);
+  if (!shown) return null;
   return (
-    <p
-      role="timer"
-      aria-label={t('display.countdown')}
-      className="text-[12rem] font-extrabold leading-none tabular-nums"
+    <div
+      role="status"
+      data-testid="announcement"
+      className="absolute inset-x-24 top-16 z-10 flex items-center justify-center gap-8 rounded-3xl bg-gold-400 px-12 py-8 text-ink-900 shadow-2xl"
     >
-      {mm}:{ss}
-    </p>
-  );
-}
-
-const MEDAL = ['👑', '✨', '✨'];
-
-function BoardScene({
-  board,
-  gifts,
-}: {
-  board: PublicLeaderboardOutput | undefined;
-  gifts: PublicGiftListOutput | undefined;
-}) {
-  const { t } = useTranslation();
-  const entries = board && board.state !== 'hidden' ? board.entries : [];
-  const nameOf = (id: string, rank: number) =>
-    (gifts?.mode === 'gallery' && gifts.gifts.find((g) => g.giftId === id)?.name) ||
-    t('display.entry', { rank });
-  return (
-    <Scene title={t('display.boardTitle')}>
-      {entries.length === 0 ? (
-        <p className="text-4xl">{t('display.boardSoon')}</p>
-      ) : (
-        <ol className="flex items-end gap-10" data-testid="podium">
-          {entries.map((e) => (
-            <li
-              key={e.entryId}
-              className="flex w-[360px] flex-col items-center justify-end rounded-t-3xl bg-white/15 px-6 py-8"
-              style={{ minHeight: `${Math.max(180, 460 - e.rank * 70)}px` }}
-            >
-              <span aria-hidden="true" className="text-7xl">
-                {MEDAL[e.rank - 1] ?? '⭐'}
-              </span>
-              <span className="text-5xl font-bold">#{e.rank}</span>
-              <span className="text-4xl">{nameOf(e.entryId, e.rank)}</span>
-              {e.tied && <span className="text-2xl">{t('display.tied')}</span>}
-            </li>
-          ))}
-        </ol>
-      )}
-    </Scene>
-  );
-}
-
-function AchievementScene({ a }: { a: Announcement }) {
-  const { t } = useTranslation();
-  return (
-    <Scene title={t('display.achievementTitle')}>
-      <p className="text-9xl" aria-hidden="true">
-        {a.avatar ? avatarGlyph(a.avatar) : '🏅'}
-      </p>
-      <p role="status" className="text-6xl">
+      <span aria-hidden="true" className="text-8xl">
+        {avatarGlyph(shown.person.avatar)}
+      </span>
+      <p className="text-5xl font-bold">
         {t('display.achievementLine', {
-          name: a.displayName,
-          achievement: t(`achievement.${a.achievement}`, { defaultValue: a.achievement }),
+          name: shown.person.displayName,
+          achievement: t(`achievement.${shown.key}`, {
+            defaultValue: shown.key.replace(/_/g, ' '),
+          }),
         })}
       </p>
-    </Scene>
+    </div>
   );
 }
-
 /** Browsers block audio until a gesture: one-tap unlock, or stay silent. Never blocks the scenes underneath. */
 function SoundUnlock() {
   const { t } = useTranslation();

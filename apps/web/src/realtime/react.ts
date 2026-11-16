@@ -54,12 +54,20 @@ export function useRealtime(): { rt: RealtimeClient | undefined; state: Realtime
   return { rt, state };
 }
 
-/** Latest payload of a surface from the first stream matching `pub` or the guest's `p:<id>` stream. */
+export type SurfaceName = 'eventState' | 'giftList' | 'leaderboard' | 'scene' | 'announcement';
+
+/** Latest payload of a surface: the preferred stream (`pub` or the guest's `p:<id>`) first, then any other stream carrying it. */
 export function surfaceOf<T = unknown>(
   s: RealtimeState,
   stream: 'pub' | 'participant',
-  surface: 'eventState' | 'giftList' | 'leaderboard',
+  surface: SurfaceName,
 ): T | undefined {
-  const key = stream === 'pub' ? 'pub' : Object.keys(s.surfaces).find((k) => k.startsWith('p:'));
-  return key ? (s.surfaces[key]?.[surface] as T | undefined) : undefined;
+  const keys = Object.keys(s.surfaces);
+  const preferred = stream === 'pub' ? 'pub' : keys.find((k) => k.startsWith('p:'));
+  const order = [...(preferred ? [preferred] : []), ...keys];
+  for (const k of order) {
+    const v = s.surfaces[k]?.[surface];
+    if (v !== undefined) return v as T;
+  }
+  return undefined;
 }

@@ -7,6 +7,11 @@ import { useOrganizer } from '../auth/session';
 import { errorKey } from './Dashboard';
 import { PairingWizard } from '../components/organizer/PairingWizard';
 import { ApprovalPanel, ReactionSettings } from '../components/organizer/Approvals';
+import {
+  OpeningControls,
+  RevealControls,
+  VotingControls,
+} from '../components/organizer/GameControls';
 
 interface OrganizerState {
   role: string;
@@ -18,6 +23,7 @@ interface OrganizerState {
     organizer: {
       roster: { unclaimed: number; pending: number; active: number; removed: number };
       warnings: string[];
+      reactionsEnabled?: boolean;
     };
   };
 }
@@ -131,7 +137,12 @@ export default function Console() {
       )}
       <PairingWizard eventId={eventId} />
       <ApprovalPanel eventId={eventId} />
-      <ReactionSettings eventId={eventId} />
+      {s.phase === 'gift_opening' && <OpeningControls eventId={eventId} />}
+      {(s.phase === 'gift_opening' || s.phase === 'voting') && (
+        <VotingControls eventId={eventId} phase={s.phase} />
+      )}
+      {s.phase === 'reveal' && <RevealControls eventId={eventId} />}
+      <ReactionSettings eventId={eventId} initial={s.organizer.reactionsEnabled} />
     </div>
   );
 }

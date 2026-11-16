@@ -4,6 +4,13 @@ import {
   ClaimCodesResponseSchema,
   ClaimEmailLinksResponseSchema,
   CreateAccessResponseSchema,
+  CloseVotingResponseSchema,
+  OpeningStateSchema,
+  OrganizerGiftListResponseSchema,
+  OrganizerParticipantsResponseSchema,
+  RevealAllResponseSchema,
+  RevealGiftResponseSchema,
+  VotingStateSchema,
   PairingImportLatestResponseSchema,
   PairingImportResultSchema,
   type PairingMapping,
@@ -15,12 +22,10 @@ export type PairingImportResult = z.infer<typeof PairingImportResultSchema>;
 export type PairingLatest = z.infer<typeof PairingImportLatestResponseSchema>;
 export type ClaimCodes = z.infer<typeof ClaimCodesResponseSchema>;
 export type AccessLink = z.infer<typeof CreateAccessResponseSchema>;
-export interface RosterRow {
-  participantId: string;
-  displayName: string;
-  status: 'unclaimed' | 'pending' | 'active' | 'removed';
-  reactionsMuted: boolean;
-}
+export type RosterRow = z.infer<typeof OrganizerParticipantsResponseSchema>['participants'][number];
+export type OpeningState = z.infer<typeof OpeningStateSchema>;
+export type OrganizerGift = z.infer<typeof OrganizerGiftListResponseSchema>['gifts'][number];
+export type VotingState = z.infer<typeof VotingStateSchema>;
 
 /** Organizer-only endpoints. Responses are schema-validated; no pairs/emails ever reach this layer. */
 export interface OrganizerApi {
@@ -37,9 +42,25 @@ export interface OrganizerApi {
   approve(eventId: string, participantId: string): Promise<void>;
   setReactionsEnabled(eventId: string, enabled: boolean): Promise<void>;
   muteParticipant(eventId: string, participantId: string, muted: boolean): Promise<void>;
+  openingState(eventId: string): Promise<OpeningState>;
+  openingNext(eventId: string): Promise<OpeningState>;
+  openingOrder(
+    eventId: string,
+    order: { mode: 'random' } | { mode: 'manual'; order: string[] },
+  ): Promise<OpeningState>;
+  listGifts(eventId: string): Promise<OrganizerGift[]>;
+  openVoting(eventId: string, durationMinutes?: number): Promise<VotingState>;
+  closeVoting(
+    eventId: string,
+  ): Promise<{ categoriesLocked: number; categoriesPublishable: number }>;
+  revealGift(eventId: string, giftId: string): Promise<void>;
+  revealAll(eventId: string): Promise<{ revealed: number }>;
 }
 
 const base = (eventId: string) => `/api/events/${encodeURIComponent(eventId)}`;
+
+const post = (id: string, path: string, body?: unknown) =>
+  api(`${base(id)}/${path}`, { method: 'POST', ...(body !== undefined ? { body } : {}) });
 
 export const httpOrganizerApi: OrganizerApi = {
   async uploadPairing(eventId, file, opts = {}) {
@@ -74,7 +95,8 @@ export const httpOrganizerApi: OrganizerApi = {
     ClaimEmailLinksResponseSchema.parse(
       await api(`${base(id)}/claims/email-links`, { method: 'POST' }),
     ),
-  listRoster: (id) => api(`${base(id)}/participants`),
+  listRoster: async (id) =>
+    OrganizerParticipantsResponseSchema.parse(await api(`${base(id)}/participants`)),
   approve: async (id, pid) => {
     ApproveParticipantResponseSchema.parse(
       await api(`${base(id)}/participants/${encodeURIComponent(pid)}/approve`, { method: 'POST' }),
@@ -89,8 +111,24 @@ export const httpOrganizerApi: OrganizerApi = {
       body: { muted },
     });
   },
+  openingState: async (id) => OpeningStateSchema.parse(await api(`${base(id)}/opening`)),
+  openingNext: async (id) => OpeningStateSchema.parse(await post(id, 'opening/next')),
+  openingOrder: async (id, o) => OpeningStateSchema.parse(await post(id, 'opening/order', o)),
+  listGifts: async (id) =>
+    OrganizerGiftListResponseSchema.parse(await api(`${base(id)}/gifts`)).gifts,
+  openVoting: async (id, durationMinutes) =>
+    VotingStateSchema.parse(
+      await post(id, 'voting/open', durationMinutes ? { durationMinutes } : {}),
+    ),
+  closeVoting: async (id) => {
+    const r = CloseVotingResponseSchema.parse(await post(id, 'voting/close'));
+    return { categoriesLocked: r.categoriesLocked, categoriesPublishable: r.categoriesPublishable };
+  },
+  revealGift: async (id, giftId) => {
+    RevealGiftResponseSchema.parse(await post(id, `reveal/gifts/${encodeURIComponent(giftId)}`));
+  },
+  revealAll: async (id) => RevealAllResponseSchema.parse(await post(id, 'reveal/all')),
 };
-
 const Ctx = createContext<OrganizerApi>(httpOrganizerApi);
 export const OrganizerApiProvider = ({
   value,
