@@ -2,13 +2,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { REACTION_KINDS } from '@santa/contracts';
+import { REACTION_KINDS, type EventStateOutput } from '@santa/contracts';
 import i18n from './i18n';
 import { en } from './i18n/en';
 import { it as itLocale } from './i18n/it';
 import { App } from './App';
 import { usePrefs } from './prefs/store';
-import { ParticipantApiProvider, type ParticipantApi, type Me } from './api/participant';
+import { ParticipantApiProvider, type MeResponse, type ParticipantApi } from './api/participant';
 import { RealtimeProvider } from './realtime/react';
 import { createRealtimeStore, type SocketLike } from './realtime/store';
 import { createReactionThrottle } from './components/reactionThrottle';
@@ -29,13 +29,23 @@ function fakeSocket() {
   };
 }
 
-const ME: Me = {
+type PMe = Extract<EventStateOutput, { role: 'participant' }>['me'];
+const ME: PMe = {
   participantId: 'p1',
   displayName: 'Anna',
-  avatar: '🎅',
+  avatar: 'santa',
   status: 'active',
   xp: { xp: 10, level: 1 },
   votes: [{ categoryId: 'c1', giftId: 'g1' }],
+};
+const MY: MeResponse = {
+  participantId: 'p1',
+  eventId: 'e1',
+  displayName: 'Anna',
+  avatar: 'santa',
+  status: 'active',
+  verified: false,
+  locale: 'en',
 };
 
 function setup(path: string, api: Partial<ParticipantApi> = {}) {
@@ -43,17 +53,26 @@ function setup(path: string, api: Partial<ParticipantApi> = {}) {
   const rt = createRealtimeStore();
   rt.connect(sock.s);
   const fullApi: ParticipantApi = {
-    preview: async () => ({
-      eventName: 'Office Party',
-      roster: [
-        { participantId: 'p1', displayName: 'Anna', avatar: null, available: true },
-        { participantId: 'p2', displayName: 'Bruno', avatar: null, available: false },
+    resolve: async () => ({
+      event: {
+        name: 'Office Party',
+        startsAt: '2026-12-20T18:00:00Z',
+        defaultLocale: 'en',
+        joinOpen: true,
+      },
+      unclaimed: [
+        { participantId: 'p1', displayName: 'Anna' },
+        { participantId: 'p2', displayName: 'Bruno' },
       ],
     }),
-    pickName: async () => ({ status: 'pending' }),
-    claim: async () => ({ status: 'active' }),
-    me: async () => ({ ...ME, status: 'pending' }),
-    updateProfile: async (p) => ({ ...ME, ...p }),
+    claim: async () => ({ status: 'pending', participantId: 'p1', verified: false }),
+    me: async () => ({ ...MY, status: 'pending' }),
+    updateProfile: async (p) => ({
+      ...MY,
+      displayName: p.displayName ?? MY.displayName,
+      avatar: p.avatar ?? MY.avatar,
+    }),
+    exchangeDisplayToken: async () => undefined,
     ...api,
   };
   const Where = () => (
@@ -89,63 +108,95 @@ beforeEach(async () => {
 });
 
 describe('join flow /j', () => {
-  it('short code -> roster name -> pending -> approved goes to /e; taken names are disabled', async () => {
-    const pickName = vi.fn(async () => ({ status: 'pending' as const }));
-    let status: Me['status'] = 'pending';
-    const { fullApi } = setup('/j', { pickName, me: async () => ({ ...ME, status }) });
+  it('short code -> roster name -> pending -> approved goes to /e', async () => {
+    const claim = vi.fn(async () => ({
+      status: 'pending' as const,
+      participantId: 'p1',
+      verified: false,
+    }));
+    let status: MeResponse['status'] = 'pending';
+    const resolve = vi.fn(async () => ({
+      event: {
+        name: 'Office Party',
+        startsAt: '2026-12-20T18:00:00Z',
+        defaultLocale: 'en' as const,
+        joinOpen: true,
+      },
+      unclaimed: [{ participantId: 'p1', displayName: 'Anna' }],
+    }));
+    setup('/j', { claim, resolve, me: async () => ({ ...MY, status }) });
     fireEvent.change(await screen.findByLabelText('Event code'), { target: { value: 'abc234' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Welcome to Office Party!')).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Bruno/ }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Anna' }));
+    expect(resolve).toHaveBeenCalledWith({ shortCode: 'ABC234' });
+    fireEvent.click(screen.getByRole('button', { name: /Anna/ }));
     expect(await screen.findByText(/organizer will confirm/)).toBeTruthy();
-    expect(pickName).toHaveBeenCalledWith('p1');
-    expect(fullApi).toBeTruthy();
+    expect(claim).toHaveBeenCalledWith({
+      method: 'pick_name',
+      target: { shortCode: 'ABC234' },
+      participantId: 'p1',
+    });
     status = 'active';
-    // approval is detected by polling own status
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/e'), {
       timeout: 5000,
     });
   }, 10_000);
 
-  it('QR landing token skips the code step; claim code is offered while pending', async () => {
-    const claim = vi.fn(async () => ({ status: 'active' as const }));
-    const preview = vi.fn(async () => ({
-      eventName: 'Gala',
-      roster: [{ participantId: 'p1', displayName: 'Anna', avatar: null, available: true }],
+  it('QR landing token skips the code step; personal code claim uses the join target', async () => {
+    const token = 'a'.repeat(22);
+    const claim = vi.fn(async () => ({
+      status: 'pending' as const,
+      participantId: 'p1',
+      verified: false,
     }));
-    setup('/j/' + 'a'.repeat(22), { preview, claim });
-    fireEvent.click(await screen.findByRole('button', { name: 'Anna' }));
-    expect(preview).toHaveBeenCalledWith({ token: 'a'.repeat(22) });
+    const resolve = vi.fn(async () => ({
+      event: {
+        name: 'Gala',
+        startsAt: '2026-12-20T18:00:00Z',
+        defaultLocale: 'en' as const,
+        joinOpen: true,
+      },
+      unclaimed: [{ participantId: 'p1', displayName: 'Anna' }],
+    }));
+    setup('/j/' + token, { resolve, claim });
+    fireEvent.click(await screen.findByRole('button', { name: /Anna/ }));
+    expect(resolve).toHaveBeenCalledWith({ joinToken: token });
     fireEvent.change(await screen.findByLabelText('Personal code'), {
-      target: { value: 'ABCDEF12' },
+      target: { value: 'abcdef23' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     await waitFor(() =>
-      expect(claim).toHaveBeenCalledWith({
+      expect(claim).toHaveBeenLastCalledWith({
         method: 'personal_code',
-        participantId: 'p1',
-        code: 'ABCDEF12',
+        target: { joinToken: token },
+        code: 'ABCDEF23',
       }),
     );
+  });
+
+  it('email claim link claims straight away and lands on /e', async () => {
+    const claim = vi.fn(async () => ({
+      status: 'active' as const,
+      participantId: 'p1',
+      verified: true,
+    }));
+    setup('/j/claim?token=' + 'b'.repeat(24), { claim });
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/e'));
+    expect(claim).toHaveBeenCalledWith({ method: 'email_link', token: 'b'.repeat(24) });
   });
 
   it('shows a localized error for an unknown code', async () => {
     const { ApiError } = await import('./api/client');
     setup('/j', {
-      preview: async () => {
-        throw new ApiError(404, 'not_found');
+      resolve: async () => {
+        throw new ApiError(404, 'invalid_claim');
       },
     });
     fireEvent.change(await screen.findByLabelText('Event code'), { target: { value: 'ZZZZZZ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toMatch(/could not find that event/);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not verify that code/);
   });
 });
-
 const PUB_BOARD = {
   eventState: undefined,
   leaderboard: { boardKey: 'b', state: 'live', entries: [{ entryId: 'g9', rank: 1, tied: false }] },
@@ -175,21 +226,25 @@ describe('participant /e', () => {
     expect(screen.getByText('Your pick')).toBeTruthy();
     expect(screen.getByText(/Thanks for playing/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/#1|rank|Rank/);
-    fireEvent.click(screen.getByRole('button', { name: 'Clap' }));
-    expect(t.sock.sent).toContainEqual(['reaction.send', { kind: 'clap' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Applause' }));
+    expect(t.sock.sent).toContainEqual(['reaction.send', { kind: 'applause' }]);
   });
 
   it('profile edit calls the API with trimmed name and avatar', async () => {
-    const updateProfile = vi.fn(async (p) => ({ ...ME, ...p }));
+    const updateProfile = vi.fn(async (p: { displayName?: string; avatar?: string | null }) => ({
+      ...MY,
+      ...p,
+      avatar: p.avatar ?? null,
+    }));
     const t = setup('/e', { updateProfile });
     t.snapshot('p:p1', { eventState: eventState() });
     fireEvent.change(await screen.findByLabelText('Display name'), {
       target: { value: ' Anna B ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '🎄' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tree' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
-      expect(updateProfile).toHaveBeenCalledWith({ displayName: 'Anna B', avatar: '🎄' }),
+      expect(updateProfile).toHaveBeenCalledWith({ displayName: 'Anna B', avatar: 'tree' }),
     );
     expect(await screen.findByText('Saved!')).toBeTruthy();
   });
@@ -197,7 +252,7 @@ describe('participant /e', () => {
   it('reaction bar throttles with a neutral message (no error role) and never blocks', async () => {
     const t = setup('/e');
     t.snapshot('p:p1', { eventState: eventState() });
-    const heart = await screen.findByRole('button', { name: 'Heart' });
+    const heart = await screen.findByRole('button', { name: 'Love' });
     for (let i = 0; i < 6; i++) fireEvent.click(heart);
     expect(t.sock.sent.filter(([e]) => e === 'reaction.send')).toHaveLength(4);
     expect(await screen.findByText('Lots of cheer! Give it a moment.')).toBeTruthy();
@@ -325,5 +380,28 @@ describe('i18n parity for new screens', () => {
     await i18n.changeLanguage('it');
     setup('/j');
     expect(await screen.findByLabelText('Codice evento')).toBeTruthy();
+  });
+});
+
+describe('display token + reaction bursts', () => {
+  it('exchanges the /d/<token> URL token, strips it, then shows the stage', async () => {
+    const exchange = vi.fn(async () => undefined);
+    setup('/d/' + 'c'.repeat(24), { exchangeDisplayToken: exchange });
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/d'));
+    expect(exchange).toHaveBeenCalledWith('c'.repeat(24));
+    expect(await screen.findByTestId('display-stage')).toBeTruthy();
+  });
+
+  it('stores aggregated reaction bursts with a monotonic sequence', () => {
+    const t = setup('/d');
+    act(() => {
+      t.sock.fire('connect');
+      t.sock.fire('reaction', { kind: 'wow', count: 3 });
+      t.sock.fire('reaction', { kind: 'love', count: 1 });
+    });
+    expect(t.rt.store.getState().reactions.map((r) => [r.kind, r.count, r.seq])).toEqual([
+      ['wow', 3, 1],
+      ['love', 1, 2],
+    ]);
   });
 });
