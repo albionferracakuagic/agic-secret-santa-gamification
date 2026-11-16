@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParticipantApi } from '../api/participant';
+import { avatarGlyph } from '../fx/avatars';
+import { floatReaction } from '../fx/reactions';
 import type {
   EventStateOutput,
   PublicGiftListOutput,
@@ -48,8 +51,20 @@ const asAnnouncement = (x: unknown): Announcement | undefined => {
     : undefined;
 };
 
-/** /d — public display. Renders only what the display projection sent; join link/code come from the display URL. */
+/** /d[/<token>] — exchanges the display token for its cookie first, and only then opens the realtime stream. */
 export default function Display() {
+  const api = useParticipantApi();
+  const nav = useNavigate();
+  const token = useParams()['*']?.split('/')[0];
+  useEffect(() => {
+    if (!token) return;
+    void api.exchangeDisplayToken(token).finally(() => nav('/d', { replace: true }));
+  }, [token, api, nav]);
+  return token ? null : <DisplayStage />;
+}
+
+/** Renders only what the display projection sent; join link/code come from the display URL. */
+function DisplayStage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const { rt, state } = useRealtime();
@@ -81,7 +96,10 @@ export default function Display() {
     es && (announcement ? announcement.displayName + '|' + announcement.achievement : ''),
     (_p, n) => n && emitFx('achievement_earned'),
   );
-  usePrevEffect(state.reactions.at(-1)?.at ?? 0, (_p, n) => n && emitFx('reaction_received'));
+  usePrevEffect(state.reactions.at(-1)?.seq ?? 0, () => {
+    const last = state.reactions.at(-1);
+    if (last) floatReaction(last.kind);
+  });
 
   const joinUrl = params.get('join') ?? `${location.origin}/j`;
   const shortCode = params.get('code');
@@ -285,7 +303,7 @@ function AchievementScene({ a }: { a: Announcement }) {
   return (
     <Scene title={t('display.achievementTitle')}>
       <p className="text-9xl" aria-hidden="true">
-        {a.avatar ?? '🏅'}
+        {a.avatar ? avatarGlyph(a.avatar) : '🏅'}
       </p>
       <p role="status" className="text-6xl">
         {t('display.achievementLine', {

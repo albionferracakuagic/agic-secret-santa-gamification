@@ -5,13 +5,15 @@ import type {
   PublicGiftListOutput,
   PublicLeaderboardOutput,
 } from '@santa/contracts';
-import { useParticipantApi, type Me } from '../api/participant';
+import { useParticipantApi } from '../api/participant';
+import { AVATAR_GLYPH, avatarGlyph } from '../fx/avatars';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { ReactionBar } from '../components/ReactionBar';
 import { floatReaction } from '../fx/reactions';
 
-const AVATARS = ['🎅', '🤶', '🧝', '🦌', '⛄', '🎄', '⭐', '🔔'];
 type PState = Extract<EventStateOutput, { role: 'participant' }>;
+type Me = PState['me'];
+type Saved = Pick<Me, 'displayName' | 'avatar'>;
 
 export default function Participant() {
   const { t } = useTranslation();
@@ -19,13 +21,13 @@ export default function Participant() {
   const es = surfaceOf<PState>(state, 'participant', 'eventState');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const board = surfaceOf<PublicLeaderboardOutput>(state, 'pub', 'leaderboard');
-  const [me, setMe] = useState<Me>();
-  const shown = me ?? es?.me;
+  const [saved, setSaved] = useState<Saved>();
+  const shown = es?.me && { ...es.me, ...saved };
 
   const seen = useRef(0);
   useEffect(() => {
-    const fresh = state.reactions.filter((r) => r.at > seen.current);
-    seen.current = state.reactions.at(-1)?.at ?? seen.current;
+    const fresh = state.reactions.filter((r) => r.seq > seen.current);
+    seen.current = state.reactions.at(-1)?.seq ?? seen.current;
     fresh.forEach((r) => floatReaction(r.kind));
   }, [state.reactions]);
 
@@ -39,13 +41,16 @@ export default function Participant() {
         <>
           <header className="space-y-1">
             <p className="text-lg font-semibold">{es.name}</p>
+            <p>
+              <span aria-hidden="true">{avatarGlyph(shown.avatar)}</span> {shown.displayName}
+            </p>
             <p>{t('participant.phase', { phase: t(`phase.${es.phase}`) })}</p>
             {es.paused && <p role="status">{t('console.paused')}</p>}
             <p>{t('participant.counts', { n: es.counts.participants })}</p>
             {shown.status === 'pending' && <p role="status">{t('join.pending')}</p>}
             <p>{t('participant.xp', { xp: shown.xp.xp, level: shown.xp.level })}</p>
           </header>
-          <Profile me={shown} onSaved={setMe} />
+          <Profile me={shown} onSaved={setSaved} />
           <OwnSelections me={shown} gifts={gifts} />
           <Standing board={board} />
           {shown.status === 'active' && <ReactionBar send={(k) => rt?.sendReaction(k)} />}
@@ -55,7 +60,7 @@ export default function Participant() {
   );
 }
 
-function Profile({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
+function Profile({ me, onSaved }: { me: Me; onSaved: (m: Saved) => void }) {
   const { t } = useTranslation();
   const api = useParticipantApi();
   const [name, setName] = useState(me.displayName);
@@ -68,7 +73,8 @@ function Profile({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
     setErr(false);
     setSaved(false);
     try {
-      onSaved(await api.updateProfile({ displayName: name.trim(), avatar }));
+      const u = await api.updateProfile({ displayName: name.trim(), avatar });
+      onSaved({ displayName: u.displayName, avatar: u.avatar });
       setSaved(true);
     } catch {
       setErr(true);
@@ -92,16 +98,16 @@ function Profile({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
       <fieldset>
         <legend>{t('participant.avatar')}</legend>
         <div className="mt-1 flex flex-wrap gap-2">
-          {AVATARS.map((a) => (
+          {Object.entries(AVATAR_GLYPH).map(([id, glyph]) => (
             <button
-              key={a}
+              key={id}
               type="button"
-              aria-pressed={avatar === a}
-              aria-label={a}
+              aria-pressed={avatar === id}
+              aria-label={t(`avatar.${id}`)}
               className="min-h-12 min-w-12 rounded border border-ink-900/30 bg-white text-2xl aria-pressed:border-4 aria-pressed:border-pine-700"
-              onClick={() => setAvatar(a)}
+              onClick={() => setAvatar(id)}
             >
-              {a}
+              {glyph}
             </button>
           ))}
         </div>

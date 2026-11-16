@@ -5,6 +5,8 @@ import { PHASES, type Phase } from '@santa/contracts';
 import { api } from '../api/client';
 import { useOrganizer } from '../auth/session';
 import { errorKey } from './Dashboard';
+import { PairingWizard } from '../components/organizer/PairingWizard';
+import { ApprovalPanel, ReactionSettings } from '../components/organizer/Approvals';
 
 interface OrganizerState {
   role: string;
@@ -127,6 +129,9 @@ export default function Console() {
           {t(errorKey(act.error))}
         </p>
       )}
+      <PairingWizard eventId={eventId} />
+      <ApprovalPanel eventId={eventId} />
+      <ReactionSettings eventId={eventId} />
     </div>
   );
 }

@@ -3,11 +3,12 @@ import { emitFx } from './bus';
 
 /** Positive-only glyphs per contract reaction kind (FR-046.7); the kind set itself comes from the contract. */
 export const REACTION_GLYPH: Record<ReactionKind, string> = {
-  heart: '❤️',
-  clap: '👏',
-  sparkle: '✨',
-  tree: '🎄',
-  gift: '🎁',
+  love: '❤️',
+  hilarious: '😂',
+  amazing: '🤩',
+  wow: '😮',
+  spirit: '🎄',
+  applause: '👏',
 };
 
 export const glyphFor = (kind: string): string | undefined =>

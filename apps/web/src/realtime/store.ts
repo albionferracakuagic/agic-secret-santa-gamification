@@ -28,7 +28,8 @@ export interface RealtimeState {
   revokedGrants: string[];
   /** serverNow = Date.now() + clockOffsetMs */
   clockOffsetMs: number;
-  reactions: Array<{ kind: string; at: number }>;
+  /** Aggregated bursts from the server; seq is monotonic so consumers can tell what is new. */
+  reactions: Array<{ kind: string; count: number; at: number; seq: number }>;
 }
 
 /**
@@ -102,9 +103,17 @@ export function createRealtimeStore(opts: { eventId?: string; now?: () => number
           void _gone;
           return { surfaces: rest, revokedGrants: [...st.revokedGrants, m.grantId] };
         })) as never);
-      s.on('reaction', ((m: { kind: string }) =>
+      s.on('reaction', ((m: { kind: string; count?: number }) =>
         store.setState((st) => ({
-          reactions: [...st.reactions.slice(-19), { kind: m.kind, at: now() }],
+          reactions: [
+            ...st.reactions.slice(-19),
+            {
+              kind: m.kind,
+              count: m.count ?? 1,
+              at: now(),
+              seq: (st.reactions.at(-1)?.seq ?? 0) + 1,
+            },
+          ],
         }))) as never);
       s.on('time.sync', ((m: { serverTime: number }) => {
         const rtt = now() - pingSentAt;

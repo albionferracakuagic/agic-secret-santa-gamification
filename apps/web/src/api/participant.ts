@@ -1,41 +1,45 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react';
-import type { ClaimRequestSchema, EventStateOutput } from '@santa/contracts';
+import {
+  ClaimRequestSchema,
+  ClaimResponseSchema,
+  JoinResolveResponseSchema,
+  MeResponseSchema,
+  type ProfileUpdateRequestSchema,
+} from '@santa/contracts';
 import type { z } from 'zod';
 import { api } from './client';
 
+export type JoinTarget = { joinToken: string } | { shortCode: string };
 export type ClaimRequest = z.infer<typeof ClaimRequestSchema>;
-export type Me = Extract<EventStateOutput, { role: 'participant' }>['me'];
+export type ClaimResponse = z.infer<typeof ClaimResponseSchema>;
+export type JoinResolve = z.infer<typeof JoinResolveResponseSchema>;
+export type MeResponse = z.infer<typeof MeResponseSchema>;
+export type ProfilePatch = z.infer<typeof ProfileUpdateRequestSchema>;
 
-export interface RosterEntry {
-  participantId: string;
-  displayName: string;
-  avatar: string | null;
-  available: boolean;
-}
-export interface JoinPreview {
-  eventName: string;
-  roster: RosterEntry[];
-}
-export type JoinStatus = 'pending' | 'active';
-
-/**
- * Thin typed boundary for join / profile endpoints. The HTTP adapter below is the only place that knows paths;
- * swap it (or its DTO mapping) when the backend contracts land in @santa/contracts.
- */
+/** Boundary used by the join, profile and display screens; the HTTP adapter validates every response with the contract schemas. */
 export interface ParticipantApi {
-  preview(input: { token?: string; shortCode?: string }): Promise<JoinPreview>;
-  pickName(participantId: string): Promise<{ status: JoinStatus }>;
-  claim(req: ClaimRequest): Promise<{ status: 'active' }>;
-  me(): Promise<Me>;
-  updateProfile(patch: { displayName?: string; avatar?: string | null }): Promise<Me>;
+  resolve(target: JoinTarget): Promise<JoinResolve>;
+  claim(req: ClaimRequest): Promise<ClaimResponse>;
+  me(): Promise<MeResponse>;
+  updateProfile(patch: ProfilePatch): Promise<MeResponse>;
+  exchangeDisplayToken(token: string): Promise<void>;
 }
 
 export const httpParticipantApi: ParticipantApi = {
-  preview: (input) => api('/api/join/preview', { method: 'POST', body: input }),
-  pickName: (participantId) => api('/api/join/pick', { method: 'POST', body: { participantId } }),
-  claim: (req) => api('/api/join/claim', { method: 'POST', body: req }),
-  me: () => api('/api/me'),
-  updateProfile: (patch) => api('/api/me', { method: 'PATCH', body: patch }),
+  resolve: async (target) =>
+    JoinResolveResponseSchema.parse(
+      await api('/api/join/resolve', { method: 'POST', body: target }),
+    ),
+  claim: async (req) =>
+    ClaimResponseSchema.parse(
+      await api('/api/join/claim', { method: 'POST', body: ClaimRequestSchema.parse(req) }),
+    ),
+  me: async () => MeResponseSchema.parse(await api('/api/me')),
+  updateProfile: async (patch) =>
+    MeResponseSchema.parse(await api('/api/me/profile', { method: 'PATCH', body: patch })),
+  exchangeDisplayToken: async (token) => {
+    await api('/api/join/display', { method: 'POST', body: { token } });
+  },
 };
 
 const Ctx = createContext<ParticipantApi>(httpParticipantApi);
