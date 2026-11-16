@@ -1,4 +1,8 @@
 import type { AddressInfo } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { LocalFsStorage } from '../storage/local.js';
 import { eq } from 'drizzle-orm';
 import { io as connectClient, type Socket } from 'socket.io-client';
 import {
@@ -36,6 +40,7 @@ export interface World {
   eventId: string;
   participantIds: string[];
   organizers: FakeOrganizerSessions;
+  storage: LocalFsStorage;
   guestCookie(i: number, token?: string): Promise<string>;
   displayCookie(): Promise<string>;
   organizerCookie(userId?: string, sessionId?: string): string;
@@ -51,7 +56,15 @@ export async function createWorld(opts: AppOptions = {}): Promise<World> {
     .insert(user)
     .values({ id: 'stranger', name: 'Stranger', email: 'stranger@example.test' });
   const organizers = new FakeOrganizerSessions();
-  const app = buildApp({ db, organizerSessions: organizers, guardEnv: 'test', ...opts });
+  const mediaDir = await mkdtemp(join(tmpdir(), 'santa-world-'));
+  const storage = new LocalFsStorage(mediaDir, 'test-media-secret');
+  const app = buildApp({
+    db,
+    organizerSessions: organizers,
+    guardEnv: 'test',
+    storage,
+    ...opts,
+  });
   await app.listen({ port: 0, host: '127.0.0.1' });
   const port = (app.server.address() as AddressInfo).port;
   const clients: Socket[] = [];
@@ -63,6 +76,7 @@ export async function createWorld(opts: AppOptions = {}): Promise<World> {
     eventId,
     participantIds,
     organizers,
+    storage,
     async guestCookie(i, token = `guest-token-${i}`) {
       await db
         .update(participants)
@@ -73,7 +87,8 @@ export async function createWorld(opts: AppOptions = {}): Promise<World> {
     async displayCookie() {
       await db
         .insert(eventAccess)
-        .values({ eventId, kind: 'display', tokenHash: hashToken('display-token') });
+        .values({ eventId, kind: 'display', tokenHash: hashToken('display-token') })
+        .onConflictDoNothing();
       return `${DISPLAY_COOKIE}=display-token`;
     },
     organizerCookie: (userId = 'demo-owner', sessionId = 'sess-1') => `sg_o=${userId}:${sessionId}`,
@@ -102,6 +117,7 @@ export async function createWorld(opts: AppOptions = {}): Promise<World> {
     async close() {
       for (const c of clients) c.close();
       await app.close();
+      await rm(mediaDir, { recursive: true, force: true });
     },
   };
 }

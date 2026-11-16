@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -128,6 +130,10 @@ export const events = pgTable(
     revealStartedAt: ts('reveal_started_at'),
     ceremonyStartedAt: ts('ceremony_started_at'),
     votingRound: integer('voting_round').notNull().default(1),
+    /** Server deadline for the voting timer (null = no timer / not open). */
+    votingEndsAt: ts('voting_ends_at'),
+    /** Gift currently being opened (opening phase); plain uuid, no FK (gifts reference events). */
+    currentGiftId: uuid('current_gift_id'),
     settings: jsonb('settings').$type<EventSettings>().notNull(),
     defaultLocale: text('default_locale').notNull().default('en'),
     createdAt: createdAt(),
@@ -277,11 +283,18 @@ export const gifts = pgTable(
     openingOrder: integer('opening_order'),
     openedAt: ts('opened_at'),
     giverRevealedAt: ts('giver_revealed_at'),
+    /** Organizer moderation flag. */
+    hidden: boolean('hidden').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
     unique('gifts_event_giver_uq').on(t.eventId, t.giverId),
     unique('gifts_event_alias_uq').on(t.eventId, t.aliasNo),
+    // revealed <=> giver_revealed_at set; a trigger (migration 0004) makes the reveal irreversible
+    check(
+      'gifts_revealed_consistent',
+      sql`(${t.status} = 'revealed') = (${t.giverRevealedAt} is not null)`,
+    ),
   ],
 );
 

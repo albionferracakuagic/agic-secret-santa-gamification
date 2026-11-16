@@ -3,7 +3,13 @@ import { IdSchema, ReactionKindSchema } from './common.js';
 
 export const StreamIdSchema = z.string().regex(/^(pub|org|p:[\w-]+|grant:[\w-]+)$/);
 
-export const SurfaceNameSchema = z.enum(['eventState', 'giftList', 'leaderboard']);
+export const SurfaceNameSchema = z.enum([
+  'eventState',
+  'giftList',
+  'leaderboard',
+  'scene',
+  'announcement',
+]);
 
 /** server -> client. Payloads are produced by role projectors and validated before emit. */
 export const ServerEvents = {

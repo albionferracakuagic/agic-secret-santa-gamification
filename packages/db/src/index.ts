@@ -7,6 +7,8 @@ export * from './unmask.js';
 export * from './events.js';
 export * from './pairing.js';
 export * from './join.js';
+export * from './gifts.js';
+export * from './voting.js';
 export * from './jobs.js';
 export * from './connect.js';
 export { MIGRATIONS_FOLDER } from './paths.js';

@@ -10,13 +10,15 @@ export const EventSettingsSchema = z.strictObject({
   minTotalVotes: z.number().int().min(5).default(5),
   cadenceSeconds: z.number().int().min(5).max(120).default(10),
   tieBreak: TieBreakSchema.default('shared'),
+  /** Gift opening order: shuffled (default) or organizer-defined. Changed via POST .../opening/order. */
+  openingMode: z.enum(['random', 'manual']).default('random'),
   showTotals: z.boolean().default(false),
   liveBoardMinVoters: z.number().int().min(5).default(10),
   xpValues: z
     .strictObject({
       joined: z.number().int().min(0).default(10),
       gift_registered: z.number().int().min(0).default(20),
-      voted: z.number().int().min(0).default(10),
+      voted: z.number().int().min(0).default(15),
     })
     .prefault({}),
   features: z

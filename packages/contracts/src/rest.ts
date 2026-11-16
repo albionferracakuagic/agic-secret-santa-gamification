@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { IdSchema, IsoDateSchema, LocaleSchema, PhaseSchema } from './common.js';
+import {
+  IdSchema,
+  IsoDateSchema,
+  LocaleSchema,
+  ParticipantStatusSchema,
+  PhaseSchema,
+} from './common.js';
 
 export const IdempotencyKeySchema = z.string().min(8).max(128);
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -11,6 +17,21 @@ export const ErrorResponseSchema = z.strictObject({
 /** Organizer reaction controls (event-wide switch + per-participant mute). */
 export const ReactionSettingsRequestSchema = z.strictObject({ enabled: z.boolean() });
 export const MuteParticipantRequestSchema = z.strictObject({ muted: z.boolean() });
+
+/**
+ * GET /api/events/:eventId/participants (organizer, masked): roster for the console (approve, mute).
+ * Names and status only: no emails, no pairings, no XP, no claim secrets.
+ */
+export const OrganizerParticipantsResponseSchema = z.strictObject({
+  participants: z.array(
+    z.strictObject({
+      participantId: IdSchema,
+      displayName: z.string(),
+      status: ParticipantStatusSchema,
+      reactionsMuted: z.boolean(),
+    }),
+  ),
+});
 
 /** One active selection per category; response echoes only the caller's own selection. */
 export const CastVoteRequestSchema = z.strictObject({ categoryId: IdSchema, giftId: IdSchema });

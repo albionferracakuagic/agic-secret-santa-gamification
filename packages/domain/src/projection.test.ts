@@ -15,6 +15,7 @@ import {
   canPublishBallots,
   projectEventState,
   projectGiftList,
+  projectScene,
   projectLeaderboard,
   projectLeaderboardUnmasked,
   type BoardSource,
@@ -53,6 +54,7 @@ const gifts: GiftSource[] = [
     openingOrder: 7,
     createdAt: '2026-12-01T10:00:00Z',
     openedAt: '2026-12-24T20:00:00Z',
+    hidden: false,
   },
   {
     id: 'G-2',
@@ -66,6 +68,7 @@ const gifts: GiftSource[] = [
     openingOrder: 2,
     createdAt: '2026-12-01T09:00:00Z',
     openedAt: '2026-12-24T20:05:00Z',
+    hidden: false,
   },
   {
     id: 'G-LASTPLACE',
@@ -79,6 +82,7 @@ const gifts: GiftSource[] = [
     openingOrder: null,
     createdAt: '2026-12-01T08:00:00Z',
     openedAt: null,
+    hidden: false,
   },
 ];
 
@@ -94,6 +98,9 @@ const event = (phase: Phase): EventSource => ({
   maxParticipants: 100,
   votingRound: 1,
   defaultLocale: 'it',
+  votingEndsAt: null,
+  currentGiftId: null,
+  reactionsEnabled: true,
   milestones: {
     giftOpeningStartedAt: null,
     votingClosedAt: null,
@@ -137,6 +144,24 @@ function project(role: Role, surface: Surface, phase: Phase): unknown {
     });
   }
   if (surface === 'giftList') return projectGiftList(v, phase, gifts, people);
+  if (surface === 'scene') {
+    return projectScene({
+      event: event(phase),
+      activeParticipants: 3,
+      gifts,
+      people,
+      join: { url: 'https://santa.test/j?code=ABCDEFG', shortCode: 'ABCDEFG' },
+      votedCount: 4,
+    });
+  }
+  if (surface === 'announcement') {
+    return {
+      type: 'achievement',
+      key: 'christmas_spirit',
+      person: { participantId: 'P-REVEALED', displayName: 'Revealed Rita', avatar: null },
+      at: '2026-12-24T21:00:00Z',
+    };
+  }
   if (role === 'organizer_unmasked') {
     return projectLeaderboardUnmasked(
       v,
@@ -146,9 +171,11 @@ function project(role: Role, surface: Surface, phase: Phase): unknown {
         { entryId: 'G-LASTPLACE', score: 1 },
       ],
       8,
+      new Date(),
+      { 'G-2': 'Gift 1', 'G-LASTPLACE': 'Gift 2' },
     );
   }
-  return projectLeaderboard(board('live'));
+  return projectLeaderboard(board('live'), { 'G-2': 'Gift 1', 'G-1': 'Gift 3' });
 }
 
 describe('contract: every role x phase x surface validates and leaks nothing', () => {
@@ -270,6 +297,7 @@ describe('send guard', () => {
   it('production strips nested leaks, but drops (throws) structurally invalid payloads', () => {
     const nested = {
       mode: 'gallery',
+      currentGiftId: null,
       gifts: [
         {
           ...(project('display', 'giftList', 'voting') as { gifts: object[] }).gifts[0],

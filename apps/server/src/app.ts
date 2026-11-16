@@ -18,6 +18,11 @@ import { registerAuthRoutes, type AuthModule } from './auth/routes.js';
 import { registerOrganizerRoutes } from './routes/organizer.js';
 import { registerPairingRoutes } from './routes/pairing.js';
 import { registerJoinRoutes } from './routes/join.js';
+import { registerGiftRoutes } from './routes/gifts.js';
+import { registerVotingRoutes } from './routes/voting.js';
+import { LocalFsStorage, registerMediaRoute } from './storage/local.js';
+import type { StorageAdapter } from './storage/adapter.js';
+import { randomBytes } from 'node:crypto';
 import { dbReactionPolicy } from './realtime/reactions.js';
 import { MemoryEmailTransport, type EmailTransport } from './auth/email.js';
 
@@ -41,6 +46,8 @@ export interface AppOptions {
   email?: EmailTransport;
   /** Public base URL used in emailed claim links. */
   baseUrl?: string;
+  /** Blob storage (default: local FS under MEDIA_DIR with signed URLs; Azure Blob in production). */
+  storage?: StorageAdapter;
   reactionWindowMs?: number;
   /** Public join endpoints: per-IP requests/minute (defaults: resolve/display 20, claim 10). */
   joinRateLimits?: { resolve: number; claim: number };
@@ -102,9 +109,17 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       opts.auth?.organizerSessions ?? opts.organizerSessions ?? NO_ORGANIZERS,
       opts.clock,
     );
+    const baseUrl = opts.baseUrl ?? 'http://localhost:3000';
+    const storage: StorageAdapter =
+      opts.storage ??
+      new LocalFsStorage(
+        process.env['MEDIA_DIR'] ?? '.data/media',
+        process.env['MEDIA_SIGNING_SECRET'] ?? randomBytes(32).toString('hex'),
+      );
+    const realtimeCtx = { storage, baseUrl };
     const hub = new RealtimeHub({
       principals,
-      snapshots: opts.snapshots ?? new DbSnapshotProvider(opts.db),
+      snapshots: opts.snapshots ?? new DbSnapshotProvider(opts.db, realtimeCtx),
       guardEnv,
       ...(opts.alert ? { alert: opts.alert } : {}),
       ...(opts.clock ? { clock: opts.clock } : {}),
@@ -112,22 +127,39 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       reactionPolicy: dbReactionPolicy(opts.db),
       ...(opts.reactionWindowMs ? { reactionWindowMs: opts.reactionWindowMs } : {}),
     });
+    hub.ctx = realtimeCtx;
     hub.attach(app.server);
     app.decorate('hub', hub);
     const sessions = opts.auth?.organizerSessions ?? opts.organizerSessions;
     const clock = opts.clock ?? (() => new Date());
     const db = opts.db;
     routes.push(() => {
+      if (storage instanceof LocalFsStorage) registerMediaRoute(app, storage);
       registerJoinRoutes(app, {
         db,
         sessions: sessions ?? NO_ORGANIZERS,
         principals,
         hub,
         email: opts.email ?? new MemoryEmailTransport(),
-        baseUrl: opts.baseUrl ?? 'http://localhost:3000',
+        baseUrl,
         secureCookies: guardEnv === 'production',
         clock,
         ...(opts.joinRateLimits ? { limits: opts.joinRateLimits } : {}),
+      });
+      registerGiftRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        storage,
+        clock,
+      });
+      registerVotingRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
       });
       if (sessions) {
         registerOrganizerRoutes(app, { db, sessions, principals, hub, guardEnv, clock });

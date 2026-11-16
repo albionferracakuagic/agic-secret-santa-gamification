@@ -1,0 +1,151 @@
+import { and, desc, eq, gt, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import {
+  VOTED_COUNTER_KEY,
+  boardPublications,
+  eventAccess,
+  events,
+  gifts,
+  loadParticipantSources,
+  loadPublishedVotedCount,
+  pairings,
+  type Db,
+} from '@santa/db';
+import {
+  giftLabel,
+  type BoardSource,
+  type EventSource,
+  type GiftSource,
+  type ParticipantSource,
+  type PublishResult,
+} from '@santa/domain';
+import { PHOTO_URL_TTL_SECONDS, type StorageAdapter } from '../storage/adapter.js';
+
+export interface RealtimeContext {
+  storage?: StorageAdapter | undefined;
+  /** Public base URL, used for the display's join URL. */
+  baseUrl: string;
+}
+
+export async function loadEventSource(db: Db, eventId: string): Promise<EventSource> {
+  const [e] = await db.select().from(events).where(eq(events.id, eventId));
+  if (!e) throw new Error('event not found');
+  const iso = (d: Date | null) => (d ? d.toISOString() : null);
+  return {
+    id: e.id,
+    name: e.name,
+    description: e.description,
+    theme: e.theme,
+    startsAt: e.startsAt.toISOString(),
+    timezone: e.timezone,
+    phase: e.phase,
+    paused: e.paused,
+    maxParticipants: e.maxParticipants,
+    votingRound: e.votingRound,
+    defaultLocale: e.defaultLocale === 'it' ? 'it' : 'en',
+    votingEndsAt: iso(e.votingEndsAt),
+    reactionsEnabled: e.settings.features.reactionsEnabled,
+    currentGiftId: e.currentGiftId,
+    milestones: {
+      giftOpeningStartedAt: iso(e.giftOpeningStartedAt),
+      votingClosedAt: iso(e.votingClosedAt),
+      revealStartedAt: iso(e.revealStartedAt),
+      ceremonyStartedAt: iso(e.ceremonyStartedAt),
+    },
+  };
+}
+
+/** Recipient is derived from `pairings` (never stored on the gift). Photo URLs are short-lived signed URLs. */
+export async function loadGiftSources(
+  db: Db,
+  eventId: string,
+  storage?: StorageAdapter,
+): Promise<GiftSource[]> {
+  const rows = await db
+    .select({ g: gifts, recipientId: pairings.recipientId })
+    .from(gifts)
+    .innerJoin(
+      pairings,
+      and(eq(pairings.eventId, gifts.eventId), eq(pairings.giverId, gifts.giverId)),
+    )
+    .where(eq(gifts.eventId, eventId));
+  return Promise.all(
+    rows.map(async ({ g, recipientId }) => ({
+      id: g.id,
+      aliasNo: g.aliasNo,
+      name: g.name,
+      description: g.description,
+      photoUrl:
+        g.photoKey && storage ? await storage.readUrl(g.photoKey, PHOTO_URL_TTL_SECONDS) : null,
+      status: g.status,
+      giverId: g.giverId,
+      recipientId,
+      openingOrder: g.openingOrder,
+      createdAt: g.createdAt.toISOString(),
+      openedAt: g.openedAt?.toISOString() ?? null,
+      hidden: g.hidden,
+    })),
+  );
+}
+
+export interface EventContext {
+  event: EventSource;
+  people: ParticipantSource[];
+  gifts: GiftSource[];
+  votedCount: number | null;
+  join: { url: string; shortCode: string } | null;
+  /** entryId (gift id) -> "Gift N". Never contains a person. */
+  labels: Record<string, string>;
+  /** Published boards (excluding the voted-counter row). */
+  boards: BoardSource[];
+}
+
+export async function loadEventContext(
+  db: Db,
+  eventId: string,
+  ctx: RealtimeContext,
+  now = new Date(),
+): Promise<EventContext> {
+  const [event, people, giftRows, votedCount, access, boardRows] = await Promise.all([
+    loadEventSource(db, eventId),
+    loadParticipantSources(db, eventId),
+    loadGiftSources(db, eventId, ctx.storage),
+    loadPublishedVotedCount(db, eventId),
+    db
+      .select({ shortCode: eventAccess.shortCode })
+      .from(eventAccess)
+      .where(
+        and(
+          eq(eventAccess.eventId, eventId),
+          eq(eventAccess.kind, 'join'),
+          isNotNull(eventAccess.shortCode),
+          isNull(eventAccess.revokedAt),
+          or(isNull(eventAccess.expiresAt), gt(eventAccess.expiresAt, now)),
+        ),
+      )
+      .orderBy(desc(eventAccess.createdAt))
+      .limit(1),
+    db
+      .select()
+      .from(boardPublications)
+      .where(
+        and(
+          eq(boardPublications.eventId, eventId),
+          ne(boardPublications.boardKey, VOTED_COUNTER_KEY),
+        ),
+      ),
+  ]);
+  const code = access[0]?.shortCode ?? null;
+  return {
+    event,
+    people,
+    gifts: giftRows,
+    votedCount,
+    join: code ? { url: `${ctx.baseUrl}/j?code=${code}`, shortCode: code } : null,
+    labels: Object.fromEntries(giftRows.map((g) => [g.id, giftLabel(g)])),
+    boards: boardRows.map((b) => ({
+      boardKey: b.boardKey,
+      state: b.state,
+      lastPublished: b.lastPublished as PublishResult | null,
+    })),
+  };
+}

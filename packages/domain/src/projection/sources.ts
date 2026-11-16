@@ -14,6 +14,11 @@ export interface EventSource {
   maxParticipants: number;
   votingRound: number;
   defaultLocale: Locale;
+  votingEndsAt: string | null;
+  /** Event-wide reactions switch. */
+  reactionsEnabled: boolean;
+  /** Gift being opened right now (opening phase). */
+  currentGiftId: string | null;
   milestones: {
     giftOpeningStartedAt: string | null;
     votingClosedAt: string | null;
@@ -43,6 +48,8 @@ export interface GiftSource {
   openingOrder: number | null;
   createdAt: string;
   openedAt: string | null;
+  /** Organizer moderation: hidden gifts never appear in opening, gallery or voting. */
+  hidden: boolean;
 }
 
 export interface BoardSource {

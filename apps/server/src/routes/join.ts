@@ -16,6 +16,7 @@ import {
   MuteParticipantRequestSchema,
   ProfileUpdateRequestSchema,
   ReactionSettingsRequestSchema,
+  OrganizerParticipantsResponseSchema,
 } from '@santa/contracts';
 import {
   EventError,
@@ -32,6 +33,7 @@ import {
   resolveJoinTarget,
   revokeAccess,
   setReactionsMuted,
+  listParticipantsMasked,
   updateEvent,
   updateProfile,
   type Db,
@@ -326,6 +328,13 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
     },
   );
 
+  /** Masked roster (names + status + mute flag) for the console. */
+  app.get('/api/events/:eventId/participants', { preHandler: g.pre }, async (req) =>
+    OrganizerParticipantsResponseSchema.parse({
+      participants: await listParticipantsMasked(d.db, g.eventParams(req)),
+    }),
+  );
+
   /* ================= reactions: organizer controls ================= */
 
   app.post('/api/events/:eventId/reactions/settings', { preHandler: g.pre }, async (req, reply) => {
@@ -339,6 +348,7 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
         patch: { settings: { features: { reactionsEnabled: b.enabled } } },
       });
       d.hub.reactions.invalidatePolicy(g.eventParams(req));
+      await broadcastEventState(d.hub, d.db, g.eventParams(req)); // org state carries reactionsEnabled
       return { enabled: b.enabled };
     });
   });

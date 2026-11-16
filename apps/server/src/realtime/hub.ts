@@ -11,6 +11,7 @@ import {
 } from '@santa/contracts';
 import type { Principal, PrincipalStore } from '../principal.js';
 import { ReactionService, type ReactionPolicy } from './reactions.js';
+import type { RealtimeContext } from './state.js';
 
 export interface SnapshotProvider {
   /** Returns projected payloads keyed by surface; the hub guards every value before sending. */
@@ -77,6 +78,8 @@ export class RealtimeHub {
   private readonly clock: () => Date;
   private readonly rate: { messagesPerSec: number; reactionsPerSec: number };
   readonly reactions: ReactionService;
+  /** Shared context for projections that need storage (photo URLs) and the public base URL. */
+  ctx: RealtimeContext = { baseUrl: 'http://localhost:3000' };
 
   constructor(private readonly o: HubOptions) {
     this.clock = o.clock ?? (() => new Date());

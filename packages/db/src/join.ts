@@ -386,6 +386,20 @@ export async function listUnclaimed(db: Db, eventId: string) {
     .where(and(eq(s.participants.eventId, eventId), eq(s.participants.status, 'unclaimed')));
 }
 
+/** Masked roster for the organizer console: names + status + mute flag only. */
+export async function listParticipantsMasked(db: Db, eventId: string) {
+  return db
+    .select({
+      participantId: s.participants.id,
+      displayName: s.participants.displayName,
+      status: s.participants.status,
+      reactionsMuted: s.participants.reactionsMuted,
+    })
+    .from(s.participants)
+    .where(and(eq(s.participants.eventId, eventId), ne(s.participants.status, 'removed')))
+    .orderBy(s.participants.displayName);
+}
+
 export async function setReactionsMuted(
   db: Db,
   p: { eventId: string; participantId: string; muted: boolean; actor: string; now: Date },

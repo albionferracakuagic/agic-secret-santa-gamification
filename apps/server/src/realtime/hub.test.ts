@@ -190,7 +190,7 @@ describe('grant-scoped unmask channel', () => {
   const grantPayload = {
     boardKey: 'b',
     voterCount: 6,
-    entries: [{ entryId: 'g1', rank: 1, tied: false, score: 3 }],
+    entries: [{ entryId: 'g1', label: 'Gift 1', rank: 1, tied: false, score: 3 }],
   };
 
   it('grants unmasked snapshot + deltas only to the grant holder; others are refused', async () => {

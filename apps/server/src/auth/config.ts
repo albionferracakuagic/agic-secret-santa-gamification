@@ -15,6 +15,9 @@ export const EnvSchema = z.object({
   MICROSOFT_CLIENT_SECRET: Opt,
   MICROSOFT_TENANT_ID: Opt,
   EMAIL_TRANSPORT: z.enum(['console']).default('console'),
+  /** Set => Azure Blob (managed identity, user-delegation SAS); unset => local FS (dev). */
+  STORAGE_ACCOUNT_NAME: Opt,
+  STORAGE_CONTAINER: z.string().default('media'),
 });
 export type Env = z.infer<typeof EnvSchema>;
 
