@@ -8,7 +8,19 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.25",
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/rate-limit": "^11.2.2",
     "@santa/contracts": "*",
-    "fastify": "^5.12.8"
+    "@santa/db": "*",
+    "@santa/domain": "*",
+    "better-auth": "1.7.25",
+    "fastify": "^5.12.8",
+    "socket.io": "^4.8.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
   }
 }

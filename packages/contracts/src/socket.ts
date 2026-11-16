@@ -3,7 +3,7 @@ import { IdSchema, ReactionKindSchema } from './common.js';
 
 export const StreamIdSchema = z.string().regex(/^(pub|org|p:[\w-]+|grant:[\w-]+)$/);
 
-export const SurfaceNameSchema = z.enum(['eventState', 'giftList', 'leaderboard', 'reaction']);
+export const SurfaceNameSchema = z.enum(['eventState', 'giftList', 'leaderboard']);
 
 /** server -> client. Payloads are produced by role projectors and validated before emit. */
 export const ServerEvents = {
@@ -24,13 +24,15 @@ export const ServerEvents = {
     reason: z.enum(['expired', 'revoked', 'membership', 'session']),
   }),
   'time.sync': z.strictObject({ clientTime: z.number(), serverTime: z.number() }),
+  error: z.strictObject({ code: z.enum(['forbidden', 'bad_request', 'rate_limited']) }),
 } as const;
 
 /** client -> server: ephemeral only; all state changes go through REST. */
 export const ClientEvents = {
-  subscribe: z.strictObject({
-    resume: z.record(StreamIdSchema, z.number().int().min(0)).optional(),
-  }),
+  /** Organizers must name the event; guests/displays are bound to theirs by their session. */
+  subscribe: z.strictObject({ eventId: IdSchema.optional() }),
+  /** Joins the grant-scoped unmasked channel; authz is re-checked before every send. */
+  'grant.subscribe': z.strictObject({ grantId: IdSchema }),
   'reaction.send': z.strictObject({ kind: ReactionKindSchema }),
   'time.ping': z.strictObject({ clientTime: z.number() }),
 } as const;

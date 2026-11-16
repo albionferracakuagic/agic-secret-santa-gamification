@@ -27,7 +27,7 @@ export interface ParticipantSource {
   displayName: string;
   avatar: string | null;
   status: 'unclaimed' | 'pending' | 'active' | 'removed';
-  /** Qualifying XP total (participation only, ADR-0003). */
+  /** Total XP (self-only in projections). Champion ranking must use qualifying XP instead. */
   xp: number;
 }
 

@@ -23,9 +23,12 @@
   },
   "dependencies": {
     "@santa/contracts": "*",
-    "drizzle-orm": "^0.45.4"
+    "@santa/domain": "*",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.16"
+    "@electric-sql/pglite": "^0.5.16",
+    "@types/pg": "^8.23.1"
   }
 }

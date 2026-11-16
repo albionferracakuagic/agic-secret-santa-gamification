@@ -16,7 +16,7 @@ import {
   type Viewer,
 } from './sources.js';
 
-export const levelFromXp = (xp: number) => Math.floor(xp / 100) + 1;
+import { levelFromXp } from '../xp.js';
 
 export interface EventStateInput {
   event: EventSource;

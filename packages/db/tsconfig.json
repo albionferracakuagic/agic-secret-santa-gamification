@@ -2,6 +2,6 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist", "types": ["node"] },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../contracts" }]
+  "exclude": ["src/**/*.test.ts", "src/**/*.suite.ts"],
+  "references": [{ "path": "../contracts" }, { "path": "../domain" }]
 }

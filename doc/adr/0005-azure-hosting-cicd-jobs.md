@@ -20,6 +20,8 @@ Status: Accepted (MVP single replica); scale-out path defined
 - Local dev (no Docker): PGlite, local-FS storage, console email; Azurite optional.
 
 **CI/CD (GitHub Actions)**
+- Audit gate (decided at ci-pipeline): `npm audit --omit=dev --audit-level=high` blocks; full `npm audit` is report-only. Status at 2026-11-16: 0 high/critical; 4 moderate on the runtime-tree scan, 8 moderate overall, all build/dev tooling (drizzle-kit → @esbuild-kit/esbuild dev-server advisory; vite-plugin-pwa → workbox-build → glob/minimatch). Not shipped in the server image; `npm audit fix --force` would downgrade drizzle-kit/vite-plugin-pwa, so wait for upstream fixes (Dependabot tracks). Revisit: raise gate to `moderate` once clean.
+- CI sets `TEST_DATABASE_URL` (Postgres 17 service) to run the real-Postgres suites; they are skipped locally when it is unset.
 - PR: install, `tsc -b`, ESLint, Vitest (PGlite), Postgres-service suite (jobs/claims), privacy contract suite, `npm audit --omit=dev`, `az bicep build`, Playwright + axe.
 - Main: build image → ACR → staging; manual approval → prod. Azure auth via **GitHub OIDC** federated credential. `what-if` on infra PRs.
 - Migrations: drizzle-kit, applied before traffic shift, expand/contract.

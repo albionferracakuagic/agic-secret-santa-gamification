@@ -65,17 +65,15 @@ export async function seedDemoEvent(db: Db) {
     { eventId, key: 'funniest', name: { en: 'Funniest', it: 'Più Divertente' }, sort: 3 },
   ]);
 
-  await db
-    .insert(s.xpLedger)
-    .values(
-      people.map((p) => ({
-        eventId,
-        participantId: p.id,
-        activity: 'joined',
-        amount: 10,
-        rewardKey: 'joined',
-      })),
-    );
+  await db.insert(s.xpLedger).values(
+    people.map((p) => ({
+      eventId,
+      participantId: p.id,
+      activity: 'joined',
+      amount: 10,
+      rewardKey: 'joined',
+    })),
+  );
 
   return { eventId, participantIds: people.map((p) => p.id) };
 }
