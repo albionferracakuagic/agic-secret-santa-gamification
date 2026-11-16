@@ -1,0 +1,11 @@
+{
+  "name": "{repo-name}-power-platform-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generatori Node.js AGIC per solution Dataverse/Power Automate/Copilot Studio code-first (scaffolded da agic-ai-team via /init-slce-ai-team)",
+  "dependencies": {
+    "adm-zip": "^0.5.17",
+    "js-yaml": "^4.1.1"
+  }
+}
