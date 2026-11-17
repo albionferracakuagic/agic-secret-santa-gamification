@@ -49,6 +49,9 @@ describe('API authorisation sweep (every registered route)', () => {
 
   beforeAll(async () => {
     w = await createWorld({
+      // the sweep fires every registered route several times per principal: keep it under the test-only
+      // global limiter (the limiter itself is covered by security.test.ts)
+      rateLimitMax: 10_000,
       configure: (app: FastifyInstance) => {
         app.addHook('onRoute', (o) => {
           for (const m of [o.method].flat()) {

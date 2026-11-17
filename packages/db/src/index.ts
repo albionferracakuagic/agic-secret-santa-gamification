@@ -17,3 +17,8 @@ export * from './privacy.js';
 export * from './jobs.js';
 export * from './connect.js';
 export { MIGRATIONS_FOLDER } from './paths.js';
+export * from './phase2.js';
+export * from './guess.js';
+export * from './missions.js';
+export * from './games.js';
+export * from './spotlight.js';

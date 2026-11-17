@@ -30,6 +30,7 @@ import { giftLabel } from '@santa/domain';
 import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
 import { broadcastEventState, broadcastGifts } from '../realtime/broadcast.js';
+import { afterReveal } from '../realtime/phase2.js';
 import { ImageError, processGiftPhoto } from '../images/process.js';
 import { PHOTO_URL_TTL_SECONDS, newGiftPhotoKey, type StorageAdapter } from '../storage/adapter.js';
 import { fail, makeGuards, makeParticipantGuard } from './guards.js';
@@ -247,7 +248,10 @@ export function registerGiftRoutes(app: FastifyInstance, d: GiftRouteDeps) {
           actor: req.org!.userId,
           now: d.clock(),
         });
-        if (r.changed) await broadcastGifts(d.hub, d.db, g.eventParams(req));
+        if (r.changed) {
+          await broadcastGifts(d.hub, d.db, g.eventParams(req));
+          await afterReveal(d.hub, d.db, g.eventParams(req), d.clock()); // guesses on this gift settle
+        }
         return RevealGiftResponseSchema.parse({
           giftId: r.giftId,
           status: 'revealed',
@@ -264,7 +268,10 @@ export function registerGiftRoutes(app: FastifyInstance, d: GiftRouteDeps) {
         actor: req.org!.userId,
         now: d.clock(),
       });
-      if (r.revealed > 0) await broadcastGifts(d.hub, d.db, g.eventParams(req));
+      if (r.revealed > 0) {
+        await broadcastGifts(d.hub, d.db, g.eventParams(req));
+        await afterReveal(d.hub, d.db, g.eventParams(req), d.clock());
+      }
       return RevealAllResponseSchema.parse(r);
     }),
   );

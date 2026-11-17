@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { Db } from './types.js';
 import * as s from './schema.js';
 import { writeAudit } from './audit.js';
+import { purgePhase2Personal } from './phase2.js';
 import { EventError } from './events.js';
 import { cancelJobs, enqueueJob } from './jobs.js';
 
@@ -45,6 +46,7 @@ export async function anonymizeParticipant(
       })
       .where(eq(s.participants.id, me.id));
     await tx.delete(s.claimTokens).where(eq(s.claimTokens.participantId, me.id));
+    await purgePhase2Personal(tx, me.id);
     const gs = await tx.select().from(s.gifts).where(eq(s.gifts.giverId, me.id));
     const photoKeys = gs.flatMap((g) => (g.photoKey ? [g.photoKey] : []));
     if (gs.length)

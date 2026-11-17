@@ -10,5 +10,6 @@ Format: MADR-lite (Status, Context, Decision, Consequences). Scope source: `../S
 | [0004](0004-identity-and-auth.md) | Identity, auth, claims, unmask grants | Accepted |
 | [0005](0005-azure-hosting-cicd-jobs.md) | Azure hosting, CI/CD, durable jobs | Accepted |
 | [0006](0006-performance-targets.md) | Performance targets (TR-003) | Accepted |
+| [0007](0007-phase2-privacy-and-games.md) | Phase 2: guesses, missions, mini-games, presentations, certificates | Accepted |
 
 New ADR: next number; never rewrite accepted ones — supersede.

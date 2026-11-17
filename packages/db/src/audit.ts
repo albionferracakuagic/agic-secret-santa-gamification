@@ -4,7 +4,7 @@ import * as s from './schema.js';
 
 /** Keys whose values must never be written to the audit log (votes, pairings, missions). */
 const SENSITIVE =
-  /^(votes?|pairings?|missions?|giverId|recipientId|ballots?|token|secret|password)$/i;
+  /^(votes?|pairings?|missions?|missionKey|guess(es)?|suspectId|clues?|note|answers?|giverId|recipientId|ballots?|token|secret|password)$/i;
 
 export function redactAuditData(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactAuditData);

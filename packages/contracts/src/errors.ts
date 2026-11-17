@@ -70,6 +70,27 @@ export const API_ERROR_CODES = [
   'nothing_to_show',
   'no_decision_needed',
   'not_a_candidate',
+  // phase 2: guesses, clues, missions, mini-games, presentations
+  'feature_disabled',
+  'guess_closed',
+  'invalid_suspect',
+  'clue_not_allowed',
+  'clue_limit',
+  'clue_not_pending',
+  'not_in_games_phase',
+  'game_active',
+  'game_not_active',
+  'invalid_game',
+  'invalid_game_state',
+  'not_enough_gifts',
+  'round_not_open',
+  'already_submitted',
+  'invalid_answer',
+  'opted_out',
+  'swap_unavailable',
+  'mission_closed',
+  'mission_not_pending',
+  'presentation_not_available',
 ] as const;
 
 export const ApiErrorCodeSchema = z.enum(API_ERROR_CODES);

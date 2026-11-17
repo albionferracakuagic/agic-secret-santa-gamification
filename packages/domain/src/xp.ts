@@ -4,7 +4,13 @@ export type XpActivity = (typeof XP_ACTIVITIES)[number];
 export type XpValues = Record<XpActivity, number>;
 
 export interface XpAward {
-  activity: XpActivity | 'achievement_unlock';
+  activity:
+    | XpActivity
+    | 'achievement_unlock'
+    | 'guess_correct'
+    | 'mission_completed'
+    | 'game_play'
+    | 'game_win';
   amount: number;
   /** Unique per (event, participant): the DB constraint makes re-awarding impossible. */
   rewardKey: string;

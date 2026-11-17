@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IdSchema, IsoDateSchema } from './common.js';
-import { PersonSchema } from './output.js';
+import { PersonSchema } from './person.js';
 
 /** Photo upload cap (multipart field `photo`); processed server-side (resize + EXIF strip). */
 export const GIFT_MAX_PHOTO_BYTES = 5 * 1024 * 1024;

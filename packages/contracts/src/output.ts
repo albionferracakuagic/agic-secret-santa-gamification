@@ -8,15 +8,10 @@ import {
   type Role,
 } from './common.js';
 
-const Avatar = z.string().max(256).nullable();
-const Count = z.number().int().min(0);
+import { PersonSchema, PersonAvatarSchema as Avatar } from './person.js';
+import { SpotlightSchema, GameViewSchema } from './phase2-scenes.js';
 
-/** Public person info: name + avatar only (FR-046; XP/level are self-only). */
-export const PersonSchema = z.strictObject({
-  participantId: IdSchema,
-  displayName: z.string(),
-  avatar: Avatar,
-});
+const Count = z.number().int().min(0);
 
 const baseEventShape = {
   eventId: IdSchema,
@@ -242,11 +237,16 @@ export const SceneSchema = z.discriminatedUnion('scene', [
   z.strictObject({ scene: z.literal('phase'), phase: PhaseSchema }),
   /** Award ceremony in progress/finished: full-screen show driven by the organizer + durable timers. */
   z.strictObject({ scene: z.literal('ceremony'), ceremony: CeremonyViewSchema }),
+  /** Phase 2: the active mini-game (intro, rounds, timers, submission counter, published winners). */
+  z.strictObject({ scene: z.literal('game'), game: GameViewSchema }),
+  /** Phase 2: Santa Detective / Invisible Santa / Mission Master presentation (canPublish-gated). */
+  z.strictObject({ scene: z.literal('spotlight'), spotlight: SpotlightSchema }),
 ]);
 
 /**
- * One-off announcement for the display/participants (celebration + ARIA text). MVP type: achievement.
- * `person` is only included for achievements that are public by design (participation recognition).
+ * One-off achievement announcement for the display/participants (celebration + ARIA text).
+ * `person` is only included for achievements that are public by design (participation recognition,
+ * canPublish-gated winners).
  */
 export const AnnouncementSchema = z.strictObject({
   type: z.literal('achievement'),
@@ -255,6 +255,46 @@ export const AnnouncementSchema = z.strictObject({
   at: IsoDateSchema,
 });
 
+/** Approved anonymous giver clue (FR-025): gift alias + text only; the author is never part of the payload. */
+export const ClueAnnouncementSchema = z.strictObject({
+  type: z.literal('clue'),
+  giftId: IdSchema,
+  alias: z.string(),
+  text: z.string().min(1).max(200),
+  at: IsoDateSchema,
+});
+
+/** FR-030: the ONLY thing the display learns about missions; no person, no mission, no counter. */
+export const MissionCompletedAnnouncementSchema = z.strictObject({
+  type: z.literal('mission_completed'),
+  at: IsoDateSchema,
+});
+
+/** Announcement surface for display / organizer / the pub stream: switch on `type`. */
+export const PublicAnnouncementSchema = z.discriminatedUnion('type', [
+  AnnouncementSchema,
+  ClueAnnouncementSchema,
+  MissionCompletedAnnouncementSchema,
+]);
+/**
+ * Personal announcements, delivered only on the participant's own p:<id> stream and accepted ONLY by the
+ * participant role schema (FR-025: guesses are visible only to their owner). Positive cues only (FR-046).
+ */
+export const GuessResultAnnouncementSchema = z.strictObject({
+  type: z.literal('guess_result'),
+  giftId: IdSchema,
+  alias: z.string(),
+  outcome: z.enum(['correct', 'incorrect']),
+  cue: z.enum(['confetti', 'wink']),
+  xp: Count,
+  at: IsoDateSchema,
+});
+export const ParticipantAnnouncementSchema = z.discriminatedUnion('type', [
+  AnnouncementSchema,
+  ClueAnnouncementSchema,
+  MissionCompletedAnnouncementSchema,
+  GuessResultAnnouncementSchema,
+]);
 export const SURFACES = [
   'eventState',
   'giftList',
@@ -277,6 +317,10 @@ export type PublicLeaderboardOutput = z.infer<typeof PublicLeaderboardSchema>;
 export type UnmaskedLeaderboardOutput = z.infer<typeof UnmaskedLeaderboardSchema>;
 export type SceneOutput = z.infer<typeof SceneSchema>;
 export type AnnouncementOutput = z.infer<typeof AnnouncementSchema>;
+export type ClueAnnouncementOutput = z.infer<typeof ClueAnnouncementSchema>;
+export type GuessResultAnnouncementOutput = z.infer<typeof GuessResultAnnouncementSchema>;
+/** Everything the nnouncement surface can carry (switch on 	ype). */
+export type AnyAnnouncementOutput = z.infer<typeof ParticipantAnnouncementSchema>;
 
 export const OutputSchemas = {
   participant: {
@@ -285,7 +329,7 @@ export const OutputSchemas = {
     leaderboard: PublicLeaderboardSchema,
     leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
-    announcement: AnnouncementSchema,
+    announcement: ParticipantAnnouncementSchema,
   },
   display: {
     eventState: DisplayEventStateSchema,
@@ -293,7 +337,7 @@ export const OutputSchemas = {
     leaderboard: PublicLeaderboardSchema,
     leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
-    announcement: AnnouncementSchema,
+    announcement: PublicAnnouncementSchema,
   },
   organizer_masked: {
     eventState: OrganizerMaskedEventStateSchema,
@@ -301,7 +345,7 @@ export const OutputSchemas = {
     leaderboard: PublicLeaderboardSchema,
     leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
-    announcement: AnnouncementSchema,
+    announcement: PublicAnnouncementSchema,
   },
   organizer_unmasked: {
     eventState: OrganizerUnmaskedEventStateSchema,
@@ -309,6 +353,6 @@ export const OutputSchemas = {
     leaderboard: UnmaskedLeaderboardSchema,
     leaderboards: PublicLeaderboardsSchema,
     scene: SceneSchema,
-    announcement: AnnouncementSchema,
+    announcement: PublicAnnouncementSchema,
   },
 } as const satisfies Record<Role, Record<Surface, z.ZodType>>;

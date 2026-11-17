@@ -1,5 +1,24 @@
 import { z } from 'zod';
 
+/** Phase 2 rules/rewards. XP granted from these is non-qualifying (cannot leak guess/game results into Christmas Champion). */
+export const Phase2SettingsSchema = z.strictObject({
+  guessCorrectXp: z.number().int().min(0).max(500).default(20),
+  missionXp: z.number().int().min(0).max(500).default(30),
+  gameParticipationXp: z.number().int().min(0).max(500).default(5),
+  gameWinnerXp: z.number().int().min(0).max(500).default(25),
+  /** Distinct guessers needed before Santa Detective / Invisible Santa may be published (floor 5, raise only). */
+  detectiveMinGuessers: z.number().int().min(5).max(100).default(5),
+  missionsPerParticipant: z.number().int().min(1).max(3).default(1),
+  /** none = honor system (completion counts at once); organizer = the organizer verifies each submission. */
+  missionVerification: z.enum(['none', 'organizer']).default('none'),
+  /** How many times a participant may swap an assigned mission for another one. */
+  missionSwaps: z.number().int().min(0).max(3).default(1),
+});
+export type Phase2Settings = z.infer<typeof Phase2SettingsSchema>;
+/** Events created before Phase 2 have no phase2 block: fall back to defaults. */
+export const phase2Settings = (s: { phase2?: unknown }): Phase2Settings =>
+  Phase2SettingsSchema.parse(s.phase2 ?? {});
+
 export const TieBreakSchema = z.enum(['shared', 'secondary', 'organizer']);
 
 /** Floors are non-overridable: schema only accepts equal-or-stricter values (ADR-0003). */
@@ -29,6 +48,10 @@ export const EventSettingsSchema = z.strictObject({
       reactionsEnabled: z.boolean().default(true),
       /** Auto-approve picked roster names: base access only, never secrets (`verified: false`). */
       autoApproveJoin: z.boolean().default(false),
+      /** Phase 2 (FR-025..027): Guess Your Secret Santa, giver clues, Santa Detective. */
+      guessSanta: z.boolean().default(false),
+      /** Phase 2 (FR-028..030): secret missions. */
+      missions: z.boolean().default(false),
     })
     .prefault({}),
   retention: z
@@ -42,6 +65,7 @@ export const EventSettingsSchema = z.strictObject({
   /** Category whose winner is the Grand Champion in the ceremony. */
   grandChampionBoard: z.string().default('best_overall'),
   ceremonyCountdownSeconds: z.number().int().min(3).max(30).default(5),
+  phase2: Phase2SettingsSchema.prefault({}),
 });
 export type EventSettings = z.infer<typeof EventSettingsSchema>;
 

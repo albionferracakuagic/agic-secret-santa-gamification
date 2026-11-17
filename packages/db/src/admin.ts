@@ -3,6 +3,7 @@ import type { Db } from './types.js';
 import * as s from './schema.js';
 import { writeAudit } from './audit.js';
 import { EventError } from './events.js';
+import { purgePhase2Personal } from './phase2.js';
 import { loadPublishedVotedCount, votingIsClosed } from './voting.js';
 
 /**
@@ -34,6 +35,7 @@ export async function removeParticipant(
       .where(eq(s.participants.id, me.id));
     await tx.delete(s.claimTokens).where(eq(s.claimTokens.participantId, me.id));
     await tx.update(s.gifts).set({ hidden: true }).where(eq(s.gifts.giverId, me.id));
+    await purgePhase2Personal(tx, me.id);
     let votesRemoved = 0;
     if (e.phase === 'voting' && !votingIsClosed(e, p.now)) {
       const gone = await tx

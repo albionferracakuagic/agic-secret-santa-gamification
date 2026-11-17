@@ -41,6 +41,23 @@ Organizer access to complete results is restricted: unmasked projections require
 | Removed voter | Votes deleted while voting is open; after close the locked awards are not rewritten and the case is flagged | `admin.test.ts` |
 | Delete-my-data | Ballots stay anonymous, identity erased | `admin.test.ts` "delete-my-data anonymises..." |
 
+## Phase 2: guesses, missions, games, presentations (FR-025..032, FR-041)
+
+Policy: ADR-0007. Every guess-, game- or mission-derived public output goes through `publishPeopleBoard()` = `canPublish()`; private data is readable only by its owner.
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| P2-1 | Guesses visible only to their owner (REST, sockets, organizer, display) | Participant-only routes; no guess in any organizer/display projection; `guess_result` is a personal announcement accepted only by the participant schema, sent on `p:<id>` | D `privacy-phase2.test.ts` "personal announcement...", key allowlists; API `phase2.test.ts` "other guesser never sees...", "result on THEIR stream only" (bob/display get nothing) |
+| P2-2 | Guess results are playful, never punitive | Result payload = `{outcome, cue: confetti\|wink, xp}`; no negative cue exists in the contract; incorrect = 0 XP, nothing deducted | D `privacy-phase2.test.ts` (cue `sad` rejected); DB `phase2.test.ts` |
+| P2-3 | Santa Detective / Invisible Santa / Mission Master / game winners obey canPublish | `publishPeopleBoard()`: >= 5 contributors (`detectiveMinGuessers` raise-only), top-N, hidden tail >= 2, shared ties, no totals, neutral `christmas_magic` on failure, reason code organizer-only | D `privacy-phase2.test.ts` property tests (cohorts 1..12), `phase2.test.ts`; DB `phase2.test.ts` (4 guessers -> fallback, 5-player floor for games and missions); API "presentations: canPublish gate" |
+| P2-4 | Clues are anonymous | Author id stored for authorship checks only, never projected; queue = alias + text + status; announcement = alias + text; filter blocks self-reveal and the giver's name | D `phase2.test.ts` (filter), `privacy-phase2.test.ts` allowlists; DB/API `phase2.test.ts` (scan for giver id in queue and announcement) |
+| P2-5 | Missions are private; the display learns only "a secret mission was completed" | Own-data-only routes; organizer sees counts + submissions awaiting verification; `mission_completed` carries only `at`; delivered by a jittered durable job, no public delta at completion time; audit redaction of `mission*`/`note` | D `privacy-phase2.test.ts` (extra keys rejected for every role); API `phase2.test.ts` "display learns only..." (empty delta window at completion, then exactly one generic announcement) |
+| P2-6 | Mini-game payloads leak no answers, scores or other players' state | Correct ids only after round close; scene identical for every viewer; per-person score/answer/card only on `GET /api/me/game`; winners top-N via canPublish; no `score`/`result` route names | D `privacy-phase2.test.ts` (scene scan, leaky payload rejected / stripped + alert in prod); DB `phase2.test.ts`; API sweep `privacy-api.test.ts` (new routes classified, 401/403 matrix) |
+| P2-7 | Phase 2 XP cannot leak guess/game/mission results | Non-qualifying XP only (`planPhase2Award`): Christmas Champion and Christmas Spirit ignore it; own XP is self-only | DB `phase2.test.ts` (ledger `qualifying = false`) |
+| P2-8 | Certificates only for the owner's unlocked achievements | Ownership check, identical 404 for unknown / not yours; achievements themselves come from canPublish-gated paths | API `phase2.test.ts` "certificates..." |
+| P2-9 | Delete-my-data / removal erase Phase 2 personal rows | `purgePhase2Personal()` | DB `phase2.test.ts` |
+
+Sweep tests (`privacy-api.test.ts`) run against the new routes without special cases; the world uses a raised global rate limit because the sweep replays every route per principal.
 ## Acceptance criteria
 
 | AC | Statement | Tests |

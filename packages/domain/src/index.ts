@@ -6,3 +6,8 @@ export * from './ceremony.js';
 export * from './projection/index.js';
 export * from './projection/sources.js';
 export { PHASES, type Phase } from '@santa/contracts';
+export * from './guess.js';
+export * from './missions.js';
+export * from './games-content.js';
+export * from './games.js';
+export * from './phase2.js';

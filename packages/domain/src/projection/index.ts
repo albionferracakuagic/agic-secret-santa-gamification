@@ -5,6 +5,8 @@ import type {
   PublicLeaderboardOutput,
   SceneOutput,
   CeremonyViewOutput,
+  GameViewOutput,
+  SpotlightOutput,
   UnmaskedGiftListOutput,
   UnmaskedLeaderboardOutput,
 } from '@santa/contracts';
@@ -234,6 +236,10 @@ export interface SceneInput {
   votedCount: number | null;
   /** Ceremony view (public payload) when one is running/finished. */
   ceremony?: CeremonyViewOutput | null;
+  /** Phase 2: the active mini-game (already a public, validated view). */
+  game?: GameViewOutput | null;
+  /** Phase 2: the canPublish-gated presentation currently on screen. */
+  spotlight?: SpotlightOutput | null;
 }
 
 /** What the display should show now. Public data only; identical for every role. */
@@ -242,6 +248,8 @@ export function projectScene(i: SceneInput): SceneOutput {
   if (i.ceremony && i.ceremony.status !== 'idle' && i.ceremony.status !== 'cancelled') {
     return { scene: 'ceremony', ceremony: i.ceremony };
   }
+  if (i.game) return { scene: 'game', game: i.game };
+  if (i.spotlight) return { scene: 'spotlight', spotlight: i.spotlight };
   if (e.phase === 'preparation' || e.phase === 'registration' || e.phase === 'gift_registration') {
     return {
       scene: 'lobby',

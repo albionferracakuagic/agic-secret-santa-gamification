@@ -4,6 +4,8 @@ import {
   boardPublications,
   ceremonyView,
   eventAccess,
+  gameView,
+  spotlightView,
   events,
   gifts,
   loadParticipantSources,
@@ -12,7 +14,12 @@ import {
   votingCategories,
   type Db,
 } from '@santa/db';
-import { XP_BOARD_KEY, type CeremonyViewOutput } from '@santa/contracts';
+import {
+  XP_BOARD_KEY,
+  type CeremonyViewOutput,
+  type GameViewOutput,
+  type SpotlightOutput,
+} from '@santa/contracts';
 import {
   giftLabel,
   type BoardSource,
@@ -104,6 +111,9 @@ export interface EventContext {
   /** Labels for a board's entries: gift aliases for categories, display names for the XP board. */
   labelsFor(boardKey: string): Record<string, string>;
   ceremony: CeremonyViewOutput | null;
+  /** Phase 2: active mini-game and current presentation (public, validated views). */
+  game: GameViewOutput | null;
+  spotlight: SpotlightOutput | null;
 }
 
 export async function loadEventContext(
@@ -112,7 +122,7 @@ export async function loadEventContext(
   ctx: RealtimeContext,
   now = new Date(),
 ): Promise<EventContext> {
-  const [event, people, giftRows, votedCount, access, boardRows, ceremony, cats] =
+  const [event, people, giftRows, votedCount, access, boardRows, ceremony, cats, game, spotlight] =
     await Promise.all([
       loadEventSource(db, eventId),
       loadParticipantSources(db, eventId),
@@ -146,6 +156,8 @@ export async function loadEventContext(
         .select({ key: votingCategories.key, name: votingCategories.name })
         .from(votingCategories)
         .where(eq(votingCategories.eventId, eventId)),
+      gameView(db, eventId, now),
+      spotlightView(db, eventId),
     ]);
   const code = access[0]?.shortCode ?? null;
   return {
@@ -160,6 +172,8 @@ export async function loadEventContext(
         ? Object.fromEntries(people.map((p) => [p.id, p.displayName]))
         : Object.fromEntries(giftRows.map((g) => [g.id, giftLabel(g)])),
     ceremony,
+    game,
+    spotlight,
     boards: boardRows.map((b) => ({
       boardKey: b.boardKey,
       name:

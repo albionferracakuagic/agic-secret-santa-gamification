@@ -10,6 +10,7 @@ import { JobRunner } from './jobs/runner.js';
 import { registerRealtimeJobs } from './realtime/jobs.js';
 import { registerVotingJobs } from './realtime/votingJobs.js';
 import { registerCeremonyJobs } from './realtime/ceremonyEvents.js';
+import { registerPhase2Jobs } from './realtime/phase2.js';
 import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
 import { AzureBlobStorage } from './storage/azure.js';
 
@@ -73,6 +74,7 @@ const runner = new JobRunner(db, {
 registerRealtimeJobs(runner, app.hub!, db);
 registerVotingJobs(runner, app.hub!, db);
 registerCeremonyJobs(runner, app.hub!, db);
+registerPhase2Jobs(runner, app.hub!, db);
 registerRetentionJob(runner, db, app.hub!.ctx.storage);
 await ensureDailyRetention(db);
 

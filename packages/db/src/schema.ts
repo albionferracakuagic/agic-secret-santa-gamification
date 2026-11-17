@@ -515,3 +515,242 @@ export const media = pgTable('media', {
   deletedAt: ts('deleted_at'),
   createdAt: createdAt(),
 });
+
+/* ---------- Phase 2 (FR-025..032) ---------- */
+
+/** One editable guess per gift per guesser. Only the owner can ever read it; `correct` is set when the giver is revealed. */
+export const santaGuesses = pgTable(
+  'santa_guesses',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    giftId: uuid('gift_id')
+      .notNull()
+      .references(() => gifts.id, { onDelete: 'cascade' }),
+    guesserId: uuid('guesser_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    suspectId: uuid('suspect_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    /** `guess` = typed in the guess screen, `prediction` = Mystery Santa Predictions mini-game. */
+    source: text('source').$type<'guess' | 'prediction'>().notNull().default('guess'),
+    correct: boolean('correct'),
+    settledAt: ts('settled_at'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    unique('santa_guesses_gift_guesser_uq').on(t.giftId, t.guesserId),
+    index('santa_guesses_event_idx').on(t.eventId),
+  ],
+);
+
+/** Anonymous giver clues. `giverId` is stored for authorship checks only and is never projected. */
+export const santaClues = pgTable(
+  'santa_clues',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    giftId: uuid('gift_id')
+      .notNull()
+      .references(() => gifts.id, { onDelete: 'cascade' }),
+    giverId: uuid('giver_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    status: text('status')
+      .$type<'pending' | 'approved' | 'rejected'>()
+      .notNull()
+      .default('pending'),
+    decidedAt: ts('decided_at'),
+    decidedBy: text('decided_by'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('santa_clues_event_idx').on(t.eventId, t.status),
+    index('santa_clues_gift_idx').on(t.giftId),
+  ],
+);
+
+export const missionAssignments = pgTable(
+  'mission_assignments',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    missionKey: text('mission_key').notNull(),
+    status: text('status')
+      .$type<'assigned' | 'submitted' | 'verified' | 'rejected' | 'cancelled'>()
+      .notNull()
+      .default('assigned'),
+    note: text('note'),
+    swapsUsed: integer('swaps_used').notNull().default(0),
+    submittedAt: ts('submitted_at'),
+    verifiedAt: ts('verified_at'),
+    verifiedBy: text('verified_by'),
+    /** The generic "a secret mission was completed" announcement was (or will be) emitted. */
+    announcedAt: ts('announced_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('mission_assignments_participant_mission_uq').on(t.participantId, t.missionKey),
+    index('mission_assignments_event_idx').on(t.eventId, t.status),
+  ],
+);
+
+export const missionOptOuts = pgTable(
+  'mission_opt_outs',
+  {
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.eventId, t.participantId] })],
+);
+
+export const miniGames = pgTable(
+  'mini_games',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('draft'),
+    title: jsonb('title').$type<Record<string, string>>().notNull(),
+    config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+    /** -1 until the first round opens. */
+    roundIndex: integer('round_index').notNull().default(-1),
+    /** Server deadline of the current auto-advancing step. */
+    stepEndsAt: ts('step_ends_at'),
+    /** Bumped on every transition: a stale timer delivery is a no-op. */
+    stepVersion: integer('step_version').notNull().default(0),
+    /** Stored canPublish() result, set once when the game reaches `results`. */
+    results: jsonb('results'),
+    createdBy: text('created_by'),
+    createdAt: createdAt(),
+    startedAt: ts('started_at'),
+    finishedAt: ts('finished_at'),
+  },
+  (t) => [
+    index('mini_games_event_idx').on(t.eventId),
+    // at most one game on screen per event
+    uniqueIndex('mini_games_one_active_uq')
+      .on(t.eventId)
+      .where(sql`${t.status} in ('intro','round_open','round_closed','results')`),
+  ],
+);
+
+export const gameRounds = pgTable(
+  'game_rounds',
+  {
+    id: id(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => miniGames.id, { onDelete: 'cascade' }),
+    idx: integer('idx').notNull(),
+    /** Full server-side round (incl. the answer); projected before it leaves the server. */
+    spec: jsonb('spec').$type<Record<string, unknown>>().notNull(),
+    status: text('status').$type<'pending' | 'open' | 'closed'>().notNull().default('pending'),
+    opensAt: ts('opens_at'),
+    endsAt: ts('ends_at'),
+    closedAt: ts('closed_at'),
+  },
+  (t) => [unique('game_rounds_game_idx_uq').on(t.gameId, t.idx)],
+);
+
+export const gameSubmissions = pgTable(
+  'game_submissions',
+  {
+    id: id(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => miniGames.id, { onDelete: 'cascade' }),
+    roundId: uuid('round_id')
+      .notNull()
+      .references(() => gameRounds.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    answer: text('answer').notNull(),
+    submittedAt: ts('submitted_at').notNull(),
+    points: integer('points'),
+  },
+  (t) => [
+    unique('game_submissions_round_participant_uq').on(t.roundId, t.participantId),
+    index('game_submissions_game_idx').on(t.gameId),
+  ],
+);
+
+export const gameScores = pgTable(
+  'game_scores',
+  {
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => miniGames.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    score: integer('score').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.participantId] })],
+);
+
+export const gameBingoCards = pgTable(
+  'game_bingo_cards',
+  {
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => miniGames.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    /** 25 entries, bank indexes; the free centre is null. */
+    cells: jsonb('cells').$type<Array<number | null>>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.participantId] })],
+);
+
+export const gameBingoMarks = pgTable(
+  'game_bingo_marks',
+  {
+    id: id(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => miniGames.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    cell: integer('cell').notNull(),
+    status: text('status')
+      .$type<'pending' | 'confirmed' | 'rejected'>()
+      .notNull()
+      .default('pending'),
+    createdAt: createdAt(),
+    decidedAt: ts('decided_at'),
+  },
+  (t) => [unique('game_bingo_marks_uq').on(t.gameId, t.participantId, t.cell)],
+);
+
+/** The presentation currently on the display (Santa Detective etc.); the payload is already canPublish-gated. */
+export const eventSpotlights = pgTable('event_spotlights', {
+  eventId: uuid('event_id')
+    .primaryKey()
+    .references(() => events.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull(),
+  shownAt: ts('shown_at').notNull(),
+});

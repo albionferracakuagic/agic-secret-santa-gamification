@@ -22,6 +22,8 @@ import { registerJoinRoutes } from './routes/join.js';
 import { registerGiftRoutes } from './routes/gifts.js';
 import { registerVotingRoutes } from './routes/voting.js';
 import { registerShowRoutes } from './routes/show.js';
+import { registerPhase2Routes } from './routes/phase2.js';
+import { registerCertificateRoutes } from './certificates/routes.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { API_PREFIX, cspDirectives, registerWeb } from './http/web.js';
 import type { ShortCodeGuardOptions } from './http/shortcode-guard.js';
@@ -70,6 +72,8 @@ export interface AppOptions {
   platformAdminEmails?: string[];
   /** Trusted reverse-proxy hops (default 1; 0 = none). */
   trustProxyHops?: number;
+  /** Directory with the certificate fonts (default: the web app's licensed fonts). */
+  certificateFontsDir?: string;
   /** Structured request logging (off by default; tests pass a sink to verify redaction). */
   logging?: boolean | { sink: LogSink };
 }
@@ -229,6 +233,21 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         principals,
         hub,
         clock,
+      });
+      registerPhase2Routes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
+      });
+      registerCertificateRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
+        ...(opts.certificateFontsDir ? { fontsDir: opts.certificateFontsDir } : {}),
       });
       registerAdminRoutes(app, {
         db,
