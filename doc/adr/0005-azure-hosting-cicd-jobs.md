@@ -34,6 +34,12 @@ Status: Accepted (MVP single replica); scale-out path defined
 **Scale-out (Phase 3)**
 - Socket.IO Redis adapter (Azure Cache for Redis) or Azure Web PubSub for Socket.IO; cursors + `lastPublished` already in DB; transactional outbox for deltas; poller already multi-instance-safe.
 
+## Implementation notes (infra-azure, 2026-11-16)
+- `infra/` Bicep validated with `az bicep build` only (no deployment, no what-if run). Region param default `italynorth`, allowed `westeurope|northeurope`.
+- PostgreSQL uses public access limited by the "Azure services" firewall rule + TLS + admin password (from a deploy-time secret → Key Vault). Entra-only auth and private networking (VNet-integrated Container Apps env) are a hardening follow-up.
+- `deploy.yml`: manual dispatch; read-only validate/what-if job, then a `deploy` job bound to a GitHub Environment (required reviewers = approval gate). OIDC login, no stored Azure secrets.
+- The server image does not yet serve the SPA (static serving is still to do); the Dockerfile has not been built locally.
+
 ## Consequences
 - + Simple, cheap MVP; scale-out needs no data-model change.
 - − Single replica: reconnect blip on deploy/node maintenance → policy: no deploys during an event window.

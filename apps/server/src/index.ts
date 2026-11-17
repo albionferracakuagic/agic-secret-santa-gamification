@@ -4,10 +4,14 @@ import { createPgDb, MIGRATIONS_FOLDER, type Db } from '@santa/db';
 import { buildApp } from './app.js';
 import { createAuth } from './auth/auth.js';
 import { loadEnv, socialFromEnv } from './auth/config.js';
-import { ConsoleEmailTransport } from './auth/email.js';
+import { createEmailTransport } from './auth/email-factory.js';
 import { createAuthModule } from './auth/routes.js';
 import { JobRunner } from './jobs/runner.js';
 import { registerRealtimeJobs } from './realtime/jobs.js';
+import { registerVotingJobs } from './realtime/votingJobs.js';
+import { registerCeremonyJobs } from './realtime/ceremonyEvents.js';
+import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
+import { AzureBlobStorage } from './storage/azure.js';
 
 const env = loadEnv();
 
@@ -25,19 +29,52 @@ async function connect(): Promise<Db> {
 }
 
 const db = await connect();
+const social = socialFromEnv(env);
+// fails startup in production unless ACS is configured (console transport prints magic links)
+const email = createEmailTransport(env);
 const auth = createAuth({
   db,
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET ?? 'dev-only-secret-dev-only-secret-0000',
-  email: new ConsoleEmailTransport(),
-  ...socialFromEnv(env),
+  email,
+  ...social,
 });
-const app = buildApp({ db, auth: createAuthModule(auth, db) });
+const app = buildApp({
+  db,
+  baseUrl: env.BETTER_AUTH_URL,
+  trustProxyHops: env.TRUST_PROXY_HOPS,
+  platformAdminEmails: (env.PLATFORM_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean),
+  ...(env.WEB_DIST ? { webDist: env.WEB_DIST } : {}),
+  ...(env.STORAGE_ACCOUNT_NAME
+    ? { cspImgSources: [`https://${env.STORAGE_ACCOUNT_NAME}.blob.core.windows.net`] }
+    : {}),
+  logging: true,
+  email,
+  ...(env.STORAGE_ACCOUNT_NAME
+    ? {
+        storage: new AzureBlobStorage({
+          accountName: env.STORAGE_ACCOUNT_NAME,
+          container: env.STORAGE_CONTAINER,
+        }),
+      }
+    : {}),
+  auth: createAuthModule(auth, db, undefined, {
+    google: !!social.google,
+    microsoft: !!social.microsoft,
+  }),
+});
 
 const runner = new JobRunner(db, {
   onError: (job, err) => console.error('job failed', job.kind, err),
 });
-registerRealtimeJobs(runner, app.hub!);
+registerRealtimeJobs(runner, app.hub!, db);
+registerVotingJobs(runner, app.hub!, db);
+registerCeremonyJobs(runner, app.hub!, db);
+registerRetentionJob(runner, db, app.hub!.ctx.storage);
+await ensureDailyRetention(db);
 
 try {
   await app.listen({ port: env.PORT, host: '0.0.0.0' });

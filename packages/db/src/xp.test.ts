@@ -45,8 +45,8 @@ describe('xp ledger', () => {
     expect(first.awarded).toBe(true);
     expect(replay.awarded).toBe(false);
     const totals = await xpTotals(db, eventId);
-    // 10 from seed `joined` + 10 configured `voted`
-    expect(totals.get(ids[0]!)).toEqual({ total: 20, qualifying: 20 });
+    // 10 from seed `joined` + 15 configured `voted`
+    expect(totals.get(ids[0]!)).toEqual({ total: 25, qualifying: 25 });
   });
 
   it('rolls back XP when the qualifying action fails (same transaction)', async () => {
@@ -99,6 +99,9 @@ describe('xp ledger', () => {
       maxParticipants: 100,
       votingRound: 1,
       defaultLocale: 'it',
+      votingEndsAt: null,
+      currentGiftId: null,
+      reactionsEnabled: true,
       milestones: {
         giftOpeningStartedAt: null,
         votingClosedAt: null,

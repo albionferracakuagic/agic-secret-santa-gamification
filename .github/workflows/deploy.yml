@@ -1,0 +1,89 @@
+name: Deploy
+
+# Manual only. The `deploy` job targets a GitHub Environment (dev/prod): configure required reviewers on it
+# so every run needs approval before any Azure write. Auth is OIDC (no stored Azure secrets).
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, prod]
+        default: dev
+      useKeyVaultSecrets:
+        description: Wire Key Vault secrets (only after better-auth-secret and database-url exist)
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+
+jobs:
+  validate:
+    # Read-only: lint the template and preview changes. No approval needed, no writes.
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}-plan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: az account show --query "{subscription:name, id:id}" -o table
+      - run: az bicep build -f infra/main.bicep --stdout > /dev/null
+      - name: What-if (read-only)
+        env:
+          PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+        run: >
+          az deployment group what-if
+          --resource-group "$RESOURCE_GROUP"
+          --parameters infra/params/${{ inputs.environment }}.bicepparam
+          --parameters useKeyVaultSecrets=${{ inputs.useKeyVaultSecrets }}
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment gate every Azure write below.
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: az account show --query "{subscription:name, id:id}" -o table
+      - name: Provision / update infrastructure
+        id: infra
+        env:
+          PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --parameters infra/params/${{ inputs.environment }}.bicepparam \
+            --parameters useKeyVaultSecrets=${{ inputs.useKeyVaultSecrets }} \
+            --query "properties.outputs" -o json > outputs.json
+          echo "acr=$(jq -r .acrName.value outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "app=$(jq -r .containerAppName.value outputs.json)" >> "$GITHUB_OUTPUT"
+      - name: Build image in ACR (remote build)
+        run: >
+          az acr build --registry "${{ steps.infra.outputs.acr }}"
+          --image "santa-server:${{ github.sha }}" --file Dockerfile .
+      - name: Roll out new image (single replica; do not deploy during an event window)
+        run: >
+          az containerapp update --name "${{ steps.infra.outputs.app }}"
+          --resource-group "$RESOURCE_GROUP"
+          --image "${{ steps.infra.outputs.acr }}.azurecr.io/santa-server:${{ github.sha }}"
+      - name: Smoke test
+        run: |
+          fqdn=$(az containerapp show --name "${{ steps.infra.outputs.app }}" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          curl --fail --retry 10 --retry-delay 6 "https://$fqdn/health"

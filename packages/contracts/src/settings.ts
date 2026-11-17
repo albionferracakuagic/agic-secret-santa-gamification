@@ -10,18 +10,52 @@ export const EventSettingsSchema = z.strictObject({
   minTotalVotes: z.number().int().min(5).default(5),
   cadenceSeconds: z.number().int().min(5).max(120).default(10),
   tieBreak: TieBreakSchema.default('shared'),
+  /** Gift opening order: shuffled (default) or organizer-defined. Changed via POST .../opening/order. */
+  openingMode: z.enum(['random', 'manual']).default('random'),
   showTotals: z.boolean().default(false),
   liveBoardMinVoters: z.number().int().min(5).default(10),
+  /** Display countdown before a gift being opened is shown (seconds, 0 = none). Server-driven. */
+  openingCountdownSeconds: z.number().int().min(0).max(10).default(3),
   xpValues: z
     .strictObject({
       joined: z.number().int().min(0).default(10),
       gift_registered: z.number().int().min(0).default(20),
-      voted: z.number().int().min(0).default(10),
+      voted: z.number().int().min(0).default(15),
     })
     .prefault({}),
-  features: z.strictObject({ xpBoard: z.boolean().default(false) }).prefault({}),
-  retention: z.strictObject({ photoDays: z.number().int().min(1).default(90) }).prefault({}),
+  features: z
+    .strictObject({
+      xpBoard: z.boolean().default(false),
+      reactionsEnabled: z.boolean().default(true),
+      /** Auto-approve picked roster names: base access only, never secrets (`verified: false`). */
+      autoApproveJoin: z.boolean().default(false),
+    })
+    .prefault({}),
+  retention: z
+    .strictObject({
+      /** Gift photos are deleted this many days after the event completes (default 90). */
+      photoDays: z.number().int().min(1).default(90),
+      /** Roster emails are erased this many days after completion (data minimisation). */
+      emailDays: z.number().int().min(1).default(30),
+    })
+    .prefault({}),
+  /** Category whose winner is the Grand Champion in the ceremony. */
+  grandChampionBoard: z.string().default('best_overall'),
+  ceremonyCountdownSeconds: z.number().int().min(3).max(30).default(5),
 });
 export type EventSettings = z.infer<typeof EventSettingsSchema>;
 
 export const defaultEventSettings = (): EventSettings => EventSettingsSchema.parse({});
+
+/** Default voting categories (EN/IT) created with every event; all vote-derived output goes via canPublish(). */
+export const DEFAULT_CATEGORIES = [
+  { key: 'most_thoughtful', name: { en: 'Most Thoughtful', it: 'Più Premuroso' } },
+  { key: 'most_creative', name: { en: 'Most Creative', it: 'Più Creativo' } },
+  { key: 'funniest', name: { en: 'Funniest', it: 'Più Divertente' } },
+  { key: 'best_presentation', name: { en: 'Best Presentation', it: 'Miglior Confezione' } },
+  { key: 'biggest_surprise', name: { en: 'Biggest Surprise', it: 'Più Sorprendente' } },
+  { key: 'best_overall', name: { en: 'Best Overall', it: 'Miglior Regalo in Assoluto' } },
+] as const;
+
+export const SETUP_WARNINGS = ['roster_below_voter_floor'] as const;
+export type SetupWarning = (typeof SETUP_WARNINGS)[number];

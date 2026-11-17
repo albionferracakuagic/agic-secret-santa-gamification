@@ -18,6 +18,13 @@ Status: Accepted
 9. Reactions: fixed positive enum validated server-side; fan-out aggregated, no per-gift counts (popularity proxy); rate-limited per socket.
 10. `Cache-Control: no-store` on event/state APIs; SW caches static assets only.
 
+## Implementation notes (gifts/voting, 2026-11-16)
+- New public surfaces on the `pub` stream: `scene` (what the display shows: lobby+join URL/short code, opening current gift, voting deadline + published counter) and `announcement` (achievement celebration). Both are public data and identical for every role.
+- `votingEndsAt` is a server timestamp; the server (not the client) closes at that instant: casting checks the deadline itself and a durable `voting.autoclose` job locks awards.
+- Voted counter is a published value (`board_publications` key `voted_counter`) updated by the `board.publish` cadence job only when it changes; vote tallies are never pushed while voting is open.
+- Gift photos: sharp pipeline (orientation, <=1600 px, JPEG, no metadata), renamed blob keys, short-lived signed URLs re-minted on every snapshot (local HMAC URL or Azure user-delegation SAS).
+- Giver reveal is irreversible in the database (trigger + check constraint), not only in code.
+
 ## Consequences
 - + No cadence side-channel from versioning; reconnect is safe by construction.
 - + Privacy tests = (principal × phase) matrix of allowlisted keys + forbidden-value scan on both REST and socket payloads.

@@ -1,109 +1,65 @@
 import { and, eq } from 'drizzle-orm';
-import {
-  boardPublications,
-  events,
-  gifts,
-  loadParticipantSources,
-  pairings,
-  unmaskGrants,
-  votes,
-  eventOrganizers,
-  type Db,
-} from '@santa/db';
+import { eventOrganizers, unmaskGrants, votes, type Db } from '@santa/db';
 import {
   projectEventState,
   projectGiftList,
   projectLeaderboard,
-  type EventSource,
-  type GiftSource,
-  type PublishResult,
+  projectLeaderboards,
+  projectScene,
   type Viewer,
 } from '@santa/domain';
 import type { Principal } from '../principal.js';
 import type { SnapshotProvider } from './hub.js';
+import { loadEventContext, type EventContext, type RealtimeContext } from './state.js';
 
-export async function loadEventSource(db: Db, eventId: string): Promise<EventSource> {
-  const [e] = await db.select().from(events).where(eq(events.id, eventId));
-  if (!e) throw new Error('event not found');
-  const iso = (d: Date | null) => (d ? d.toISOString() : null);
-  return {
-    id: e.id,
-    name: e.name,
-    description: e.description,
-    theme: e.theme,
-    startsAt: e.startsAt.toISOString(),
-    timezone: e.timezone,
-    phase: e.phase,
-    paused: e.paused,
-    maxParticipants: e.maxParticipants,
-    votingRound: e.votingRound,
-    defaultLocale: e.defaultLocale === 'it' ? 'it' : 'en',
-    milestones: {
-      giftOpeningStartedAt: iso(e.giftOpeningStartedAt),
-      votingClosedAt: iso(e.votingClosedAt),
-      revealStartedAt: iso(e.revealStartedAt),
-      ceremonyStartedAt: iso(e.ceremonyStartedAt),
-    },
+export { loadEventSource, loadGiftSources } from './state.js';
+
+const sceneOf = (c: EventContext) =>
+  projectScene({
+    event: c.event,
+    activeParticipants: c.people.filter((p) => p.status === 'active').length,
+    gifts: c.gifts,
+    people: c.people,
+    join: c.join,
+    votedCount: c.votedCount,
+    ceremony: c.ceremony,
+  });
+
+/** Public (display-role) projections shared by the pub stream: gifts, board, scene. */
+export function publicSurfaces(c: EventContext, now = new Date()) {
+  const out: Record<string, unknown> = {
+    giftList: projectGiftList(
+      { role: 'display' },
+      c.event.phase,
+      c.gifts,
+      c.people,
+      now,
+      c.event.currentGiftId,
+    ),
+    scene: sceneOf(c),
   };
-}
-
-/** Recipient is derived from `pairings` (never stored on the gift). */
-export async function loadGiftSources(db: Db, eventId: string): Promise<GiftSource[]> {
-  const rows = await db
-    .select({ g: gifts, recipientId: pairings.recipientId })
-    .from(gifts)
-    .innerJoin(
-      pairings,
-      and(eq(pairings.eventId, gifts.eventId), eq(pairings.giverId, gifts.giverId)),
-    )
-    .where(eq(gifts.eventId, eventId));
-  return rows.map(({ g, recipientId }) => ({
-    id: g.id,
-    aliasNo: g.aliasNo,
-    name: g.name,
-    description: g.description,
-    photoUrl: null,
-    status: g.status,
-    giverId: g.giverId,
-    recipientId,
-    openingOrder: g.openingOrder,
-    createdAt: g.createdAt.toISOString(),
-    openedAt: g.openedAt?.toISOString() ?? null,
-  }));
+  out['leaderboards'] = projectLeaderboards(c.boards, c.labelsFor);
+  // deprecated single-board surface, kept for existing clients
+  const board = c.boards.find((b) => b.state !== 'hidden');
+  if (board) out['leaderboard'] = projectLeaderboard(board, c.labelsFor(board.boardKey));
+  return out;
 }
 
 export class DbSnapshotProvider implements SnapshotProvider {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly ctx: RealtimeContext = { baseUrl: 'http://localhost:3000' },
+  ) {}
 
   async snapshot(p: Principal, eventId: string, stream: string): Promise<Record<string, unknown>> {
-    const [event, people, giftRows] = await Promise.all([
-      loadEventSource(this.db, eventId),
-      loadParticipantSources(this.db, eventId),
-      loadGiftSources(this.db, eventId),
-    ]);
-
-    if (stream === 'pub') {
-      const out: Record<string, unknown> = {
-        giftList: projectGiftList({ role: 'display' }, event.phase, giftRows, people),
-      };
-      const [board] = await this.db
-        .select()
-        .from(boardPublications)
-        .where(eq(boardPublications.eventId, eventId));
-      if (board) {
-        out['leaderboard'] = projectLeaderboard({
-          boardKey: board.boardKey,
-          state: board.state,
-          lastPublished: board.lastPublished as PublishResult | null,
-        });
-      }
-      return out;
-    }
+    const c = await loadEventContext(this.db, eventId, this.ctx);
+    if (stream === 'pub') return publicSurfaces(c);
 
     const base = {
-      event,
-      participants: people,
-      giftsRegistered: giftRows.length,
+      event: c.event,
+      participants: c.people,
+      giftsRegistered: c.gifts.length,
+      ...(c.votedCount === null ? {} : { votedCount: c.votedCount }),
     };
 
     if (stream.startsWith('p:') && p.kind === 'guest') {
@@ -146,7 +102,7 @@ export class DbSnapshotProvider implements SnapshotProvider {
         };
         return {
           eventState: projectEventState(viewer, { ...base, ownVotes: own }),
-          giftList: projectGiftList(viewer, event.phase, giftRows, people),
+          giftList: projectGiftList(viewer, c.event.phase, c.gifts, c.people),
         };
       }
     }

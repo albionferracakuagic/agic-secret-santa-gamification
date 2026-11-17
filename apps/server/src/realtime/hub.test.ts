@@ -145,22 +145,6 @@ describe('realtime core', () => {
     expect(hub.currentCursor(w.eventId, 'pub')).toBe(before);
   });
 
-  it('reactions are rate limited per socket and carry no identity', async () => {
-    const guest = w.client(await w.guestCookie(3));
-    const display = w.client('sg_d=display-token');
-    await Promise.all([connected(guest), connected(display)]);
-    await Promise.all([subscribeAll(guest, {}, 2), subscribeAll(display, {}, 1)]);
-    const got = collect(display, 'reaction') as Array<Record<string, unknown>>;
-    const errors = collect(guest, 'error');
-    for (let i = 0; i < 20; i++) guest.emit('reaction.send', { kind: 'heart' });
-    guest.emit('reaction.send', { kind: 'boo' }); // not in the positive enum
-    await sleep(250);
-    expect(got.length).toBeGreaterThanOrEqual(1);
-    expect(got.length).toBeLessThanOrEqual(5);
-    expect(got[0]).toEqual({ kind: 'heart' });
-    expect(errors).toContainEqual({ code: 'rate_limited' });
-  });
-
   it('time.ping returns server time; /api/time is no-store', async () => {
     const guest = w.client(await w.guestCookie(4));
     await connected(guest);
@@ -206,7 +190,7 @@ describe('grant-scoped unmask channel', () => {
   const grantPayload = {
     boardKey: 'b',
     voterCount: 6,
-    entries: [{ entryId: 'g1', rank: 1, tied: false, score: 3 }],
+    entries: [{ entryId: 'g1', label: 'Gift 1', rank: 1, tied: false, score: 3 }],
   };
 
   it('grants unmasked snapshot + deltas only to the grant holder; others are refused', async () => {

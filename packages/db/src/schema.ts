@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -128,6 +130,14 @@ export const events = pgTable(
     revealStartedAt: ts('reveal_started_at'),
     ceremonyStartedAt: ts('ceremony_started_at'),
     votingRound: integer('voting_round').notNull().default(1),
+    /** Server deadline for the voting timer (null = no timer / not open). */
+    votingEndsAt: ts('voting_ends_at'),
+    /** Gift currently being opened (opening phase); plain uuid, no FK (gifts reference events). */
+    currentGiftId: uuid('current_gift_id'),
+    /** Set when the phase machine reaches `completed` (drives retention). */
+    completedAt: ts('completed_at'),
+    /** Platform-admin takedown: all participant/display access stops while set. */
+    suspendedAt: ts('suspended_at'),
     settings: jsonb('settings').$type<EventSettings>().notNull(),
     defaultLocale: text('default_locale').notNull().default('en'),
     createdAt: createdAt(),
@@ -190,6 +200,10 @@ export const participants = pgTable(
     sessionTokenHash: text('session_token_hash'),
     locale: text('locale').notNull().default('en'),
     prefs: jsonb('prefs').$type<Record<string, unknown>>().notNull().default({}),
+    /** Organizer mute: this participant's reactions are silently dropped. */
+    reactionsMuted: boolean('reactions_muted').notNull().default(false),
+    /** Set by delete-my-data: personal fields erased, entry kept only as "Former player". */
+    anonymizedAt: ts('anonymized_at'),
     userId: text('user_id').references(() => user.id),
     createdAt: createdAt(),
   },
@@ -199,6 +213,23 @@ export const participants = pgTable(
     uniqueIndex('participants_session_uq').on(t.sessionTokenHash),
     unique('participants_event_id_uq').on(t.eventId, t.id),
   ],
+);
+
+/** Single-use personal claim credentials (emailed link token or printed code); only hashes are stored. */
+export const claimTokens = pgTable(
+  'claim_tokens',
+  {
+    id: id(),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    method: claimMethod('method').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('claim_tokens_participant_idx').on(t.participantId)],
 );
 
 export const pairingImports = pgTable('pairing_imports', {
@@ -258,11 +289,18 @@ export const gifts = pgTable(
     openingOrder: integer('opening_order'),
     openedAt: ts('opened_at'),
     giverRevealedAt: ts('giver_revealed_at'),
+    /** Organizer moderation flag. */
+    hidden: boolean('hidden').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
     unique('gifts_event_giver_uq').on(t.eventId, t.giverId),
     unique('gifts_event_alias_uq').on(t.eventId, t.aliasNo),
+    // revealed <=> giver_revealed_at set; a trigger (migration 0004) makes the reveal irreversible
+    check(
+      'gifts_revealed_consistent',
+      sql`(${t.status} = 'revealed') = (${t.giverRevealedAt} is not null)`,
+    ),
   ],
 );
 
@@ -317,6 +355,8 @@ export const boardPublications = pgTable(
     lastPublished: jsonb('last_published'),
     lastPublishedAt: ts('last_published_at'),
     cursor: integer('cursor').notNull().default(0),
+    /** Organizer enabled the live board despite a small cohort (< liveBoardMinVoters). */
+    forced: boolean('forced').notNull().default(false),
   },
   (t) => [unique('board_publications_event_board_uq').on(t.eventId, t.boardKey)],
 );
@@ -375,7 +415,11 @@ export const awards = pgTable(
     confirmedBy: text('confirmed_by').references(() => user.id),
     revealedAt: ts('revealed_at'),
   },
-  (t) => [index('awards_event_idx').on(t.eventId, t.boardKey, t.votingRound)],
+  (t) => [
+    index('awards_event_idx').on(t.eventId, t.boardKey, t.votingRound),
+    // one award per category per voting round (a reopened round bumps votingRound)
+    unique('awards_event_board_round_uq').on(t.eventId, t.boardKey, t.votingRound),
+  ],
 );
 
 export const ceremonyState = pgTable('ceremony_state', {
@@ -384,6 +428,14 @@ export const ceremonyState = pgTable('ceremony_state', {
     .references(() => events.id, { onDelete: 'cascade' }),
   script: jsonb('script').$type<unknown[]>().notNull().default([]),
   stepIndex: integer('step_index').notNull().default(0),
+  status: text('status')
+    .$type<'idle' | 'running' | 'paused' | 'done' | 'cancelled'>()
+    .notNull()
+    .default('idle'),
+  /** Server deadline of an auto-advancing step (countdown). */
+  stepEndsAt: ts('step_ends_at'),
+  votingRound: integer('voting_round').notNull().default(1),
+  startedAt: ts('started_at'),
 });
 
 export const scheduledJobs = pgTable(
@@ -423,6 +475,20 @@ export const unmaskGrants = pgTable(
   (t) => [index('unmask_grants_event_idx').on(t.eventId, t.expiresAt)],
 );
 
+/** Persistent Idempotency-Key store (survives restarts/replicas). Rows expire; the retention job purges them. */
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
+  {
+    key: text('key').primaryKey(),
+    fingerprint: text('fingerprint').notNull(),
+    state: text('state').$type<'inflight' | 'done'>().notNull(),
+    status: integer('status'),
+    body: text('body'),
+    contentType: text('content_type'),
+    expiresAt: ts('expires_at').notNull(),
+  },
+  (t) => [index('idempotency_keys_expires_idx').on(t.expiresAt)],
+);
 export const auditLog = pgTable(
   'audit_log',
   {

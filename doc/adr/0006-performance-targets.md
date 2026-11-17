@@ -34,3 +34,18 @@ Load profile: **100 clients/event × 5 concurrent events ≈ 500 sockets** on 1 
 - + Concrete pass/fail for `perf-load`.
 - − Numbers are estimates; revise after first load run. Breach ⇒ scale-up before scale-out.
 - − Deploy-time reconnect storm is the worst case.
+
+## Validation log
+
+**Local run, 2026-11-16** (`e2e/load/harness.ts`, 5 events x 100 clients + 5 displays = 505 sockets, in-process server + PGlite, batch 25; pessimistic: clients and server share one process):
+
+| Metric | Result | Target |
+|---|---|---|
+| REST read p95 | 66 ms | 300 ms |
+| REST mutation p95 (vote) | 115 ms, 0 errors | 400 ms |
+| Connect + snapshot p95 | 353 ms | 1500 ms |
+| Board publish push, 505/505 delivered | p95 111 ms, max 111 ms | p95 1000 / max 3000 ms |
+| Phase push (voting close), 505/505 delivered | p95 142 ms | 1000 ms |
+| Reconnect storm (30 %, jittered) p95 | 1027 ms | 3000 ms |
+
+All targets met locally. Findings: (1) 100 *simultaneous* snapshot loads crashed the PGlite WASM runtime (a PGlite limit, not a server defect; the production pool serialises it) - the harness defaults to batch 25; (2) each connect issues ~7 queries plus signed-URL generation, so a deploy-time reconnect storm is the worst case (ADR-0005: no deploys during events); sharing a per-event context load between concurrent snapshots was considered and rejected because a snapshot older than its cursor can miss an update; (3) malformed ids returned HTTP 500, now 400 (fixed). Not yet measured: network latency, real Postgres, CPU/memory on the Container App, photo upload p95, display-vs-participant skew (needs staging + `k6-socket.js`).

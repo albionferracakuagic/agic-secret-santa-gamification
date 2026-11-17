@@ -1,5 +1,12 @@
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
-import { eventAccess, eventOrganizers, participants, unmaskGrants, type Db } from '@santa/db';
+import {
+  eventAccess,
+  eventOrganizers,
+  events,
+  participants,
+  unmaskGrants,
+  type Db,
+} from '@santa/db';
 import { hashToken, parseCookies } from './tokens.js';
 
 export const GUEST_COOKIE = 'sg_p';
@@ -41,6 +48,7 @@ export class DbPrincipalStore implements PrincipalStore {
       const [p] = await this.db
         .select({ id: participants.id, eventId: participants.eventId })
         .from(participants)
+        .innerJoin(events, and(eq(events.id, participants.eventId), isNull(events.suspendedAt)))
         .where(
           and(eq(participants.sessionTokenHash, sessionId), eq(participants.status, 'active')),
         );
@@ -52,6 +60,7 @@ export class DbPrincipalStore implements PrincipalStore {
       const [a] = await this.db
         .select({ eventId: eventAccess.eventId })
         .from(eventAccess)
+        .innerJoin(events, and(eq(events.id, eventAccess.eventId), isNull(events.suspendedAt)))
         .where(
           and(
             eq(eventAccess.tokenHash, sessionId),
@@ -97,6 +106,8 @@ export class DbPrincipalStore implements PrincipalStore {
   }
 
   async grantActive(userId: string, eventId: string, grantId: string, now: Date): Promise<boolean> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(grantId))
+      return false;
     const [row] = await this.db
       .select({ id: unmaskGrants.id })
       .from(unmaskGrants)

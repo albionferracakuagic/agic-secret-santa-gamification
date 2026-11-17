@@ -1,7 +1,10 @@
 import type {
   EventStateOutput,
   PublicGiftListOutput,
+  PublicGiftOutput,
   PublicLeaderboardOutput,
+  SceneOutput,
+  CeremonyViewOutput,
   UnmaskedGiftListOutput,
   UnmaskedLeaderboardOutput,
 } from '@santa/contracts';
@@ -17,6 +20,7 @@ import {
 } from './sources.js';
 
 import { levelFromXp } from '../xp.js';
+import { setupWarnings } from '../phases.js';
 
 export interface EventStateInput {
   event: EventSource;
@@ -61,6 +65,7 @@ export function projectEventState(
       giftsRegistered: input.giftsRegistered,
     },
     ...(input.votedCount === undefined ? {} : { votedCount: input.votedCount }),
+    votingEndsAt: e.votingEndsAt,
   };
   if (viewer.role === 'display') return { ...base, role: 'display' };
   if (viewer.role === 'participant') {
@@ -81,6 +86,8 @@ export function projectEventState(
     },
     milestones: { ...e.milestones },
     me: me(input, viewer.participantId),
+    warnings: setupWarnings(input.participants.filter((p) => p.status !== 'removed').length),
+    reactionsEnabled: e.reactionsEnabled,
   };
   if (viewer.role === 'organizer_masked') return { ...base, role: 'organizer_masked', organizer };
   const grant = assertActiveGrant(viewer, now);
@@ -107,6 +114,7 @@ export function projectGiftList(
   gifts: readonly GiftSource[],
   people: readonly ParticipantSource[],
   now = new Date(),
+  currentGiftId: string | null = null,
 ): PublicGiftListOutput | UnmaskedGiftListOutput {
   // Stable order by random alias: never registration/opening order.
   const byAlias = [...gifts].sort((a, b) => a.aliasNo - b.aliasNo);
@@ -127,41 +135,75 @@ export function projectGiftList(
     };
   }
   if (!GALLERY_PHASES.includes(phase)) {
-    return { mode: 'count_only', count: phase === 'gift_registration' ? gifts.length : 0 };
+    return {
+      mode: 'count_only',
+      count: phase === 'gift_registration' ? gifts.filter((g) => !g.hidden).length : 0,
+    };
   }
+  const visible = byAlias.filter((g) => g.status !== 'registered' && !g.hidden);
   return {
     mode: 'gallery',
-    gifts: byAlias
-      .filter((g) => g.status !== 'registered')
-      .map((g) => {
-        const core = {
-          giftId: g.id,
-          alias: `Gift ${g.aliasNo}`,
-          name: g.name,
-          description: g.description,
-          photoUrl: g.photoUrl,
-        };
-        const giver = g.status === 'revealed' ? people.find((p) => p.id === g.giverId) : undefined;
-        if (!giver) return { ...core, status: 'opened' as const };
-        return {
-          ...core,
-          status: 'revealed' as const,
-          giver: { participantId: giver.id, displayName: giver.displayName, avatar: giver.avatar },
-        };
-      }),
+    gifts: visible.map((g) => toPublicGift(g, people)),
+    currentGiftId: visible.some((g) => g.id === currentGiftId) ? currentGiftId : null,
   };
 }
 
-/** Public boards come only from `lastPublished`; scores/totals are dropped. */
-export function projectLeaderboard(board: BoardSource): PublicLeaderboardOutput {
+/** Public gift DTO; the giver appears only for revealed gifts. */
+export function toPublicGift(
+  g: GiftSource,
+  people: readonly ParticipantSource[],
+): PublicGiftOutput {
+  const core = {
+    giftId: g.id,
+    alias: `Gift ${g.aliasNo}`,
+    name: g.name,
+    description: g.description,
+    photoUrl: g.photoUrl,
+  };
+  const giver = g.status === 'revealed' ? people.find((p) => p.id === g.giverId) : undefined;
+  if (!giver) return { ...core, status: 'opened' };
+  return {
+    ...core,
+    status: 'revealed',
+    giver: { participantId: giver.id, displayName: giver.displayName, avatar: giver.avatar },
+  };
+}
+
+export const giftLabel = (g: Pick<GiftSource, 'aliasNo'>) => `Gift ${g.aliasNo}`;
+
+/** Public boards come only from `lastPublished`; scores/totals are dropped. Labels are GIFT aliases. */
+export function projectLeaderboard(
+  board: BoardSource,
+  labels: Readonly<Record<string, string>> = {},
+): PublicLeaderboardOutput {
   const published =
     board.state !== 'hidden' && board.lastPublished?.ok ? board.lastPublished : null;
   return {
     boardKey: board.boardKey,
+    name: board.name ?? { en: board.boardKey },
     state: board.state,
+    // live but nothing may be shown safely => neutral fallback (no promise of a later reveal)
+    message: board.state !== 'hidden' && !published ? 'christmas_magic' : null,
     entries: published
-      ? published.entries.map((e) => ({ entryId: e.entryId, rank: e.rank, tied: e.tied }))
+      ? published.entries.map((e) => ({
+          entryId: e.entryId,
+          label: labels[e.entryId] ?? 'Gift',
+          rank: e.rank,
+          tied: e.tied,
+        }))
       : [],
+  };
+}
+
+/** All visible boards (hidden boards are omitted entirely). */
+export function projectLeaderboards(
+  boards: readonly BoardSource[],
+  labelsFor: (boardKey: string) => Readonly<Record<string, string>>,
+): { boards: PublicLeaderboardOutput[] } {
+  return {
+    boards: boards
+      .filter((b) => b.state !== 'hidden')
+      .map((b) => projectLeaderboard(b, labelsFor(b.boardKey))),
   };
 }
 
@@ -171,7 +213,66 @@ export function projectLeaderboardUnmasked(
   scores: readonly Score[],
   voterCount: number,
   now = new Date(),
+  labels: Readonly<Record<string, string>> = {},
 ): UnmaskedLeaderboardOutput {
   assertActiveGrant(viewer, now);
-  return { boardKey, voterCount, entries: fullRanking(scores) };
+  return {
+    boardKey,
+    voterCount,
+    entries: fullRanking(scores).map((e) => ({ ...e, label: labels[e.entryId] ?? 'Gift' })),
+  };
+}
+
+export interface SceneInput {
+  event: EventSource;
+  activeParticipants: number;
+  gifts: readonly GiftSource[];
+  people: readonly ParticipantSource[];
+  /** Newest active join access (short code is stored in clear; tokens are hash-only). */
+  join: { url: string; shortCode: string } | null;
+  /** Published counter (cadence). */
+  votedCount: number | null;
+  /** Ceremony view (public payload) when one is running/finished. */
+  ceremony?: CeremonyViewOutput | null;
+}
+
+/** What the display should show now. Public data only; identical for every role. */
+export function projectScene(i: SceneInput): SceneOutput {
+  const { event: e } = i;
+  if (i.ceremony && i.ceremony.status !== 'idle' && i.ceremony.status !== 'cancelled') {
+    return { scene: 'ceremony', ceremony: i.ceremony };
+  }
+  if (e.phase === 'preparation' || e.phase === 'registration' || e.phase === 'gift_registration') {
+    return {
+      scene: 'lobby',
+      participants: i.activeParticipants,
+      joinUrl: i.join?.url ?? null,
+      shortCode: i.join?.shortCode ?? null,
+    };
+  }
+  if (e.phase === 'gift_opening') {
+    const real = i.gifts.filter((g) => !g.hidden);
+    const current = real.find((g) => g.id === e.currentGiftId && g.status !== 'registered');
+    const seconds = e.openingCountdownSeconds ?? 0;
+    return {
+      scene: 'opening',
+      openedCount: real.filter((g) => g.status !== 'registered').length,
+      total: real.length,
+      current: current ? toPublicGift(current, i.people) : null,
+      countdownSeconds: seconds,
+      countdownEndsAt:
+        current?.openedAt && seconds > 0
+          ? new Date(Date.parse(current.openedAt) + seconds * 1000).toISOString()
+          : null,
+    };
+  }
+  if (e.phase === 'voting') {
+    return {
+      scene: 'voting',
+      endsAt: e.votingEndsAt,
+      votedCount: i.votedCount,
+      closed: e.milestones.votingClosedAt !== null,
+    };
+  }
+  return { scene: 'phase', phase: e.phase };
 }

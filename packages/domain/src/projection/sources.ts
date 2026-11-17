@@ -14,6 +14,13 @@ export interface EventSource {
   maxParticipants: number;
   votingRound: number;
   defaultLocale: Locale;
+  votingEndsAt: string | null;
+  /** Event-wide reactions switch. */
+  reactionsEnabled: boolean;
+  /** Gift being opened right now (opening phase). */
+  currentGiftId: string | null;
+  /** Server-driven reveal countdown seconds for the gift being opened (0/undefined = none). */
+  openingCountdownSeconds?: number;
   milestones: {
     giftOpeningStartedAt: string | null;
     votingClosedAt: string | null;
@@ -43,10 +50,14 @@ export interface GiftSource {
   openingOrder: number | null;
   createdAt: string;
   openedAt: string | null;
+  /** Organizer moderation: hidden gifts never appear in opening, gallery or voting. */
+  hidden: boolean;
 }
 
 export interface BoardSource {
   boardKey: string;
+  /** Localized title (defaults to the key). */
+  name?: Record<string, string>;
   state: 'hidden' | 'live' | 'paused';
   /** Only the last published result is ever projected (reconnect cannot bypass cadence). */
   lastPublished: PublishResult | null;

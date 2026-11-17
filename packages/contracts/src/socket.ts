@@ -3,7 +3,14 @@ import { IdSchema, ReactionKindSchema } from './common.js';
 
 export const StreamIdSchema = z.string().regex(/^(pub|org|p:[\w-]+|grant:[\w-]+)$/);
 
-export const SurfaceNameSchema = z.enum(['eventState', 'giftList', 'leaderboard']);
+export const SurfaceNameSchema = z.enum([
+  'eventState',
+  'giftList',
+  'leaderboard',
+  'leaderboards',
+  'scene',
+  'announcement',
+]);
 
 /** server -> client. Payloads are produced by role projectors and validated before emit. */
 export const ServerEvents = {
@@ -18,7 +25,11 @@ export const ServerEvents = {
     surface: SurfaceNameSchema,
     payload: z.unknown(),
   }),
-  reaction: z.strictObject({ kind: ReactionKindSchema }),
+  /**
+   * Aggregated cheer burst (FR-037): `count` reactions of one kind in the last flush window.
+   * Sent to the pub room (participants + display). Never tied to a person or a gift.
+   */
+  reaction: z.strictObject({ kind: ReactionKindSchema, count: z.number().int().min(1).max(500) }),
   'grant.revoked': z.strictObject({
     grantId: IdSchema,
     reason: z.enum(['expired', 'revoked', 'membership', 'session']),
@@ -39,3 +50,27 @@ export const ClientEvents = {
 
 export type ServerEventName = keyof typeof ServerEvents;
 export type ClientEventName = keyof typeof ClientEvents;
+
+/**
+ * Which stream carries which surface (ADR-0002). Streams: `pub` (everyone in the event incl. the display),
+ * `p:<participantId>` (one participant), `org` (organizers, masked), `grant:<id>` (unmasked, one socket).
+ * A participant socket is subscribed to `pub` AND its own `p:<id>`; the display only to `pub`.
+ *
+ * - eventState   : pub (display role), p:<id> (participant role: own XP/level, own votes), org (masked)
+ * - giftList     : pub (aliases only; counts-only during registration), grant:<id> (unmasked)
+ * - scene        : pub only (lobby/opening/voting/phase/ceremony; identical for every viewer)
+ * - leaderboards : pub only (top-N published boards; identical for every viewer). "Is this entry mine?" =
+ *                  `entry.entryId === GET /api/me/gift .giftId`; there is no per-person board payload.
+ * - announcement : pub (achievements earned by a named winner/champion) and p:<id> (personal ones such as
+ *                  Christmas Spirit, delivered only to that participant)
+ * - leaderboard  : deprecated single-board alias of `leaderboards[0]`, pub only
+ * Reactions are a separate `reaction` event to the pub room (aggregated, no identity).
+ */
+export const SURFACE_STREAMS = {
+  eventState: ['pub', 'p', 'org', 'grant'],
+  giftList: ['pub', 'grant'],
+  scene: ['pub'],
+  leaderboards: ['pub'],
+  leaderboard: ['pub'],
+  announcement: ['pub', 'p'],
+} as const;

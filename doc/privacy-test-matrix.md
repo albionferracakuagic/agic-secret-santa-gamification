@@ -1,0 +1,76 @@
+# Privacy test matrix
+
+Traceability from the privacy requirements (FR-046 rules 1-10, FR-013, acceptance criteria AC7 and AC13) to the automated tests that enforce them. Policy: ADR-0002 (projection/realtime), ADR-0003 (publication policy), ADR-0004 (identity). **Adding a route, surface or output field must add or update a row here** (the sweep tests below fail on unclassified routes and on key-allowlist changes).
+
+Layers: **D** = domain/contract unit, **DB** = PGlite, **API** = Fastify inject, **WS** = Socket.IO integration.
+
+## Cross-cutting enforcement
+
+| Mechanism | What it guarantees | Tests |
+|---|---|---|
+| Strict per-role output schemas (`OutputSchemas`) | Unknown keys are rejected; roles cannot receive each other's shapes | `packages/domain/src/projection.test.ts` (role x phase x surface, incl. `leaderboards`, `announcement`); `privacy-surfaces.test.ts` (ceremony scenes role x phase x step, key allowlists) |
+| Send-guard (dev/test throw, prod strip + alert) | A leaky projection is never emitted | `packages/contracts/src/index.test.ts`; `hub.test.ts` "send guard: leaky payloads are never emitted" |
+| Forbidden-value scanner (`scanForbidden`) | Ids, scores, ordering metadata absent from every payload | used in `projection.test.ts`, `privacy-surfaces.test.ts`, `flow.test.ts`, `show.test.ts`, `privacy-api.test.ts` |
+| Route sweep | Every registered route is classified; every event/me/admin route enforces its auth class; no route name exposes rank/score/tally/result | `privacy-api.test.ts` "API authorisation sweep" |
+| Single publication policy `canPublish()` | Floors (>=5 voters, hiddenMin 2, safe-N), ties, neutral fallback | `ranking.test.ts` (properties), `deduction.test.ts` (brute-force cohorts 3..12), `boards.test.ts`, `ceremony.test.ts` |
+
+## FR-046
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| 1 | No public last-place awards | Winners only (rank 1) from locked awards; ceremony never shows ranks > 1; no last place in any payload | D `projection.test.ts` "non-top / last place never appears"; DB `ceremony.test.ts` (nominees only canPublish-safe, no rank/score); API `show.test.ts` ceremony scan |
+| 2 | No public negative gift rankings | Public boards = top-N only, `score`/totals dropped, tail hidden (hiddenMin) | D `ranking.test.ts` properties (never exposes last place / ranks beyond N / totals); `privacy-surfaces.test.ts` public leaderboard entry keys = `entryId,label,rank,tied`; WS `privacy-api.test.ts` snapshots have no `score` |
+| 3 | No public identification of low-scoring participants | Board labels are gift aliases, never people; XP board hides totals and is off by default | D `scene.test.ts` "board labels are gift aliases"; DB `boards.test.ts` (xp board only when feature on) |
+| 4 | No embarrassing failure animations | Contract has no failure/negative cue; unsafe boards use neutral `christmas_magic` message | D `scene.test.ts` "live board that is unsafe shows the neutral message"; web FX catalog tests (Fiammetta) |
+| 5 | No public individual voting history | Votes never in any projection; own selections only on the participant's own stream/endpoint | D `projection.test.ts` forbidden `voterId`/`votes`; API `flow.test.ts` "only own selections returned"; DB `admin.test.ts` integrity report aggregate-only |
+| 6 | No disclosure of hidden Santa identity before reveal | Giver absent from gift projections until `giverRevealedAt`; reveal is irreversible (DB trigger); ceremony reveals at the winner step only | D `projection.test.ts` gift list; `privacy-surfaces.test.ts` giver only in `winner` step; DB `gifts.test.ts` (irreversible reveal), `ceremony.test.ts` "giver revealed only at the winner step"; API `flow.test.ts` reveal; `show.test.ts` only winners' givers on the public stream |
+| 7 | No insulting/negative reactions | Closed positive reaction enum, per-participant bucket, organizer mute | `reactions.test.ts`; contracts reaction enum |
+| 8 | No percentile / hidden-position indicators for non-top | Entries carry only `rank` within top-N and `tied`; no counts of hidden entries; stats are counts without ranks | D `privacy-surfaces.test.ts` allowlists (leaderboard, stats, integrity); `ranking.test.ts` |
+| 9 | No participant access to unpublished full rankings through APIs | No ranking/score route exists; unmasked data only with an active grant; sockets serve `lastPublished` only | API `privacy-api.test.ts` "no route exposes a ranking...", "unmask-gated routes refuse..."; WS "reconnecting returns the last PUBLISHED board and counter", "only a cadence tick changes what reconnecting clients see", "participant cannot subscribe to organizer or grant streams"; `hub.test.ts` guest never gets organizer streams, grant-scoped channel |
+| 10 | Positive recognition independent of voting performance | Spirit/Champion achievements from qualifying XP, not votes; XP self-only | D `ceremony.test.ts` Christmas Spirit ignores non-qualifying XP; DB `ceremony.test.ts` spirit + champion unlock; `xp.test.ts` |
+
+Organizer access to complete results is restricted: unmasked projections require an active grant (`organizer.test.ts` "secret data only behind an active grant", `privacy-api.test.ts` expired/bogus/missing grant on pairings, integrity details, corrections, organizer-state), every grant and detail read is audited (`organizer.test.ts`, `admin.test.ts`).
+
+## FR-013 Anonymous voting
+
+| Aspect | Enforced by | Tests |
+|---|---|---|
+| Nobody can see who voted for what | No per-voter data in any projection; masked integrity report counts only | `projection.test.ts`, `admin.test.ts`, `privacy-api.test.ts` |
+| Deduction from published aggregates | >=5 distinct voters, hiddenMin 2, safe-N; brute-force check for cohorts 3..12 shows 0 deducible voters at the floors | `deduction.test.ts` (recalibrate upward only if it ever fails; ADR-0003) |
+| Voters-count / "N voted" cannot be polled for timing correlation | Counter and boards publish on cadence only; a reconnect gets the last published value | WS `privacy-api.test.ts` cadence tests; `flow.test.ts` "N voted appears only on cadence"; residual timing-correlation risk accepted (ADR-0003) |
+| Removed voter | Votes deleted while voting is open; after close the locked awards are not rewritten and the case is flagged | `admin.test.ts` |
+| Delete-my-data | Ballots stay anonymous, identity erased | `admin.test.ts` "delete-my-data anonymises..." |
+
+## Acceptance criteria
+
+| AC | Statement | Tests |
+|---|---|---|
+| AC7 | No participant can see last place, negative rankings or private vote information | all FR-046 rows 1, 2, 5, 9 above; participant socket snapshot scan in `privacy-api.test.ts` |
+| AC13 | Hidden data remains protected in the backend, not merely concealed in the UI | route sweep (anonymous/guest/display/non-member/IDOR), unmask-gated routes, malformed-id handling, removed/suspended principals on REST and sockets, send-guard, grant expiry/revocation (`hub.test.ts`, `organizer.test.ts`), takedown (`show.test.ts`, `privacy-api.test.ts`) |
+
+## API negative-test catalogue (`privacy-api.test.ts`)
+
+- Anonymous / guest / display session on any `/api/events/:eventId/*` route: 401. Non-member organizer: 403.
+- Anonymous / display / organizer session on any `/api/me*` or `/api/profiles/*` route: 401.
+- `/api/admin/*`: anonymous 401, guest 401, ordinary organizer 403.
+- Unmask-gated (`pairings`, `integrity/details`, `pairings/correct`, `organizer-state` with a grant header): missing, expired, unknown and malformed grant: 403.
+- Cross-event IDOR: a participant of another event cannot read this event's profiles (404) or vote for its gifts.
+- Another participant's profile exposes only `participantId, displayName, avatar, achievements`.
+- Malformed ids: 400 `bad_request`, never 500.
+- Removed participant: every `/api/me*` GET 401 and socket refused. Suspended (taken-down) event: participant and display sessions 401 and sockets refused; restore reverses it.
+
+## Socket audit catalogue
+
+| Scenario | Test |
+|---|---|
+| Unauthenticated connection refused | `hub.test.ts` |
+| Role-scoped snapshots, per-stream contiguous cursors, event isolation | `hub.test.ts` |
+| Grant-scoped channel: only the holder; expiry mid-session, explicit revoke, DB revocation, membership removal, session replacement each cut the next send | `hub.test.ts`, `organizer.test.ts` (`grant.expire` job) |
+| Reconnect cannot bypass cadence | `privacy-api.test.ts` |
+| Participant cannot subscribe to `org`/`grant:*` streams | `privacy-api.test.ts` |
+| Removed participant / suspended event refused | `privacy-api.test.ts`, `show.test.ts` |
+| Public stream during ceremony: only winners' givers, announcements allowed, no vote/score keys | `show.test.ts` |
+
+## Known residual risks (accepted, see ADR-0003)
+
+Timing correlation between a single vote and a cadence tick (cohorts under 10 can be small enough to infer); organizer collusion via unmask is mitigated by audit, not prevented.
