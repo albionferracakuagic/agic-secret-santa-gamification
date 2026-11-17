@@ -47,8 +47,8 @@ const guessState = (over: Record<string, unknown> = {}) => ({
   enabled: true,
   suspects: [person('p3', 'Zoe'), person('p1', 'Anna'), person('p2', 'Bruno')],
   gifts: [
-    { giftId: 'g1', alias: 'Gift 1', state: 'guessable', myGuess: null, result: null, clues: [] },
-    { giftId: 'g2', alias: 'Gift 2', state: 'own', myGuess: null, result: null, clues: [] },
+    { giftId: 'g1', alias: 'Gift 1', state: 'guessable' as const, myGuess: null, result: null, clues: [] },
+    { giftId: 'g2', alias: 'Gift 2', state: 'own' as const, myGuess: null, result: null, clues: [] },
   ],
   ...over,
 });
@@ -86,7 +86,7 @@ describe('guess your secret santa (participant)', () => {
               {
                 giftId: 'g1',
                 alias: 'Gift 1',
-                state: 'revealed',
+                state: 'revealed' as const,
                 myGuess: 'p2',
                 result: { outcome: 'incorrect', cue: 'wink', xp: 0 },
                 clues: [{ clueId: 'c1', text: 'Likes tea' }],
@@ -94,7 +94,7 @@ describe('guess your secret santa (participant)', () => {
               {
                 giftId: 'g3',
                 alias: 'Gift 3',
-                state: 'revealed',
+                state: 'revealed' as const,
                 myGuess: 'p3',
                 result: { outcome: 'correct', cue: 'confetti', xp: 25 },
                 clues: [],
