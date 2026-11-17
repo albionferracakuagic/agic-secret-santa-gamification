@@ -79,6 +79,8 @@ export default function Participant() {
               {scene?.scene === 'opening' ? (
                 <OpeningStage
                   current={scene.current}
+                  countdownEndsAt={scene.countdownEndsAt}
+                  now={now}
                   openedCount={scene.openedCount}
                   total={scene.total}
                 />

@@ -1,3 +1,5 @@
+import { ApiErrorCodeSchema, type ApiErrorCode } from '@santa/contracts';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -35,3 +37,10 @@ export async function api<T>(
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
+
+/** Typed check against the shared API_ERROR_CODES enum (no ad-hoc string matching in screens). */
+export const hasApiCode = (e: unknown, ...codes: ApiErrorCode[]): boolean => {
+  if (!(e instanceof ApiError)) return false;
+  const parsed = ApiErrorCodeSchema.safeParse(e.code);
+  return parsed.success && codes.includes(parsed.data);
+};

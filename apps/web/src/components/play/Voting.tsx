@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PublicGiftListOutput } from '@santa/contracts';
-import { ApiError } from '../../api/client';
+import { hasApiCode } from '../../api/client';
 import { usePlayApi, type OwnVotes } from '../../api/play';
 import { emitFx } from '../../fx/bus';
 import { Countdown } from '../Countdown';
@@ -112,11 +112,7 @@ export function VotingPanel({
         ))}
       {cast.isError && (
         <p role="alert">
-          {t(
-            cast.error instanceof ApiError && cast.error.code === 'own_gift'
-              ? 'voting.error.own_gift'
-              : 'voting.error.generic',
-          )}
+          {t(hasApiCode(cast.error, 'own_gift') ? 'voting.error.own_gift' : 'voting.error.generic')}
         </p>
       )}
       <section aria-labelledby="picks-title" className="space-y-1">

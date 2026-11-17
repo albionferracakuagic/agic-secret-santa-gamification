@@ -177,6 +177,8 @@ test.describe('public display scenes (mocked realtime)', () => {
             scene: 'opening',
             openedCount: 1,
             total: 5,
+            countdownSeconds: 3,
+            countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
             current: { ...pubGift('7', 'Warm scarf') },
           },
         },
@@ -222,7 +224,14 @@ test.describe('public display scenes (mocked realtime)', () => {
         stream: 'pub',
         data: {
           eventState: { ...base, role: 'display', phase: 'gift_opening' },
-          scene: { scene: 'opening', openedCount: 2, total: 5, current: pubGift('8', 'Candle') },
+          scene: {
+            scene: 'opening',
+            openedCount: 2,
+            total: 5,
+            countdownSeconds: 3,
+            countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
+            current: pubGift('8', 'Candle'),
+          },
         },
       },
     ]);
@@ -285,14 +294,30 @@ test.describe('organizer console game controls (mocked API)', () => {
     await page.route('**/api/events/e1/gifts', (r) => r.fulfill(json({ gifts: [] })));
     await page.route('**/api/events/e1/opening', (r) =>
       r.fulfill(
-        json({ mode: 'random', openedCount: 1, total: 5, currentGiftId: null, allOpened: false }),
+        json({
+          mode: 'random',
+          openedCount: 1,
+          total: 5,
+          currentGiftId: null,
+          countdownSeconds: 3,
+          countdownEndsAt: null,
+          allOpened: false,
+        }),
       ),
     );
     let next = 0;
     await page.route('**/api/events/e1/opening/next', (r) => {
       next++;
       return r.fulfill(
-        json({ mode: 'random', openedCount: 2, total: 5, currentGiftId: 'g1', allOpened: false }),
+        json({
+          mode: 'random',
+          openedCount: 2,
+          total: 5,
+          currentGiftId: 'g1',
+          countdownSeconds: 3,
+          countdownEndsAt: null,
+          allOpened: false,
+        }),
       );
     });
     await page.goto('/o/events/e1');

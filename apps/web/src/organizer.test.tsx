@@ -50,6 +50,8 @@ function fakeApi(over: Partial<OrganizerApi> = {}): OrganizerApi {
       openedCount: 0,
       total: 3,
       currentGiftId: null,
+      countdownSeconds: 3,
+      countdownEndsAt: null,
       allOpened: false,
     })),
     openingNext: vi.fn(async () => ({
@@ -57,6 +59,8 @@ function fakeApi(over: Partial<OrganizerApi> = {}): OrganizerApi {
       openedCount: 1,
       total: 3,
       currentGiftId: 'g1',
+      countdownSeconds: 3,
+      countdownEndsAt: null,
       allOpened: false,
     })),
     openingOrder: vi.fn(async () => ({
@@ -64,6 +68,8 @@ function fakeApi(over: Partial<OrganizerApi> = {}): OrganizerApi {
       openedCount: 0,
       total: 3,
       currentGiftId: null,
+      countdownSeconds: 3,
+      countdownEndsAt: null,
       allOpened: false,
     })),
     listGifts: async () => [

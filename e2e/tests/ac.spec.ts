@@ -271,7 +271,14 @@ test.describe('AC14 reduced motion and sound off', () => {
         stream: 'pub',
         data: {
           eventState: displayState('gift_opening'),
-          scene: { scene: 'opening', openedCount: 1, total: 4, current: gift('g1', 'Warm scarf') },
+          scene: {
+            scene: 'opening',
+            openedCount: 1,
+            total: 4,
+            countdownSeconds: 3,
+            countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
+            current: gift('g1', 'Warm scarf'),
+          },
         },
       },
     ]);
@@ -387,6 +394,8 @@ test.describe('lifecycle: organizer-driven party with display + 3 phones (AC3-AC
       scene: 'opening',
       openedCount: 1,
       total: 3,
+      countdownSeconds: 3,
+      countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
       current: opened[0],
     });
     await expect(display.getByText('1 of 3 gifts opened')).toBeVisible();

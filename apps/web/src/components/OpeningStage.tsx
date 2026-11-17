@@ -7,39 +7,40 @@ import { emitFx } from '../fx/bus';
 import { avatarGlyph } from '../fx/avatars';
 
 /**
- * Gift-opening stage shared by the display and participant app: animated box -> 3-2-1 -> reveal.
- * With visuals off (reduced motion / intensity off) the reveal is immediate and the same text is shown.
+ * Gift-opening stage shared by the display and participant app: animated box -> server countdown -> reveal.
+ * The countdown is server-driven (`countdownEndsAt` against the server clock); with visuals off
+ * (reduced motion / intensity off) the reveal is immediate and the same text is shown.
  */
 export function OpeningStage({
   current,
   openedCount,
   total,
+  countdownEndsAt,
+  now,
   big = false,
-  stepMs = 1000,
-  steps = 3,
 }: {
   current: PublicGiftOutput | null;
   openedCount: number;
   total: number;
+  countdownEndsAt: string | null;
+  now: () => number;
   big?: boolean;
-  stepMs?: number;
-  steps?: number;
 }) {
   const { t } = useTranslation();
   const prefs = usePrefs();
   const cap = useFxCap((s) => s.cap);
   const animate = effectiveIntensity(prefs, cap) !== 'off';
-  const [left, setLeft] = useState(0); // >0 while counting down
+  const [, tick] = useState(0);
   const id = current?.giftId;
+  const remainingMs =
+    animate && current && countdownEndsAt ? Date.parse(countdownEndsAt) - now() : 0;
+  const left = remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
 
   useEffect(() => {
-    if (!id) return setLeft(0);
-    if (!animate) return setLeft(0);
-    setLeft(steps);
-    const timer = setInterval(() => setLeft((n) => (n > 0 ? n - 1 : 0)), stepMs);
+    if (left === 0) return;
+    const timer = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(timer);
-  }, [id, animate, steps, stepMs]);
-
+  }, [left === 0, id]);
   const revealed = !!current && left === 0;
   useEffect(() => {
     if (revealed && animate) emitFx('auction_won');

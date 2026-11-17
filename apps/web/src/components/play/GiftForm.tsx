@@ -2,16 +2,17 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GIFT_MAX_PHOTO_BYTES } from '@santa/contracts';
-import { ApiError } from '../../api/client';
+import { hasApiCode } from '../../api/client';
 import { usePlayApi } from '../../api/play';
 import { avatarGlyph } from '../../fx/avatars';
 import { emitFx } from '../../fx/bus';
 
 const field = 'mt-1 block min-h-12 w-full rounded border border-ink-900/40 bg-white px-3';
-const errKey = (e: unknown) =>
-  e instanceof ApiError && ['gift_locked', 'invalid_image', 'file_too_large'].includes(e.code)
-    ? `gift.error.${e.code}`
-    : 'error.generic';
+const errKey = (e: unknown) => {
+  for (const code of ['gift_locked', 'invalid_image', 'file_too_large'] as const)
+    if (hasApiCode(e, code)) return `gift.error.${code}`;
+  return 'error.generic';
+};
 
 /** Gift registration: name, description, photo with client-side preview. Before opening only the giver sees the content. */
 export function GiftForm({ canEdit }: { canEdit: boolean }) {
@@ -155,7 +156,7 @@ export function AssignmentView() {
   const api = usePlayApi();
   const q = useQuery({ queryKey: ['assignment'], queryFn: () => api.assignment(), retry: false });
   if (q.isLoading) return null;
-  if (q.error instanceof ApiError && q.error.code === 'verification_required')
+  if (hasApiCode(q.error, 'verification_required'))
     return <p role="status">{t('assignment.verify')}</p>;
   if (!q.data) return <p role="status">{t('assignment.none')}</p>;
   const r = q.data.recipient;

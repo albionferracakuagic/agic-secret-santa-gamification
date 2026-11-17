@@ -136,6 +136,8 @@ describe('opening on the participant app', () => {
         scene: 'opening',
         openedCount: 2,
         total: 6,
+        countdownSeconds: 3,
+        countdownEndsAt: null,
         current: pubGift('7', 'Candle'),
       }),
     });
