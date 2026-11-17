@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ACHIEVEMENT_CATALOG, type AnyAnnouncementOutput } from '@santa/contracts';
 import { usePlayApi } from '../../api/play';
 import { emitFx } from '../../fx/bus';
+import { useLocalized } from '../../lib/localized';
 
 const ANNOUNCE_MS = 8000;
 
@@ -58,6 +59,10 @@ export function announcementFx(a: AnyAnnouncementOutput) {
       return 'mission_completed' as const;
     case 'guess_result':
       return a.outcome === 'correct' ? ('correct_guess' as const) : ('guess_wink' as const);
+    case 'auction_won':
+      return 'auction_won' as const;
+    case 'mystery_reveal':
+      return 'mystery_reveal' as const;
   }
 }
 
@@ -72,6 +77,7 @@ export function AchievementUnlock({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const name = useAchievementName();
+  const loc = useLocalized();
   const [shown, setShown] = useState<AnyAnnouncementOutput>();
   const baseline = useRef<{ set: boolean; at?: string | undefined }>({ set: false });
   useEffect(() => {
@@ -90,10 +96,14 @@ export function AchievementUnlock({
     }
     if (announcement.type === 'clue' || announcement.type === 'guess_result')
       void qc.invalidateQueries({ queryKey: ['guess'] });
+    if (announcement.type === 'auction_won' || announcement.type === 'mystery_reveal') {
+      void qc.invalidateQueries({ queryKey: ['auction'] });
+      void qc.invalidateQueries({ queryKey: ['coins'] });
+    }
     const id = setTimeout(() => setShown(undefined), ANNOUNCE_MS);
     return () => clearTimeout(id);
   }, [announcement, ready, qc]);
-  const line = shown && announcementLine(shown, t, name);
+  const line = shown && announcementLine(shown, t, name, loc);
   return (
     <div role="status" data-testid="achievement-unlock">
       {line && (
@@ -110,6 +120,7 @@ export function announcementLine(
   a: AnyAnnouncementOutput,
   t: TFunction,
   achievementName: (key: string) => string,
+  loc: (text: Record<string, string>) => string,
 ): { icon: string; text: string } {
   switch (a.type) {
     case 'achievement':
@@ -122,5 +133,15 @@ export function announcementLine(
       return a.outcome === 'correct'
         ? { icon: '🎉', text: t('guess.correct', { xp: a.xp }) }
         : { icon: '😉', text: t('guess.incorrect') };
+    case 'auction_won':
+      return {
+        icon: '🎁',
+        text: t('auction.wonLine', { name: a.winner.displayName, title: loc(a.title) }),
+      };
+    case 'mystery_reveal':
+      return {
+        icon: '✨',
+        text: t('auction.revealLine', { title: loc(a.title), reveal: loc(a.reveal) }),
+      };
   }
 }

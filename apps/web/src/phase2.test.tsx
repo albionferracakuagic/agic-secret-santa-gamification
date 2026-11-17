@@ -47,8 +47,22 @@ const guessState = (over: Record<string, unknown> = {}) => ({
   enabled: true,
   suspects: [person('p3', 'Zoe'), person('p1', 'Anna'), person('p2', 'Bruno')],
   gifts: [
-    { giftId: 'g1', alias: 'Gift 1', state: 'guessable' as const, myGuess: null, result: null, clues: [] },
-    { giftId: 'g2', alias: 'Gift 2', state: 'own' as const, myGuess: null, result: null, clues: [] },
+    {
+      giftId: 'g1',
+      alias: 'Gift 1',
+      state: 'guessable' as const,
+      myGuess: null,
+      result: null,
+      clues: [],
+    },
+    {
+      giftId: 'g2',
+      alias: 'Gift 2',
+      state: 'own' as const,
+      myGuess: null,
+      result: null,
+      clues: [],
+    },
   ],
   ...over,
 });
@@ -591,8 +605,10 @@ describe('organizer phase 2 console', () => {
     const decideClue = vi.fn<Phase2Api['decideClue']>(async () => undefined);
     mountConsole({
       phase: 'gift_opening',
+      features: { guessSanta: true },
       p2: {
         clueQueue: async () => ({
+          enabled: true,
           clues: [
             {
               clueId: 'c1',
@@ -619,7 +635,7 @@ describe('organizer phase 2 console', () => {
       reason: 'insufficient_votes' as const,
       achievementsUnlocked: 0,
     }));
-    mountConsole({ phase: 'gift_opening', p2: { present } });
+    mountConsole({ phase: 'gift_opening', features: { guessSanta: true }, p2: { present } });
     fireEvent.click(
       await screen.findByRole('button', { name: 'Show on display: Santa Detective' }),
     );
@@ -632,6 +648,7 @@ describe('organizer phase 2 console', () => {
     const verifyMission = vi.fn<Phase2Api['verifyMission']>(async () => undefined);
     mountConsole({
       phase: 'gift_opening',
+      features: { missions: true },
       p2: {
         organizerMissions: async () => ({
           enabled: true,
@@ -667,6 +684,8 @@ describe('organizer phase 2 console', () => {
       phase: 'games',
       p2: {
         organizerGames: async () => ({
+          enabled: true,
+          canCreate: true,
           catalog: { triviaQuestions: 40, bingoSquares: 30 },
           games: [
             {

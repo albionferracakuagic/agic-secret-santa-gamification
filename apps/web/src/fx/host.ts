@@ -50,6 +50,7 @@ export function createDomHost(d: DomHostDeps): FxHost & { dispose(): void } {
   };
 
   const confetti = async (opts: object) => {
+    if (!d.confettiCanvas.getContext('2d')) return; // no 2D canvas (e.g. headless/jsdom): nothing to draw
     if (!confettiFn) {
       const mod = await import('canvas-confetti');
       confettiFn = mod.default.create(d.confettiCanvas, { resize: true, useWorker: false });

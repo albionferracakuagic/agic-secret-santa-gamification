@@ -11,6 +11,7 @@ const Participant = lazy(() => import('./pages/Participant'));
 const Display = lazy(() => import('./pages/Display'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const Legal = lazy(() => import('./pages/Legal'));
+const LinkConfirm = lazy(() => import('./pages/Link'));
 const Credits = lazy(() => import('./pages/Credits'));
 
 export function App() {
@@ -25,6 +26,7 @@ export function App() {
           <Route path="/e/profile/:id" element={<ProfilePage />} />
           <Route path="/legal/:doc" element={<Legal />} />
           <Route path="/credits" element={<Credits />} />
+          <Route path="/link" element={<LinkConfirm />} />
           <Route path="/e/*" element={<Participant />} />
           <Route path="/d/*" element={<Display />} />
           <Route path="/j/*" element={<Join />} />
