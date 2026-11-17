@@ -14,12 +14,17 @@ import { surfaceOf, useRealtime } from '../realtime/react';
 import { formatShortCode } from '../lib/shortCode';
 import { Qr } from '../components/Qr';
 import { Countdown } from '../components/Countdown';
-import { announcementFx, useAchievementName } from '../components/play/Achievements';
+import {
+  announcementFx,
+  announcementLine,
+  useAchievementName,
+} from '../components/play/Achievements';
 import { OpeningStage } from '../components/OpeningStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
-import { GameScene, SpotlightScene } from '../components/GameScenes';
+import { AuctionScene, GameScene, SpotlightScene } from '../components/GameScenes';
 import { emitFx } from '../fx/bus';
+import { useLocalized } from '../lib/localized';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
 
@@ -140,6 +145,7 @@ function DisplayStage() {
   else if (scene.scene === 'ceremony') body = <CeremonyScene big view={scene.ceremony} now={now} />;
   else if (scene.scene === 'game') body = <GameScene game={scene.game} now={now} />;
   else if (scene.scene === 'spotlight') body = <SpotlightScene spotlight={scene.spotlight} />;
+  else if (scene.scene === 'auction') body = <AuctionScene auction={scene.auction} now={now} />;
   else if (scene.phase === 'gift_registration')
     body = (
       <Scene title={t('display.registrationTitle')}>
@@ -275,6 +281,7 @@ function AnnouncementOverlay({
 }) {
   const { t } = useTranslation();
   const achievementName = useAchievementName();
+  const loc = useLocalized();
   const [shown, setShown] = useState<AnyAnnouncementOutput>();
   const baseline = useRef<{ set: boolean; at?: string | undefined }>({ set: false });
   useEffect(() => {
@@ -292,6 +299,8 @@ function AnnouncementOverlay({
     return () => clearTimeout(id);
   }, [announcement, ready]);
   if (!shown || shown.type === 'guess_result') return null;
+  const other =
+    shown.type === 'achievement' ? undefined : announcementLine(shown, t, achievementName, loc);
   const line =
     shown.type === 'achievement'
       ? t('display.achievementLine', {
@@ -300,13 +309,9 @@ function AnnouncementOverlay({
         })
       : shown.type === 'clue'
         ? t('display.clueLine', { alias: shown.alias, text: shown.text })
-        : t('display.missionLine');
+        : (other?.text ?? '');
   const icon =
-    shown.type === 'achievement'
-      ? avatarGlyph(shown.person.avatar)
-      : shown.type === 'clue'
-        ? '💡'
-        : '🧝';
+    shown.type === 'achievement' ? avatarGlyph(shown.person.avatar) : (other?.icon ?? '');
   return (
     <div
       role="status"

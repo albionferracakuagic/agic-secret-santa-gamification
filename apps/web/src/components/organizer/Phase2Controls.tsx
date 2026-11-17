@@ -36,6 +36,7 @@ export function ClueQueue({ eventId }: { eventId: string }) {
     onSettled: () => void qc.invalidateQueries({ queryKey: key }),
   });
   const pending = q.data?.clues.filter((c) => c.status === 'pending') ?? [];
+  if (q.data && !q.data.enabled) return null;
   return (
     <section aria-labelledby="clue-q-title" className="space-y-2" data-testid="clue-queue">
       <h2 id="clue-q-title" className="text-xl font-semibold">
@@ -270,6 +271,7 @@ export function GamesConsole({ eventId }: { eventId: string }) {
     e.preventDefault();
     create.mutate();
   };
+  if (q.data && !q.data.enabled) return null;
   const num = (label: string, v: number, set: (n: number) => void, min: number, max: number) => (
     <label className="block">
       {label}
@@ -296,38 +298,40 @@ export function GamesConsole({ eventId }: { eventId: string }) {
           })}
         </p>
       )}
-      <form onSubmit={submit} className="space-y-2">
-        <label className="block">
-          {t('gamesCtl.kind')}
-          <select
-            className={field}
-            value={kind}
-            onChange={(e) => setKind(e.target.value as GameKind)}
-          >
-            {GAME_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {t(`game.kind.${k}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          {t('gamesCtl.gameTitle')}
-          <input
-            className={field}
-            value={title}
-            maxLength={80}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </label>
-        {num(t('gamesCtl.rounds'), rounds, setRounds, 1, 20)}
-        {num(t('gamesCtl.roundSeconds'), roundSeconds, setRoundSeconds, 5, 1800)}
-        {num(t('gamesCtl.revealSeconds'), revealSeconds, setRevealSeconds, 0, 60)}
-        {num(t('gamesCtl.introSeconds'), introSeconds, setIntroSeconds, 0, 60)}
-        <button className={primary} disabled={create.isPending}>
-          {t('gamesCtl.create')}
-        </button>
-      </form>
+      {q.data?.canCreate && (
+        <form onSubmit={submit} className="space-y-2">
+          <label className="block">
+            {t('gamesCtl.kind')}
+            <select
+              className={field}
+              value={kind}
+              onChange={(e) => setKind(e.target.value as GameKind)}
+            >
+              {GAME_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {t(`game.kind.${k}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            {t('gamesCtl.gameTitle')}
+            <input
+              className={field}
+              value={title}
+              maxLength={80}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </label>
+          {num(t('gamesCtl.rounds'), rounds, setRounds, 1, 20)}
+          {num(t('gamesCtl.roundSeconds'), roundSeconds, setRoundSeconds, 5, 1800)}
+          {num(t('gamesCtl.revealSeconds'), revealSeconds, setRevealSeconds, 0, 60)}
+          {num(t('gamesCtl.introSeconds'), introSeconds, setIntroSeconds, 0, 60)}
+          <button className={primary} disabled={create.isPending}>
+            {t('gamesCtl.create')}
+          </button>
+        </form>
+      )}
       {q.data?.games.length === 0 && <p>{t('gamesCtl.empty')}</p>}
       <ul className="space-y-3">
         {q.data?.games.map((g) => (

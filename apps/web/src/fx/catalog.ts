@@ -12,6 +12,7 @@ export const FX_EVENTS = [
   'achievement_earned',
   'mission_completed',
   'guess_wink',
+  'mystery_reveal',
   'auction_won',
   'grand_winner',
   'reaction_received',
@@ -83,6 +84,11 @@ export const FX_CATALOG = {
     visual: { kind: 'fireworks', bursts: 5 },
     sfx: 'bell',
   },
+  box_open: {
+    id: 'box_open',
+    visual: { kind: 'confetti', count: 140 },
+    sfx: 'sparkle',
+  },
   wink_sparkle: {
     id: 'wink_sparkle',
     visual: { kind: 'emoji', glyph: '😉', count: 1, durationMs: 2200 },
@@ -103,6 +109,7 @@ export const EVENT_TO_CUE: Record<FxEvent, FxCueId> = {
   achievement_earned: 'badge_reveal',
   mission_completed: 'elf_celebration',
   guess_wink: 'wink_sparkle',
+  mystery_reveal: 'box_open',
   auction_won: 'mystery_box',
   grand_winner: 'trophy_fireworks',
   reaction_received: 'reaction',

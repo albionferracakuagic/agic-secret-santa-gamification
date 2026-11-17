@@ -1,7 +1,16 @@
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PHASES, type Phase } from '@santa/contracts';
+import {
+  DEFAULT_EVENT_FEATURES,
+  PHASES,
+  Phase2SettingsSchema,
+  Phase3SettingsSchema,
+  type EventFeatures,
+  type Phase,
+  type Phase2Settings,
+  type Phase3Settings,
+} from '@santa/contracts';
 import { api } from '../api/client';
 import { useOrganizer } from '../auth/session';
 import { errorKey } from './Dashboard';
@@ -24,6 +33,13 @@ import {
   PresentationControls,
 } from '../components/organizer/Phase2Controls';
 import {
+  ArchiveConsole,
+  AuctionConsole,
+  CoinsConsole,
+  EditorConsole,
+  FeaturesPanel,
+} from '../components/organizer/Phase3Controls';
+import {
   OpeningControls,
   RevealControls,
   VotingControls,
@@ -40,6 +56,9 @@ interface OrganizerState {
       roster: { unclaimed: number; pending: number; active: number; removed: number };
       warnings: string[];
       reactionsEnabled?: boolean;
+      features?: EventFeatures;
+      phase2?: Phase2Settings;
+      phase3?: Phase3Settings;
     };
   };
 }
@@ -84,6 +103,8 @@ function ConsoleInner() {
   const go = (to: Phase) => act.mutate({ path: 'phase', body: { to } });
   const big = 'min-h-12 w-full rounded px-4 font-semibold disabled:opacity-50';
   const r = s.organizer.roster;
+  const f = { ...DEFAULT_EVENT_FEATURES, ...s.organizer.features };
+  const at = (p: Phase) => PHASES.indexOf(s.phase) >= PHASES.indexOf(p);
 
   return (
     <div className="space-y-4">
@@ -169,16 +190,23 @@ function ConsoleInner() {
       )}
       {s.phase === 'reveal' && <RevealControls eventId={eventId} />}
       <ReactionSettings eventId={eventId} initial={s.organizer.reactionsEnabled} />
-      {PHASES.indexOf(s.phase) >= PHASES.indexOf('gift_registration') && (
-        <MissionsConsole eventId={eventId} />
+      <FeaturesPanel
+        eventId={eventId}
+        phase={s.phase}
+        features={f}
+        phase2={s.organizer.phase2 ?? Phase2SettingsSchema.parse({})}
+        phase3={s.organizer.phase3 ?? Phase3SettingsSchema.parse({})}
+      />
+      {f.missions && at('gift_registration') && <MissionsConsole eventId={eventId} />}
+      {f.guessSanta && at('gift_opening') && <ClueQueue eventId={eventId} />}
+      {f.miniGames && at('gift_opening') && <GamesConsole eventId={eventId} />}
+      {(f.guessSanta || f.missions) && at('gift_opening') && (
+        <PresentationControls eventId={eventId} />
       )}
-      {PHASES.indexOf(s.phase) >= PHASES.indexOf('gift_opening') && (
-        <>
-          <ClueQueue eventId={eventId} />
-          <GamesConsole eventId={eventId} />
-          <PresentationControls eventId={eventId} />
-        </>
-      )}
+      {f.coins && <CoinsConsole eventId={eventId} />}
+      {f.auction && <AuctionConsole eventId={eventId} />}
+      {f.history && <ArchiveConsole eventId={eventId} />}
+      <EditorConsole eventId={eventId} />
       {PHASES.indexOf(s.phase) >= PHASES.indexOf('voting') && <BoardsConsole eventId={eventId} />}
       {(s.phase === 'awards' || s.phase === 'completed') && <CeremonyControls eventId={eventId} />}
       <StatsCard eventId={eventId} />

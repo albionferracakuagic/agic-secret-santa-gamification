@@ -19,6 +19,8 @@ import { AchievementUnlock, MyAchievements } from '../components/play/Achievemen
 import { GuessPanel } from '../components/play/GuessPanel';
 import { MissionsPanel } from '../components/play/MissionsPanel';
 import { GamePanel } from '../components/play/GamePanel';
+import { CoinsPanel, AuctionPanel } from '../components/play/AuctionPanel';
+import { HistoryPanel } from '../components/play/HistoryPanel';
 import { Certificates } from '../components/play/Certificates';
 import { DeleteMyData } from '../components/play/DeleteMyData';
 import { Link } from 'react-router-dom';
@@ -106,6 +108,8 @@ export default function Participant() {
             />
           )}
           {active && <GamePanel scene={scene} now={now} />}
+          {active && <AuctionPanel scene={scene} now={now} />}
+          {active && <CoinsPanel />}
           {active && reached('gift_opening') && <GuessPanel selfId={shown.participantId} />}
           {active && reached('gift_registration') && <MissionsPanel />}
           {phase !== 'voting' && <OwnSelections me={shown} gifts={gifts} />}
@@ -117,6 +121,7 @@ export default function Participant() {
           <Standing boards={boards} />
           {active && <MyAchievements />}
           {active && <Certificates />}
+          {active && <HistoryPanel />}
           {active && <ReactionBar send={(k) => rt?.sendReaction(k)} />}
           <Profile me={shown} onSaved={setSaved} />
           <DeleteMyData />

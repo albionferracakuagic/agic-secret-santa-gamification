@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameViewOutput, SpotlightOutput } from '@santa/contracts';
+import type { AuctionViewOutput, GameViewOutput, SpotlightOutput } from '@santa/contracts';
 import { Countdown } from './Countdown';
 import { Winners } from './play/GamePanel';
+import { RevealBox } from './play/AuctionPanel';
 import { useLocalized } from '../lib/localized';
 
 const Frame = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -83,6 +84,34 @@ export function SpotlightScene({ spotlight }: { spotlight: SpotlightOutput }) {
     <Frame title={t(`guessCtl.kind.${spotlight.kind}`)}>
       <div data-testid="spotlight-scene">
         <Winners big results={spotlight} />
+      </div>
+    </Frame>
+  );
+}
+
+/** Display auction: only the current price (never bidders or bid counts); the winner is named once closed, the content after the reveal. */
+export function AuctionScene({ auction, now }: { auction: AuctionViewOutput; now: () => number }) {
+  const { t } = useTranslation();
+  const loc = useLocalized();
+  return (
+    <Frame title={`${t('display.auctionTitle')} — ${loc(auction.title)}`}>
+      <div data-testid="auction-scene" data-status={auction.status} className="space-y-8">
+        <p className="text-5xl">{t(`auction.status.${auction.status}`)}</p>
+        <p className="text-[9rem] font-extrabold text-gold-400" data-testid="auction-price">
+          🪙 {auction.currentBid ?? auction.minNextBid}
+        </p>
+        <p className="text-4xl">{t('auction.minNext', { n: auction.minNextBid })}</p>
+        {auction.status === 'open' && auction.endsAt && (
+          <Countdown endsAt={auction.endsAt} now={now} className="text-[9rem]" />
+        )}
+        {auction.status !== 'open' && (
+          <p className="text-6xl">
+            {auction.winner
+              ? t('auction.winner', { name: auction.winner.displayName })
+              : t('auction.nobody')}
+          </p>
+        )}
+        {auction.reveal && <RevealBox big text={loc(auction.reveal)} />}
       </div>
     </Frame>
   );

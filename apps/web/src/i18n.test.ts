@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { en } from './i18n/en';
 import { it as itLocale } from './i18n/it';
+import { API_ERROR_CODES } from '@santa/contracts';
 import { FX_CATALOG } from './fx/catalog';
 
 const keys = (o: unknown, p = ''): string[] =>
@@ -20,6 +21,15 @@ describe('i18n', () => {
     for (const id of Object.keys(FX_CATALOG)) {
       expect(en.fx).toHaveProperty(id);
       expect(itLocale.fx).toHaveProperty(id);
+    }
+  });
+
+  it('every API error code has a non-empty EN and IT message (fails when a new code lacks a string)', () => {
+    for (const code of API_ERROR_CODES) {
+      const e = (en.error as Record<string, string>)[code];
+      const i = (itLocale.error as Record<string, string>)[code];
+      expect(e && e.length > 0, `en error.${code}`).toBe(true);
+      expect(i && i.length > 0, `it error.${code}`).toBe(true);
     }
   });
 });
