@@ -29,6 +29,8 @@ const PUBLIC = new Set([
   '/api/join/resolve',
   '/api/join/claim',
   '/api/join/display',
+  // single-use emailed token, generic 401 for any bad token, rate-limited (FR-043)
+  '/api/account-link/confirm',
 ]);
 const PUBLIC_PREFIX = ['/api/auth/', '/media/'];
 
@@ -74,7 +76,7 @@ describe('API authorisation sweep (every registered route)', () => {
           ? 'me'
           : u.startsWith('/api/events/:eventId')
             ? 'event'
-            : u === '/api/events' || u === '/api/organizer/me'
+            : u === '/api/events' || u === '/api/organizer/me' || u === '/api/account/profile'
               ? 'organizer'
               : 'unclassified';
 

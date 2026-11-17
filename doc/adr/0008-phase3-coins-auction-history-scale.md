@@ -1,0 +1,23 @@
+# ADR-0008 — Phase 3: Santa Coins, auction, history, editor, scale-out prep
+
+Status: Accepted (Phase 3 backend; extends ADR-0003/0007, supersedes nothing)
+
+## Context
+- FR-033/034 add a currency and an auction, FR-042..044 add cross-event data (archive, returning participants, Hall of Fame). FR-046 and the single `canPublish()` must still hold, and private data (balances, bids, votes, missions, guesses) must not leak through the new surfaces.
+
+## Decision
+- **Coins = append-only ledger** (`coin_ledger`): earnings `+`, bid holds `-`, released holds `+`; balance = sum. `reward_key` is server-derived and unique per participant. Earn rules (`phase3.coinRules`, organizer-tunable, 0 = off) are applied inside `awardXp` for `game_play|game_win|mission_completed|guess_correct|achievement_unlock`, so a coin can only follow an XP row that was just created (idempotent, no request-controlled key). Organizer grants use `grant:<key>` (idempotent per key). There is no purchase, transfer, conversion or coin board; balances are self-only. Coins are not back-paid when switched on mid-event.
+- **Auction** (`auction_prizes`, `auction_bids`): one prize on stage per event (partial unique index). A bid runs under row locks (bidder, prize): balance check, hold, release of the previous leader, optional anti-snipe extension (`antiSnipeSeconds`, `extensionSeconds`, `maxExtensions`) which re-schedules the durable `auction.close` job with a bumped `closeVersion` (stale timers are no-ops). Public view = price + deadline; no bidder, no count, no history; the participant sees only `you.leading`. The winner is named at the close; the mystery text is released only by the `reveal` step. Switching the auction off cancels open prizes and refunds the leader.
+- **Feature switches** `PATCH /api/events/:id/features`: strict patch schema with no floor keys; merged settings re-validated by `EventSettingsSchema`; auction requires coins; locked at `completed`, nothing new in `awards`; audited. The organizer event state now carries `features`, `phase2`, `phase3`. `features.miniGames` (default on) is new.
+- **History**: when an event completes (`finalizeEvent`, also lazily on read) the PUBLIC results are snapshotted if `features.history`: locked + publishable + ceremony-revealed awards (rank 1 only), unlocked achievements, finished games' published results, champion. Names/photos are resolved at read time (anonymised people drop out, photos vanish with the photo retention). The snapshot is deleted `retention.archiveDays` (default 730) after completion by the daily retention job.
+- **Returning participants**: a VERIFIED participant can link their roster entry to an account through an emailed single-use token (`account_link_tokens`, hash only, 30 min). The account is found/created by the proven email; `lifetime_titles` copies the participant's own achievements and an attendance badge per event (positive only, trophy flag for champion-type titles). Delete-my-data removes that event's titles. Guest sessions are unchanged.
+- **Hall of Fame / seasons**: scoped to the owner's archived events; positive accomplishments only. The seasonal top-N sums qualifying XP of linked accounts per year (only events that ran the XP board) and is published through `publishPeopleBoard()` (>= 5 accounts, top-N, hidden tail, no numbers).
+- **Editor**: custom categories (`c_` keys, editable until voting opens, never deleted while referenced) and custom achievements (winner-of-a-custom-category, mapped into the ceremony script through `extraAchievements`, or manually awarded from `games` on). Names are text; `GET /api/me/custom-achievements` lets clients label them; certificates support them.
+- **Scale-out prep** (no Azure writes): `FanoutBus` interface (Web PubSub/Redis adapters to be added with infra) + in-memory default; the hub relays role-guarded deltas to other instances (never `grant:*`) and emits remote ones locally; transactional `outbox_events` with an ordered, `SKIP LOCKED` dispatcher; job leases already recover crashed workers, `SCALE_OUT=true` turns off the single-replica blanket requeue.
+
+## Consequences
+- + Every new "who is best" output reuses `canPublish()`; private data has no new read path.
+- + Money-like features cannot be abused through request-supplied keys or balances.
+- − Cursors are still per instance (collisions possible with two writers on the same stream): a shared cursor store (DB/Redis) is the next step before running >1 replica; rate-limit counters are per process.
+- − History/HoF only know people who linked an account; others appear only through their event's archive while it exists.
+- − The auction names its winner; organizers who want anonymous winners should not enable it.

@@ -16,6 +16,7 @@ import {
 import {
   addCoOrganizer,
   changePhase,
+  finalizeEvent,
   createEvent,
   createUnmaskGrant,
   listAudit,
@@ -94,6 +95,10 @@ export function registerOrganizerRoutes(app: FastifyInstance, d: OrganizerRouteD
         now: d.clock(),
       });
       await broadcastEventState(d.hub, d.db, eventParams(req));
+      if (r.phase === 'completed') {
+        // lifetime titles + history archive; rebuilt lazily on read if this fails
+        await finalizeEvent(d.db, eventParams(req), d.clock()).catch(() => undefined);
+      }
       return r;
     });
   });

@@ -57,6 +57,13 @@
       "when": 1794908449757,
       "tag": "0007_phase2_guess_missions_games",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794918281387,
+      "tag": "0008_phase3_coins_auction_history_outbox",
+      "breakpoints": true
     }
   ]
 }

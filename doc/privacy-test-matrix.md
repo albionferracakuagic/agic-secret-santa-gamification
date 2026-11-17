@@ -58,6 +58,24 @@ Policy: ADR-0007. Every guess-, game- or mission-derived public output goes thro
 | P2-9 | Delete-my-data / removal erase Phase 2 personal rows | `purgePhase2Personal()` | DB `phase2.test.ts` |
 
 Sweep tests (`privacy-api.test.ts`) run against the new routes without special cases; the world uses a raised global rate limit because the sweep replays every route per principal.
+## Phase 3: coins, auction, history, Hall of Fame, editor (FR-033/034/042..044)
+
+Policy: ADR-0008 (extends ADR-0007). Coins/bids/lifetime data are self-only; every ranking-like output (seasonal top-N) goes through `publishPeopleBoard()` = `canPublish()`.
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| P3-1 | Coins are earned only (XP-derived rules with server `rewardKey`, organizer grants); never bought, transferred or converted; no coin board | `coin_ledger` unique `(event, participant, rewardKey)`, earn hook in `awardXp`, `COIN_REASONS` has no purchase/transfer/convert; route names checked | DB `phase3.test.ts` (earn rules, replay, grant idempotency, reasons); API `phase3.test.ts` "coins are self-only..." (route-name scan) |
+| P3-2 | Balance/ledger visible only to the owner; organizer sees rules + one aggregate | `GET /api/me/coins` participant-only; `OrganizerCoinsResponse` has no per-person field | D `privacy-phase3.test.ts` (allowlists); API (organizer/display 401) |
+| P3-3 | Auction shows prices, never bidders; "you are leading" only to yourself | `AuctionView` = price + deadline + winner after close; `MyAuction.you` own position; public scene/announcements strict; bid history is not exposed anywhere | D `privacy-phase3.test.ts` (bidderId/bids rejected for every role, guard strips + alerts in prod); API `phase3.test.ts` "auction end to end" (scan of the display stream for bidder ids) |
+| P3-4 | Mystery content stays hidden until the reveal step | `reveal` null in every payload until status `revealed`; only the `mystery_reveal` announcement carries it | DB + API auction tests |
+| P3-5 | Bids cannot overspend or double-pay; timers are durable | Participant row lock + balance check + hold in one tx; outbid holds released; `closeVersion` guards stale timers; anti-snipe bounded by `maxExtensions` | DB `phase3.test.ts` (holds, release, snipe, stale/early/replay close, cancel/disable refund) |
+| P3-6 | Archive keeps PUBLIC results only | Snapshot builder reads only locked+publishable+ceremony-revealed awards (rank 1), unlocked achievements, finished games' published results; names resolved at read time (anonymised people drop out); photo URL only while the photo exists; deleted at `retention.archiveDays` | DB `phase3.test.ts` "history archive" (votes/nominees/unrevealed awards/XP/bids absent; anonymisation; retention); D `privacy-phase3.test.ts` (extra keys rejected) |
+| P3-7 | Hall of Fame / lifetime profile are positive only | Only winners, champions, achievements; no low ranks, no totals; seasonal board via canPublish (>= 5 linked accounts, top-N, hidden tail, no XP numbers) and only from events that ran the XP board | DB `phase3.test.ts` (HoF, seasons incl. floor, no-xpBoard) |
+| P3-8 | Account link needs a verified claim and a mailbox proof | Verified claim only (auto-approved guests refused); single-use hashed 30-min token; one generic 401 for wrong/used/expired; delete-my-data removes that event's titles | DB + API `phase3.test.ts` |
+| P3-9 | Feature PATCH cannot lower floors | `FeaturesPatchSchema` has no floor keys, `detectiveMinGuessers` min 5, merged settings re-validated; locked at `completed`; nothing new in `awards`; audited | D `privacy-phase3.test.ts`; DB + API `phase3.test.ts` |
+| P3-10 | Custom categories keep ballot integrity | Editable only before voting opens; `c_` key space; custom winner achievements go through the same canPublish-locked awards | DB + API `phase3.test.ts` |
+
+Scale-out (no privacy surface change): deltas relayed between instances are already role-guarded; `grant:*` channels never cross instances (`scale/scale.test.ts`).
 ## Acceptance criteria
 
 | AC | Statement | Tests |

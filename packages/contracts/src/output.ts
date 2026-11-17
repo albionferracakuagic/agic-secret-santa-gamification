@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { SETUP_WARNINGS } from './settings.js';
+import {
+  EventFeaturesSchema,
+  Phase2SettingsSchema,
+  Phase3SettingsSchema,
+  SETUP_WARNINGS,
+} from './settings.js';
 import {
   IdSchema,
   IsoDateSchema,
@@ -10,6 +15,11 @@ import {
 
 import { PersonSchema, PersonAvatarSchema as Avatar } from './person.js';
 import { SpotlightSchema, GameViewSchema } from './phase2-scenes.js';
+import {
+  AuctionViewSchema,
+  AuctionWonAnnouncementSchema,
+  MysteryRevealAnnouncementSchema,
+} from './auction.js';
 
 const Count = z.number().int().min(0);
 
@@ -53,6 +63,10 @@ const organizerShape = {
   warnings: z.array(z.enum(SETUP_WARNINGS)),
   /** Event-wide reactions switch (settings.features.reactionsEnabled). */
   reactionsEnabled: z.boolean(),
+  /** Every feature switch (Phase 2/3 included) so the console can render the right toggles. */
+  features: EventFeaturesSchema,
+  phase2: Phase2SettingsSchema,
+  phase3: Phase3SettingsSchema,
 };
 
 export const ParticipantEventStateSchema = z.strictObject({
@@ -241,6 +255,8 @@ export const SceneSchema = z.discriminatedUnion('scene', [
   z.strictObject({ scene: z.literal('game'), game: GameViewSchema }),
   /** Phase 2: Santa Detective / Invisible Santa / Mission Master presentation (canPublish-gated). */
   z.strictObject({ scene: z.literal('spotlight'), spotlight: SpotlightSchema }),
+  /** Phase 3: the mystery-box auction on stage (price only, never bidders). */
+  z.strictObject({ scene: z.literal('auction'), auction: AuctionViewSchema }),
 ]);
 
 /**
@@ -275,6 +291,8 @@ export const PublicAnnouncementSchema = z.discriminatedUnion('type', [
   AnnouncementSchema,
   ClueAnnouncementSchema,
   MissionCompletedAnnouncementSchema,
+  AuctionWonAnnouncementSchema,
+  MysteryRevealAnnouncementSchema,
 ]);
 /**
  * Personal announcements, delivered only on the participant's own p:<id> stream and accepted ONLY by the
@@ -293,6 +311,8 @@ export const ParticipantAnnouncementSchema = z.discriminatedUnion('type', [
   AnnouncementSchema,
   ClueAnnouncementSchema,
   MissionCompletedAnnouncementSchema,
+  AuctionWonAnnouncementSchema,
+  MysteryRevealAnnouncementSchema,
   GuessResultAnnouncementSchema,
 ]);
 export const SURFACES = [

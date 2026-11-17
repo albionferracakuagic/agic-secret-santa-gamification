@@ -41,7 +41,13 @@ import { cancelJobs, enqueueJob } from './jobs.js';
 import { awardXp } from './xp.js';
 import { unlockAchievement } from './achievements.js';
 import { setGuess } from './guess.js';
-import { loadActiveParticipant, loadEventRow, publishedPeople, type EventRow } from './phase2.js';
+import {
+  loadActiveParticipant,
+  loadEventRow,
+  miniGamesEnabled,
+  publishedPeople,
+  type EventRow,
+} from './phase2.js';
 import type { CeremonyAnnouncement } from './ceremony.js';
 
 /** Auto-advance of the current step (intro end, round end, reveal end). Idempotent via `stepVersion`. */
@@ -77,6 +83,7 @@ export async function createGame(
 ) {
   return db.transaction(async (tx) => {
     const e = await loadEventRow(tx, p.eventId, true);
+    if (!miniGamesEnabled(e)) throw new EventError('feature_disabled');
     if (e.phase !== GAMES_PHASE) throw new EventError('not_in_games_phase');
     const cfg = GameConfigSchema.parse(p.config ?? {});
     const rng = p.rng ?? Math.random;
@@ -426,6 +433,7 @@ export async function gameAction(
     const e = await loadEventRow(tx, p.eventId, true);
     const g = await lockGame(tx, p.gameId, p.eventId);
     if (e.paused) throw new EventError('paused');
+    if (p.action === 'start' && !miniGamesEnabled(e)) throw new EventError('feature_disabled');
     let out: GameStepResult;
     switch (p.action) {
       case 'start': {
@@ -448,15 +456,13 @@ export async function gameAction(
             .where(and(eq(s.participants.eventId, e.id), eq(s.participants.status, 'active')));
           const rng = p.rng ?? Math.random;
           if (active.length)
-            await tx
-              .insert(s.gameBingoCards)
-              .values(
-                active.map((a) => ({
-                  gameId: g.id,
-                  participantId: a.id,
-                  cells: generateBingoCard(rng),
-                })),
-              );
+            await tx.insert(s.gameBingoCards).values(
+              active.map((a) => ({
+                gameId: g.id,
+                participantId: a.id,
+                cells: generateBingoCard(rng),
+              })),
+            );
         }
         const intro = cfgOf(g).introSeconds;
         out = {
@@ -557,7 +563,7 @@ export async function activeGame(db: Db, eventId: string): Promise<Game | undefi
 
 export async function submitAnswer(
   db: Db,
-  p: { participantId: string; answerId: string; now: Date },
+  p: { participantId: string; answerId?: string | undefined; now: Date },
 ): Promise<{ roundIndex: number; accepted: true }> {
   return db.transaction(async (tx) => {
     const me = await loadActiveParticipant(tx, p.participantId);
@@ -574,7 +580,8 @@ export async function submitAnswer(
     if (!round.opensAt || !round.endsAt || p.now < round.opensAt || p.now > round.endsAt)
       throw new EventError('round_not_open');
     const spec = specOf(round);
-    const answer = kind === 'speed' ? 'tap' : p.answerId;
+    // speed rounds have no options: the answer is always the server's own 'tap' (body value optional)
+    const answer = kind === 'speed' ? 'tap' : (p.answerId ?? '');
     if (kind !== 'speed' && !spec.options.some((o) => o.id === answer))
       throw new EventError('invalid_answer');
     const inserted = await tx
@@ -719,6 +726,7 @@ export async function decideBingoMark(
 /* ---------- views ---------- */
 
 export async function listGames(db: Db, eventId: string) {
+  const e = await loadEventRow(db, eventId);
   const games = await db
     .select()
     .from(s.miniGames)
@@ -737,6 +745,8 @@ export async function listGames(db: Db, eventId: string) {
         .groupBy(s.gameRounds.gameId)
     : [];
   return {
+    enabled: miniGamesEnabled(e),
+    canCreate: miniGamesEnabled(e) && e.phase === GAMES_PHASE,
     games: games.map((g) => ({
       gameId: g.id,
       kind: kindOf(g),

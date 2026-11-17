@@ -11,6 +11,7 @@ import { registerRealtimeJobs } from './realtime/jobs.js';
 import { registerVotingJobs } from './realtime/votingJobs.js';
 import { registerCeremonyJobs } from './realtime/ceremonyEvents.js';
 import { registerPhase2Jobs } from './realtime/phase2.js';
+import { registerAuctionJobs } from './realtime/phase3.js';
 import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
 import { AzureBlobStorage } from './storage/azure.js';
 
@@ -75,12 +76,14 @@ registerRealtimeJobs(runner, app.hub!, db);
 registerVotingJobs(runner, app.hub!, db);
 registerCeremonyJobs(runner, app.hub!, db);
 registerPhase2Jobs(runner, app.hub!, db);
+registerAuctionJobs(runner, app.hub!, db);
 registerRetentionJob(runner, db, app.hub!.ctx.storage);
 await ensureDailyRetention(db);
 
 try {
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
-  await runner.start();
+  // several replicas: a 'running' job may belong to a live sibling, so no blanket requeue (leases recover crashes)
+  await runner.start({ requeueAll: process.env['SCALE_OUT'] !== 'true' });
   console.log(`server listening on :${env.PORT}`);
 } catch (err) {
   console.error(err);

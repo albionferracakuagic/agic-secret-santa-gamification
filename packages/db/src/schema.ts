@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigserial,
   boolean,
   check,
   index,
@@ -317,6 +318,8 @@ export const votingCategories = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     sort: integer('sort').notNull().default(0),
     boardEnabled: boolean('board_enabled').notNull().default(false),
+    /** Organizer-defined category (key c_...); editable only before voting opens. */
+    custom: boolean('custom').notNull().default(false),
   },
   (t) => [unique('voting_categories_event_key_uq').on(t.eventId, t.key)],
 );
@@ -754,3 +757,186 @@ export const eventSpotlights = pgTable('event_spotlights', {
   data: jsonb('data').$type<Record<string, unknown>>().notNull(),
   shownAt: ts('shown_at').notNull(),
 });
+
+/* ---------- Phase 3 (FR-033/034/042..044) + scale-out prep ---------- */
+
+/**
+ * Append-only Santa Coin ledger. Earnings are positive; bid holds negative; releases positive again. The balance is
+ * the sum. `reward_key` is server-derived and unique per participant, so no award can happen twice.
+ */
+export const coinLedger = pgTable(
+  'coin_ledger',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    reason: text('reason').notNull(),
+    amount: integer('amount').notNull(),
+    rewardKey: text('reward_key').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('coin_ledger_reward_uq').on(t.eventId, t.participantId, t.rewardKey),
+    index('coin_ledger_participant_idx').on(t.participantId),
+  ],
+);
+
+export const auctionPrizes = pgTable(
+  'auction_prizes',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    title: jsonb('title').$type<Record<string, string>>().notNull(),
+    /** Secret content: organizer-only until the reveal step. */
+    reveal: jsonb('reveal').$type<Record<string, string>>().notNull(),
+    minBid: integer('min_bid').notNull().default(1),
+    status: text('status')
+      .$type<'draft' | 'open' | 'closed' | 'revealed' | 'cancelled'>()
+      .notNull()
+      .default('draft'),
+    onStage: boolean('on_stage').notNull().default(false),
+    endsAt: ts('ends_at'),
+    extensions: integer('extensions').notNull().default(0),
+    /** Bumped when the deadline moves: a stale close timer is a no-op. */
+    closeVersion: integer('close_version').notNull().default(0),
+    winnerId: uuid('winner_id').references(() => participants.id, { onDelete: 'set null' }),
+    winningBid: integer('winning_bid'),
+    sort: integer('sort').notNull().default(0),
+    createdAt: createdAt(),
+    closedAt: ts('closed_at'),
+    revealedAt: ts('revealed_at'),
+  },
+  (t) => [
+    index('auction_prizes_event_idx').on(t.eventId),
+    // one prize on stage per event
+    uniqueIndex('auction_prizes_one_stage_uq')
+      .on(t.eventId)
+      .where(sql`${t.onStage}`),
+  ],
+);
+
+export const auctionBids = pgTable(
+  'auction_bids',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    prizeId: uuid('prize_id')
+      .notNull()
+      .references(() => auctionPrizes.id, { onDelete: 'cascade' }),
+    bidderId: uuid('bidder_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    status: text('status').$type<'leading' | 'outbid' | 'won'>().notNull().default('leading'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('auction_bids_prize_amount_uq').on(t.prizeId, t.amount),
+    index('auction_bids_prize_idx').on(t.prizeId),
+  ],
+);
+
+/** Public-results snapshot of a completed event (kept per retention settings, deleted at `expires_at`). */
+export const eventArchives = pgTable('event_archives', {
+  eventId: uuid('event_id')
+    .primaryKey()
+    .references(() => events.id, { onDelete: 'cascade' }),
+  snapshot: jsonb('snapshot').notNull(),
+  completedAt: ts('completed_at').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  builtAt: createdAt(),
+});
+
+/** One-time email link that attaches a verified participant to an account (hash only). */
+export const accountLinkTokens = pgTable(
+  'account_link_tokens',
+  {
+    id: id(),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('account_link_tokens_participant_idx').on(t.participantId)],
+);
+
+/** Lifetime titles of a linked account; copied from the participant's own achievements, outlives event data. */
+export const lifetimeTitles = pgTable(
+  'lifetime_titles',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id').notNull(),
+    eventName: text('event_name').notNull(),
+    year: integer('year').notNull(),
+    key: text('key').notNull(),
+    trophy: boolean('trophy').notNull().default(false),
+    earnedAt: ts('earned_at').notNull().defaultNow(),
+  },
+  (t) => [unique('lifetime_titles_uq').on(t.userId, t.eventId, t.key), index('lifetime_titles_user_idx').on(t.userId)],
+);
+
+/** Qualifying XP per linked account and event, for the seasonal top-N (never shown as numbers). */
+export const seasonXp = pgTable(
+  'season_xp',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id').notNull(),
+    ownerId: text('owner_id').notNull(),
+    year: integer('year').notNull(),
+    xp: integer('xp').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.eventId] }), index('season_xp_owner_idx').on(t.ownerId, t.year)],
+);
+
+export const customAchievements = pgTable(
+  'custom_achievements',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    name: jsonb('name').$type<Record<string, string>>().notNull(),
+    description: jsonb('description').$type<Record<string, string>>().notNull(),
+    categoryKey: text('category_key'),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('custom_achievements_event_key_uq').on(t.eventId, t.key)],
+);
+
+/**
+ * Transactional outbox: written in the same transaction as the state change, relayed to the realtime bus by a
+ * dispatcher (multi-instance fan-out without losing an event on crash).
+ */
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    id: id(),
+    /** Strict relay order (timestamps can tie). */
+    seq: bigserial('seq', { mode: 'number' }).notNull(),
+    eventId: uuid('event_id'),
+    topic: text('topic').notNull(),
+    payload: jsonb('payload').notNull(),
+    createdAt: createdAt(),
+    dispatchedAt: ts('dispatched_at'),
+    attempts: integer('attempts').notNull().default(0),
+  },
+  (t) => [index('outbox_pending_idx').on(t.dispatchedAt, t.createdAt)],
+);

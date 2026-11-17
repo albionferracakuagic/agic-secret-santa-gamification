@@ -43,6 +43,7 @@ import {
   decideBingoMark,
   decideClue,
   decideMission,
+  events,
   gameAction,
   guessState,
   hideSpotlight,
@@ -62,6 +63,7 @@ import {
   swapMission,
   type Db,
 } from '@santa/db';
+import { eq } from 'drizzle-orm';
 import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
 import { broadcastEventState, broadcastParticipantState } from '../realtime/broadcast.js';
@@ -128,9 +130,14 @@ export function registerPhase2Routes(app: FastifyInstance, d: Phase2RouteDeps) {
     MyCluesResponseSchema.parse({ clues: await ownClues(d.db, req.me!.participantId) }),
   );
 
-  app.get('/api/events/:eventId/clues', { preHandler: g.pre }, async (req) =>
-    ClueQueueResponseSchema.parse({ clues: await clueQueue(d.db, g.eventParams(req)) }),
-  );
+  app.get('/api/events/:eventId/clues', { preHandler: g.pre }, async (req) => {
+    const eventId = g.eventParams(req);
+    const [e] = await d.db.select().from(events).where(eq(events.id, eventId));
+    return ClueQueueResponseSchema.parse({
+      enabled: e?.settings.features.guessSanta === true,
+      clues: await clueQueue(d.db, eventId),
+    });
+  });
 
   app.post('/api/events/:eventId/clues/:clueId', { preHandler: g.pre }, async (req, reply) => {
     const b = g.body(reply, ClueDecisionRequestSchema, req.body);

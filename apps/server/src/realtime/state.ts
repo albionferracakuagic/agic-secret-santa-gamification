@@ -4,6 +4,7 @@ import {
   boardPublications,
   ceremonyView,
   eventAccess,
+  auctionView,
   gameView,
   spotlightView,
   events,
@@ -16,6 +17,10 @@ import {
 } from '@santa/db';
 import {
   XP_BOARD_KEY,
+  eventFeatures,
+  phase2Settings,
+  phase3Settings,
+  type AuctionViewOutput,
   type CeremonyViewOutput,
   type GameViewOutput,
   type SpotlightOutput,
@@ -54,6 +59,9 @@ export async function loadEventSource(db: Db, eventId: string): Promise<EventSou
     defaultLocale: e.defaultLocale === 'it' ? 'it' : 'en',
     votingEndsAt: iso(e.votingEndsAt),
     reactionsEnabled: e.settings.features.reactionsEnabled,
+    features: eventFeatures(e.settings),
+    phase2: phase2Settings(e.settings),
+    phase3: phase3Settings(e.settings),
     currentGiftId: e.currentGiftId,
     openingCountdownSeconds: e.settings.openingCountdownSeconds,
     milestones: {
@@ -114,6 +122,7 @@ export interface EventContext {
   /** Phase 2: active mini-game and current presentation (public, validated views). */
   game: GameViewOutput | null;
   spotlight: SpotlightOutput | null;
+  auction: AuctionViewOutput | null;
 }
 
 export async function loadEventContext(
@@ -122,43 +131,55 @@ export async function loadEventContext(
   ctx: RealtimeContext,
   now = new Date(),
 ): Promise<EventContext> {
-  const [event, people, giftRows, votedCount, access, boardRows, ceremony, cats, game, spotlight] =
-    await Promise.all([
-      loadEventSource(db, eventId),
-      loadParticipantSources(db, eventId),
-      loadGiftSources(db, eventId, ctx.storage),
-      loadPublishedVotedCount(db, eventId),
-      db
-        .select({ shortCode: eventAccess.shortCode })
-        .from(eventAccess)
-        .where(
-          and(
-            eq(eventAccess.eventId, eventId),
-            eq(eventAccess.kind, 'join'),
-            isNotNull(eventAccess.shortCode),
-            isNull(eventAccess.revokedAt),
-            or(isNull(eventAccess.expiresAt), gt(eventAccess.expiresAt, now)),
-          ),
-        )
-        .orderBy(desc(eventAccess.createdAt))
-        .limit(1),
-      db
-        .select()
-        .from(boardPublications)
-        .where(
-          and(
-            eq(boardPublications.eventId, eventId),
-            ne(boardPublications.boardKey, VOTED_COUNTER_KEY),
-          ),
+  const [
+    event,
+    people,
+    giftRows,
+    votedCount,
+    access,
+    boardRows,
+    ceremony,
+    cats,
+    game,
+    spotlight,
+    auction,
+  ] = await Promise.all([
+    loadEventSource(db, eventId),
+    loadParticipantSources(db, eventId),
+    loadGiftSources(db, eventId, ctx.storage),
+    loadPublishedVotedCount(db, eventId),
+    db
+      .select({ shortCode: eventAccess.shortCode })
+      .from(eventAccess)
+      .where(
+        and(
+          eq(eventAccess.eventId, eventId),
+          eq(eventAccess.kind, 'join'),
+          isNotNull(eventAccess.shortCode),
+          isNull(eventAccess.revokedAt),
+          or(isNull(eventAccess.expiresAt), gt(eventAccess.expiresAt, now)),
         ),
-      ceremonyView(db, eventId),
-      db
-        .select({ key: votingCategories.key, name: votingCategories.name })
-        .from(votingCategories)
-        .where(eq(votingCategories.eventId, eventId)),
-      gameView(db, eventId, now),
-      spotlightView(db, eventId),
-    ]);
+      )
+      .orderBy(desc(eventAccess.createdAt))
+      .limit(1),
+    db
+      .select()
+      .from(boardPublications)
+      .where(
+        and(
+          eq(boardPublications.eventId, eventId),
+          ne(boardPublications.boardKey, VOTED_COUNTER_KEY),
+        ),
+      ),
+    ceremonyView(db, eventId),
+    db
+      .select({ key: votingCategories.key, name: votingCategories.name })
+      .from(votingCategories)
+      .where(eq(votingCategories.eventId, eventId)),
+    gameView(db, eventId, now),
+    spotlightView(db, eventId),
+    auctionView(db, eventId),
+  ]);
   const code = access[0]?.shortCode ?? null;
   return {
     event,
@@ -174,6 +195,7 @@ export async function loadEventContext(
     ceremony,
     game,
     spotlight,
+    auction,
     boards: boardRows.map((b) => ({
       boardKey: b.boardKey,
       name:

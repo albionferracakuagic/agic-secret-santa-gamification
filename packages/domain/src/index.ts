@@ -11,3 +11,4 @@ export * from './missions.js';
 export * from './games-content.js';
 export * from './games.js';
 export * from './phase2.js';
+export * from './coins.js';

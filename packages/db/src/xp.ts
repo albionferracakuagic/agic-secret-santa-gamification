@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { planAward, type ParticipantSource, type XpActivity, type XpAward } from '@santa/domain';
 import type { Db } from './types.js';
 import * as s from './schema.js';
+import { earnCoinsForXp } from './coins.js';
 
 /** Idempotent by construction: unique(eventId, participantId, rewardKey). Returns true iff newly awarded. */
 export async function awardXp(
@@ -22,7 +23,9 @@ export async function awardXp(
       target: [s.xpLedger.eventId, s.xpLedger.participantId, s.xpLedger.rewardKey],
     })
     .returning({ id: s.xpLedger.id });
-  return rows.length > 0;
+  if (rows.length === 0) return false;
+  await earnCoinsForXp(db, p); // Santa Coins per the event's earn rules (no-op unless enabled)
+  return true;
 }
 
 /**

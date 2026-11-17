@@ -23,6 +23,8 @@ import { registerGiftRoutes } from './routes/gifts.js';
 import { registerVotingRoutes } from './routes/voting.js';
 import { registerShowRoutes } from './routes/show.js';
 import { registerPhase2Routes } from './routes/phase2.js';
+import { registerPhase3Routes } from './routes/phase3.js';
+import type { FanoutBus } from './scale/bus.js';
 import { registerCertificateRoutes } from './certificates/routes.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { API_PREFIX, cspDirectives, registerWeb } from './http/web.js';
@@ -72,6 +74,8 @@ export interface AppOptions {
   platformAdminEmails?: string[];
   /** Trusted reverse-proxy hops (default 1; 0 = none). */
   trustProxyHops?: number;
+  /** Scale-out: relay realtime deltas to other instances (default: none = single replica). */
+  bus?: FanoutBus;
   /** Directory with the certificate fonts (default: the web app's licensed fonts). */
   certificateFontsDir?: string;
   /** Structured request logging (off by default; tests pass a sink to verify redaction). */
@@ -188,6 +192,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       ...(opts.alert ? { alert: opts.alert } : {}),
       ...(opts.clock ? { clock: opts.clock } : {}),
       ...(opts.rate ? { rate: opts.rate } : {}),
+      ...(opts.bus ? { bus: opts.bus } : {}),
       reactionPolicy: dbReactionPolicy(opts.db),
       allowOrigin: (origin) => allowedOrigin(origin, baseUrl, opts.allowedOrigins, guardEnv),
       ...(opts.reactionWindowMs ? { reactionWindowMs: opts.reactionWindowMs } : {}),
@@ -240,6 +245,16 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         principals,
         hub,
         clock,
+      });
+      registerPhase3Routes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
+        email: opts.email ?? new MemoryEmailTransport(),
+        baseUrl,
+        storage,
       });
       registerCertificateRoutes(app, {
         db,

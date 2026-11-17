@@ -25,6 +25,7 @@ const sceneOf = (c: EventContext) =>
     ceremony: c.ceremony,
     game: c.game,
     spotlight: c.spotlight,
+    auction: c.auction,
   });
 
 /** Public (display-role) projections shared by the pub stream: gifts, board, scene. */

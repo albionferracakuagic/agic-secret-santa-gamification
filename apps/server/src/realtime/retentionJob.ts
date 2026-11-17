@@ -1,4 +1,12 @@
-import { RETENTION_JOB, enqueueJob, ensureRetentionJob, sweepRetention, type Db } from '@santa/db';
+import {
+  RETENTION_JOB,
+  enqueueJob,
+  ensureRetentionJob,
+  purgeExpiredArchives,
+  purgeOutbox,
+  sweepRetention,
+  type Db,
+} from '@santa/db';
 import { purgeExpiredIdempotencyKeys } from '../http/idempotency-db.js';
 import type { JobRunner } from '../jobs/runner.js';
 import type { StorageAdapter } from '../storage/adapter.js';
@@ -20,6 +28,8 @@ export function registerRetentionJob(
     // schedule tomorrow first so a failing sweep can never stop the daily cadence
     await enqueueJob(db, { kind: RETENTION_JOB, runAt: new Date(now.getTime() + DAY_MS) });
     await purgeExpiredIdempotencyKeys(db);
+    await purgeExpiredArchives(db, now); // history snapshots past retention.archiveDays
+    await purgeOutbox(db, new Date(now.getTime() - DAY_MS)); // relayed outbox rows older than a day
     await sweepRetention(db, {
       now,
       deleteBlob: async (key) => {

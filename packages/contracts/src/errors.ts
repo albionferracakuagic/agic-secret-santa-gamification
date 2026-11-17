@@ -91,6 +91,24 @@ export const API_ERROR_CODES = [
   'mission_closed',
   'mission_not_pending',
   'presentation_not_available',
+  // phase 2/3 follow-ups: features, coins, auction, history, custom content
+  'features_locked',
+  'coins_disabled',
+  'insufficient_coins',
+  'auction_disabled',
+  'no_prize_on_stage',
+  'auction_closed',
+  'bid_too_low',
+  'already_leading',
+  'invalid_prize_state',
+  'stage_busy',
+  'categories_locked',
+  'category_in_use',
+  'duplicate_key',
+  'invalid_link',
+  'already_linked',
+  'verification_required_for_link',
+  'history_disabled',
 ] as const;
 
 export const ApiErrorCodeSchema = z.enum(API_ERROR_CODES);

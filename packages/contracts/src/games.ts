@@ -65,6 +65,10 @@ export const OrganizerGameSchema = z.strictObject({
   config: GameConfigSchema,
 });
 export const OrganizerGamesResponseSchema = z.strictObject({
+  /** features.miniGames (default on). When false games cannot be created or started. */
+  enabled: z.boolean(),
+  /** Games can only be created in the games phase. */
+  canCreate: z.boolean(),
   games: z.array(OrganizerGameSchema),
   /** In-house content available for the organizer UI. */
   catalog: z.strictObject({
@@ -116,7 +120,13 @@ export const MyGameResponseSchema = z.strictObject({
     .nullable(),
 });
 
-export const SubmitAnswerRequestSchema = z.strictObject({ answerId: z.string().min(1).max(64) });
+/**
+ * POST /api/me/game/answers. nswerId = the option id of the current round. Speed rounds have no options:
+ * send nswerId: 'tap' or omit it entirely (the server ignores it and uses its own arrival time).
+ */
+export const SubmitAnswerRequestSchema = z.strictObject({
+  answerId: z.string().min(1).max(64).optional(),
+});
 export const SubmitAnswerResponseSchema = z.strictObject({
   roundIndex: z.number().int().min(0),
   accepted: z.literal(true),

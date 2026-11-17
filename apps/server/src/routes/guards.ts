@@ -97,6 +97,22 @@ export const STATUS: Record<string, number> = {
   mission_closed: 409,
   mission_not_pending: 409,
   presentation_not_available: 409,
+  features_locked: 409,
+  coins_disabled: 409,
+  insufficient_coins: 409,
+  auction_disabled: 409,
+  no_prize_on_stage: 409,
+  auction_closed: 409,
+  bid_too_low: 409,
+  already_leading: 409,
+  invalid_prize_state: 409,
+  stage_busy: 409,
+  categories_locked: 409,
+  category_in_use: 409,
+  duplicate_key: 409,
+  invalid_link: 401,
+  already_linked: 409,
+  history_disabled: 409,
 };
 
 export const fail = (reply: FastifyReply, status: number, code: string, message = code) =>

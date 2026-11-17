@@ -5,7 +5,14 @@ import {
   CertificateQuerySchema,
   MyCertificatesResponseSchema,
 } from '@santa/contracts';
-import { events, myAchievements, participantAchievements, participants, type Db } from '@santa/db';
+import {
+  events,
+  listCustomAchievements,
+  myAchievements,
+  participantAchievements,
+  participants,
+  type Db,
+} from '@santa/db';
 import { fail, makeParticipantGuard } from '../routes/guards.js';
 import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
@@ -31,12 +38,21 @@ export function registerCertificateRoutes(app: FastifyInstance, d: CertificateRo
   const mine = makeParticipantGuard(d.db);
   // small in-memory LRU: a card is a pure function of (participant, achievement, locale, event name)
   const cache = new Map<string, Buffer>();
+  type Def = { key: string; name: Record<string, string>; description: Record<string, string> };
+  /** Built-in catalog + the event's organizer-defined achievements. */
+  const allDefs = async (eventId: string): Promise<Def[]> => [
+    ...ACHIEVEMENT_CATALOG,
+    ...(await listCustomAchievements(d.db, eventId)),
+  ];
+  const achievementDef = async (eventId: string, key: string) =>
+    (await allDefs(eventId)).find((x) => x.key === key);
 
   app.get('/api/me/certificates', { preHandler: mine }, async (req) => {
     const unlocked = await myAchievements(d.db, req.me!.participantId);
+    const defs = await allDefs(req.me!.eventId);
     return MyCertificatesResponseSchema.parse({
       certificates: unlocked.flatMap((a) => {
-        const def = ACHIEVEMENT_CATALOG.find((x) => x.key === a.key);
+        const def = defs.find((x) => x.key === a.key);
         return def
           ? [
               {
@@ -58,7 +74,7 @@ export function registerCertificateRoutes(app: FastifyInstance, d: CertificateRo
       const { key } = req.params as { key: string };
       const q = CertificateQuerySchema.safeParse(req.query ?? {});
       if (!q.success) return fail(reply, 400, 'bad_request');
-      const def = ACHIEVEMENT_CATALOG.find((x) => x.key === key);
+      const def = await achievementDef(req.me!.eventId, key);
       const [owned] = def
         ? await d.db
             .select({ id: participantAchievements.id })
@@ -99,8 +115,8 @@ export function registerCertificateRoutes(app: FastifyInstance, d: CertificateRo
           {
             locale,
             name: row.name,
-            title: def.name[locale],
-            description: def.description[locale],
+            title: def.name[locale] ?? def.name['en'] ?? key,
+            description: def.description[locale] ?? def.description['en'] ?? '',
             eventName: row.eventName,
             year,
             seed: `${req.me!.participantId}:${key}`,

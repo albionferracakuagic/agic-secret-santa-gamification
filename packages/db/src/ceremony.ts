@@ -17,6 +17,7 @@ import { cancelJobs, enqueueJob } from './jobs.js';
 import { unlockAchievement } from './achievements.js';
 import { publishFinalBoards } from './boards.js';
 import { xpTotals } from './xp.js';
+import { customCategoryAchievements } from './custom.js';
 
 export const CEREMONY_STEP_JOB = 'ceremony.step';
 
@@ -265,6 +266,7 @@ async function buildScript(tx: Db, e: Event, awards: Award[]): Promise<CeremonyS
       countdownSeconds: e.settings.ceremonyCountdownSeconds,
       includeSpirit: (await spiritIds(tx, e.id)).length > 0,
       includeChampion: true,
+      extraAchievements: await customCategoryAchievements(tx, e.id),
     },
   );
   const totals = [...(await xpTotals(tx, e.id))]

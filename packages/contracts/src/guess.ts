@@ -62,6 +62,8 @@ export const SubmitClueResponseSchema = z.strictObject({
  * never part of the projection (not even with an unmask grant).
  */
 export const ClueQueueResponseSchema = z.strictObject({
+  /** features.guessSanta: when false the queue is always empty and clues are refused. */
+  enabled: z.boolean(),
   clues: z.array(
     z.strictObject({
       clueId: IdSchema,

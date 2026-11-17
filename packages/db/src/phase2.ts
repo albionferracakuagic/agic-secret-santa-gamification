@@ -25,6 +25,9 @@ export async function loadActiveParticipant(
 
 export const guessEnabled = (e: Pick<EventRow, 'settings'>) =>
   e.settings.features.guessSanta === true;
+/** Mini-games are on unless the organizer switched them off (default on). */
+export const miniGamesEnabled = (e: Pick<EventRow, 'settings'>) =>
+  (e.settings.features as { miniGames?: boolean }).miniGames !== false;
 export const missionsEnabled = (e: Pick<EventRow, 'settings'>) =>
   e.settings.features.missions === true;
 
@@ -81,4 +84,7 @@ export async function purgePhase2Personal(tx: Db, participantId: string) {
   await tx.delete(s.gameBingoMarks).where(eq(s.gameBingoMarks.participantId, participantId));
   await tx.delete(s.gameBingoCards).where(eq(s.gameBingoCards.participantId, participantId));
   await tx.delete(s.gameScores).where(eq(s.gameScores.participantId, participantId));
+  // Phase 3: coins and bids are personal too (a won prize stays recorded without a person)
+  await tx.delete(s.auctionBids).where(eq(s.auctionBids.bidderId, participantId));
+  await tx.delete(s.coinLedger).where(eq(s.coinLedger.participantId, participantId));
 }
