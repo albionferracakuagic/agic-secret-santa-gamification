@@ -51,6 +51,7 @@ describe('clue screening (EN/IT keyword filter)', () => {
     ['sono io!!', 'reveals_giver'],
     ['Call 3331234567 now', 'contact_details'],
     ['mail me at a@b.it', 'contact_details'],
+    ['mail me at alex@example', 'contact_details'],
     ['Marco would love this', 'reveals_giver'],
   ])('rejects %s', (text, reason) => {
     expect(screenClue(text, { giverName: 'Marco Rossi' })).toEqual({ ok: false, reason });

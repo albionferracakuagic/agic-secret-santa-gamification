@@ -85,7 +85,7 @@ const BLOCKED_STEMS = [
 const WHOLE_TOKENS = new Set(['die', 'sex', 'dick', 'ass', 'tit', 'tits', 'cum', 'fag']);
 const SELF_REVEAL =
   /\b(i am|i m|it is me|this is me|it s me|its me|its mine|this is mine|sono io|sono stato io|sono stata io|l ho fatto io|l ho preso io|e mio|e stato mio|e di me)\b/;
-const CONTACT = /https?:|www\.|\.com\b|\.it\b|\b\d{6,}\b|[\w.]+@[\w.]+/;
+const CONTACT = /https?:|www\.|\.com\b|\.it\b|\b\d{6,}\b/;
 
 export type ClueScreening =
   { ok: true } | { ok: false; reason: 'blocked_word' | 'reveals_giver' | 'contact_details' };
@@ -96,7 +96,8 @@ export type ClueScreening =
  */
 export function screenClue(text: string, opts: { giverName?: string } = {}): ClueScreening {
   const folded = fold(text).replace(/'/g, ' ');
-  if (CONTACT.test(text.toLowerCase())) return { ok: false, reason: 'contact_details' };
+  if (CONTACT.test(text.toLowerCase()) || text.includes('@'))
+    return { ok: false, reason: 'contact_details' };
   const tokens = folded.split(/[^a-z]+/).filter(Boolean);
   if (tokens.some((t) => WHOLE_TOKENS.has(t) || BLOCKED_STEMS.some((s) => t.startsWith(s))))
     return { ok: false, reason: 'blocked_word' };
