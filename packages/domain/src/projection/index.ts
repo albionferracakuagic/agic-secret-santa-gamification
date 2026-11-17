@@ -252,11 +252,17 @@ export function projectScene(i: SceneInput): SceneOutput {
   if (e.phase === 'gift_opening') {
     const real = i.gifts.filter((g) => !g.hidden);
     const current = real.find((g) => g.id === e.currentGiftId && g.status !== 'registered');
+    const seconds = e.openingCountdownSeconds ?? 0;
     return {
       scene: 'opening',
       openedCount: real.filter((g) => g.status !== 'registered').length,
       total: real.length,
       current: current ? toPublicGift(current, i.people) : null,
+      countdownSeconds: seconds,
+      countdownEndsAt:
+        current?.openedAt && seconds > 0
+          ? new Date(Date.parse(current.openedAt) + seconds * 1000).toISOString()
+          : null,
     };
   }
   if (e.phase === 'voting') {

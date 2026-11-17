@@ -241,3 +241,34 @@ describe('board message + ceremony scene', () => {
     ).toBeTruthy();
   });
 });
+
+describe('opening countdown (server-driven)', () => {
+  const base = (seconds: number | undefined): SceneInput => ({
+    event: event({
+      phase: 'gift_opening',
+      currentGiftId: 'G1',
+      ...(seconds === undefined ? {} : { openingCountdownSeconds: seconds }),
+    }),
+    activeParticipants: 2,
+    gifts: [g('G1', 1, 'opened', { openedAt: '2026-12-24T20:00:00.000Z' })],
+    people,
+    join: null,
+    votedCount: null,
+  });
+
+  it('deadline = openedAt + countdownSeconds; 0/unset means reveal immediately', () => {
+    expect(projectScene(base(3))).toMatchObject({
+      scene: 'opening',
+      countdownSeconds: 3,
+      countdownEndsAt: '2026-12-24T20:00:03.000Z',
+    });
+    expect(projectScene(base(0))).toMatchObject({ countdownSeconds: 0, countdownEndsAt: null });
+    expect(projectScene(base(undefined))).toMatchObject({ countdownEndsAt: null });
+  });
+
+  it('the payload validates and exposes no opening-order metadata', () => {
+    const scene = projectScene(base(3));
+    expect(OutputSchemas.display.scene.parse(scene)).toBeTruthy();
+    expect(JSON.stringify(scene)).not.toMatch(/openedAt|openingOrder|createdAt/);
+  });
+});

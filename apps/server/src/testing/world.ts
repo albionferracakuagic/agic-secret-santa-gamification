@@ -49,7 +49,10 @@ export interface World {
   close(): Promise<void>;
 }
 
-export async function createWorld(opts: AppOptions = {}): Promise<World> {
+export async function createWorld(
+  opts: AppOptions & { configure?: (app: FastifyInstance) => void } = {},
+): Promise<World> {
+  const { configure, ...appOpts } = opts;
   const db = await createTestDb();
   const { eventId, participantIds } = await seedDemoEvent(db);
   await db
@@ -63,8 +66,9 @@ export async function createWorld(opts: AppOptions = {}): Promise<World> {
     organizerSessions: organizers,
     guardEnv: 'test',
     storage,
-    ...opts,
+    ...appOpts,
   });
+  configure?.(app);
   await app.listen({ port: 0, host: '127.0.0.1' });
   const port = (app.server.address() as AddressInfo).port;
   const clients: Socket[] = [];

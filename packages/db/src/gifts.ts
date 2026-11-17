@@ -265,22 +265,32 @@ export interface OpeningState {
   total: number;
   currentGiftId: string | null;
   allOpened: boolean;
+  /** Server-driven pre-reveal countdown (0 = none) and its absolute deadline for the current gift. */
+  countdownSeconds: number;
+  countdownEndsAt: string | null;
 }
 
 export async function openingState(db: Db, eventId: string): Promise<OpeningState> {
   const [e] = await db.select().from(s.events).where(eq(s.events.id, eventId));
   if (!e) throw new EventError('not_found');
   const rows = await db
-    .select({ id: s.gifts.id, status: s.gifts.status })
+    .select({ id: s.gifts.id, status: s.gifts.status, openedAt: s.gifts.openedAt })
     .from(s.gifts)
     .where(and(eq(s.gifts.eventId, eventId), eq(s.gifts.hidden, false)));
   const opened = rows.filter((r) => r.status !== 'registered').length;
+  const seconds = e.settings.openingCountdownSeconds;
+  const current = rows.find((r) => r.id === e.currentGiftId);
   return {
     mode: e.settings.openingMode,
     openedCount: opened,
     total: rows.length,
     currentGiftId: e.currentGiftId,
     allOpened: rows.length > 0 && opened === rows.length,
+    countdownSeconds: seconds,
+    countdownEndsAt:
+      current?.openedAt && seconds > 0
+        ? new Date(current.openedAt.getTime() + seconds * 1000).toISOString()
+        : null,
   };
 }
 

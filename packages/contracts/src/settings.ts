@@ -14,6 +14,8 @@ export const EventSettingsSchema = z.strictObject({
   openingMode: z.enum(['random', 'manual']).default('random'),
   showTotals: z.boolean().default(false),
   liveBoardMinVoters: z.number().int().min(5).default(10),
+  /** Display countdown before a gift being opened is shown (seconds, 0 = none). Server-driven. */
+  openingCountdownSeconds: z.number().int().min(0).max(10).default(3),
   xpValues: z
     .strictObject({
       joined: z.number().int().min(0).default(10),

@@ -225,6 +225,9 @@ export const SceneSchema = z.discriminatedUnion('scene', [
     openedCount: Count,
     total: Count,
     current: PublicGiftSchema.nullable(),
+    /** Server-driven reveal countdown for `current` (same semantics as OpeningState). */
+    countdownSeconds: z.number().int().min(0).max(10),
+    countdownEndsAt: IsoDateSchema.nullable(),
   }),
   z.strictObject({
     scene: z.literal('voting'),

@@ -98,6 +98,15 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
   registerIdempotency(app);
 
+  // Malformed ids (non-UUID path params / headers) reach Postgres as 22P02: that is a client error, not a 500.
+  app.setErrorHandler((err, _req, reply) => {
+    for (let e: unknown = err; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
+      if ((e as { code?: string }).code === '22P02')
+        return reply.status(400).send({ error: { code: 'bad_request', message: 'bad_request' } });
+    }
+    return reply.send(err);
+  });
+
   // Default 404 handler logs the raw URL (may hold tokens); ours does not.
   app.setNotFoundHandler((_req, reply) =>
     reply.status(404).send({ error: { code: 'not_found', message: 'not_found' } }),

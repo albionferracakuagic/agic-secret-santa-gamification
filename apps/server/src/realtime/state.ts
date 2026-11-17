@@ -47,6 +47,7 @@ export async function loadEventSource(db: Db, eventId: string): Promise<EventSou
     votingEndsAt: iso(e.votingEndsAt),
     reactionsEnabled: e.settings.features.reactionsEnabled,
     currentGiftId: e.currentGiftId,
+    openingCountdownSeconds: e.settings.openingCountdownSeconds,
     milestones: {
       giftOpeningStartedAt: iso(e.giftOpeningStartedAt),
       votingClosedAt: iso(e.votingClosedAt),

@@ -19,6 +19,8 @@ export interface EventSource {
   reactionsEnabled: boolean;
   /** Gift being opened right now (opening phase). */
   currentGiftId: string | null;
+  /** Server-driven reveal countdown seconds for the gift being opened (0/undefined = none). */
+  openingCountdownSeconds?: number;
   milestones: {
     giftOpeningStartedAt: string | null;
     votingClosedAt: string | null;

@@ -10,6 +10,7 @@ export * from './achievements.js';
 export * from './ceremony.js';
 export * from './admin.js';
 export * from './privacy.js';
+export * from './errors.js';
 export * from './output.js';
 export * from './socket.js';
 export * from './guard.js';

@@ -106,6 +106,8 @@ export class DbPrincipalStore implements PrincipalStore {
   }
 
   async grantActive(userId: string, eventId: string, grantId: string, now: Date): Promise<boolean> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(grantId))
+      return false;
     const [row] = await this.db
       .select({ id: unmaskGrants.id })
       .from(unmaskGrants)

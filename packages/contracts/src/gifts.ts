@@ -72,6 +72,12 @@ export const OpeningStateSchema = z.strictObject({
   /** Gift being opened right now (opened gifts are visible to everyone). */
   currentGiftId: IdSchema.nullable(),
   allOpened: z.boolean(),
+  /**
+   * Server-driven reveal countdown for the gift being opened: show "3-2-1" until `countdownEndsAt`
+   * (absolute server time; use /api/time for clock offset). 0 / null = reveal immediately.
+   */
+  countdownSeconds: z.number().int().min(0).max(10),
+  countdownEndsAt: IsoDateSchema.nullable(),
 });
 
 /** POST /api/events/:eventId/reveal/gifts/:giftId and /reveal/all (phase reveal; irreversible, idempotent). */
