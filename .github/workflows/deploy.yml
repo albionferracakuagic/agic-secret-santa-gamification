@@ -43,6 +43,9 @@ jobs:
       - name: What-if (read-only)
         env:
           PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          MICROSOFT_CLIENT_ID: ${{ vars.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_TENANT_ID: ${{ vars.MICROSOFT_TENANT_ID }}
         run: >
           az deployment group what-if
           --resource-group "$RESOURCE_GROUP"
@@ -66,6 +69,9 @@ jobs:
         id: infra
         env:
           PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          MICROSOFT_CLIENT_ID: ${{ vars.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_TENANT_ID: ${{ vars.MICROSOFT_TENANT_ID }}
         run: |
           az deployment group create \
             --resource-group "$RESOURCE_GROUP" \
@@ -74,10 +80,31 @@ jobs:
             --query "properties.outputs" -o json > outputs.json
           echo "acr=$(jq -r .acrName.value outputs.json)" >> "$GITHUB_OUTPUT"
           echo "app=$(jq -r .containerAppName.value outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "migrate_job=$(jq -r '.migrateJobName.value // empty' outputs.json)" >> "$GITHUB_OUTPUT"
       - name: Build image in ACR (remote build)
         run: >
           az acr build --registry "${{ steps.infra.outputs.acr }}"
           --image "santa-server:${{ github.sha }}" --file Dockerfile .
+      - name: Run DB migrations (before the rollout)
+        # The job only exists once useKeyVaultSecrets=true (bootstrap run has no DB secrets to migrate with).
+        if: ${{ inputs.useKeyVaultSecrets && steps.infra.outputs.migrate_job != '' }}
+        env:
+          JOB: ${{ steps.infra.outputs.migrate_job }}
+          IMAGE: ${{ steps.infra.outputs.acr }}.azurecr.io/santa-server:${{ github.sha }}
+        run: |
+          az containerapp job update --name "$JOB" --resource-group "$RESOURCE_GROUP" --image "$IMAGE" -o none
+          exec_name=$(az containerapp job start --name "$JOB" --resource-group "$RESOURCE_GROUP" --query name -o tsv)
+          echo "migration execution: $exec_name"
+          for i in $(seq 1 60); do
+            status=$(az containerapp job execution show --name "$JOB" --resource-group "$RESOURCE_GROUP" --job-execution-name "$exec_name" --query properties.status -o tsv)
+            echo "status: $status"
+            case "$status" in
+              Succeeded) exit 0 ;;
+              Failed|Stopped|Degraded) echo "::error::migration job $status (see Log Analytics, ContainerAppConsoleLogs, job $JOB)"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::migration job timed out"; exit 1
       - name: Roll out new image (single replica; do not deploy during an event window)
         run: >
           az containerapp update --name "${{ steps.infra.outputs.app }}"

@@ -29,6 +29,15 @@ param useKeyVaultSecrets bool = false
 @description('Public base URL (custom domain). Empty = generated Container Apps FQDN.')
 param publicBaseUrl string = ''
 
+@description('Google OAuth client id (public, not a secret). Empty = disabled. Secret goes in Key Vault: google-client-secret.')
+param googleClientId string = ''
+
+@description('Microsoft Entra OAuth client id (public). Empty = disabled. Secret goes in Key Vault: microsoft-client-secret.')
+param microsoftClientId string = ''
+
+@description('Microsoft tenant id (public). Empty = app default.')
+param microsoftTenantId string = ''
+
 var prod = environment == 'prod'
 var namePrefix = '${appName}-${environment}'
 var tags = {
@@ -122,11 +131,15 @@ module app 'modules/containerapp.bicep' = {
     emailSenderAddress: communication.outputs.senderAddress
     useKeyVaultSecrets: useKeyVaultSecrets
     publicBaseUrl: publicBaseUrl
+    googleClientId: googleClientId
+    microsoftClientId: microsoftClientId
+    microsoftTenantId: microsoftTenantId
   }
 }
 
 output appUrl string = app.outputs.baseUrl
 output acrName string = registry.outputs.name
 output containerAppName string = app.outputs.appName
+output migrateJobName string = app.outputs.migrateJobName
 output keyVaultName string = keyVault.outputs.name
 output senderDomain string = communication.outputs.senderDomain
