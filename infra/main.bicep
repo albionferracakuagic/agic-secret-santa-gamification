@@ -38,6 +38,15 @@ param microsoftClientId string = ''
 @description('Microsoft tenant id (public). Empty = app default.')
 param microsoftTenantId string = ''
 
+@description('Monthly budget (USD) for alerts. Alerts only; does not cap spending.')
+param budgetAmountUsd int = environment == 'prod' ? 200 : 60
+
+@description('Budget alert recipients. Empty = no budget/action group is created.')
+param budgetContactEmails array = []
+
+@description('Budget start (first of a month). Only valid as a param default.')
+param firstDayOfMonth string = utcNow('yyyy-MM-01')
+
 var prod = environment == 'prod'
 var namePrefix = '${appName}-${environment}'
 var tags = {
@@ -134,6 +143,17 @@ module app 'modules/containerapp.bicep' = {
     googleClientId: googleClientId
     microsoftClientId: microsoftClientId
     microsoftTenantId: microsoftTenantId
+  }
+}
+
+module budget 'modules/budget.bicep' = if (!empty(budgetContactEmails)) {
+  name: 'budget'
+  params: {
+    environment: environment
+    tags: tags
+    budgetAmountUsd: budgetAmountUsd
+    contactEmails: budgetContactEmails
+    firstDayOfMonth: firstDayOfMonth
   }
 }
 
