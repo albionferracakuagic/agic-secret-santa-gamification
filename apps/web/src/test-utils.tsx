@@ -2,12 +2,20 @@ import { act, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { vi } from 'vitest';
-import type { EventStateOutput } from '@santa/contracts';
+import {
+  DEFAULT_EVENT_FEATURES,
+  Phase2SettingsSchema,
+  Phase3SettingsSchema,
+  type EventFeatures,
+  type EventStateOutput,
+} from '@santa/contracts';
 import { App } from './App';
 import { ParticipantApiProvider, type MeResponse, type ParticipantApi } from './api/participant';
 import { PlayApiProvider, type PlayApi } from './api/play';
 import { OrganizerApiProvider, type OrganizerApi } from './api/organizer';
 import { AdminApiProvider, type AdminApi } from './api/admin';
+import { Phase2ApiProvider, type Phase2Api } from './api/phase2';
+import { Phase3ApiProvider, type Phase3Api } from './api/phase3';
 import { RealtimeProvider } from './realtime/react';
 import { createRealtimeStore, type SocketLike } from './realtime/store';
 
@@ -66,6 +74,8 @@ export function setup(
   path: string,
   api: Partial<ParticipantApi> = {},
   play: Partial<PlayApi> = {},
+  p2: Partial<Phase2Api> = {},
+  p3: Partial<Phase3Api> = {},
 ) {
   const sock = fakeSocket();
   const rt = createRealtimeStore();
@@ -103,16 +113,20 @@ export function setup(
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <PlayApiProvider value={{ ...unimplementedPlay, ...play }}>
-        <ParticipantApiProvider value={fullApi}>
-          <RealtimeProvider factory={() => rt}>
-            <MemoryRouter initialEntries={[path]}>
-              <App />
-              <Routes>
-                <Route path="*" element={<Where />} />
-              </Routes>
-            </MemoryRouter>
-          </RealtimeProvider>
-        </ParticipantApiProvider>
+        <Phase2ApiProvider value={fakePhase2Api(p2)}>
+          <Phase3ApiProvider value={fakePhase3Api(p3)}>
+            <ParticipantApiProvider value={fullApi}>
+              <RealtimeProvider factory={() => rt}>
+                <MemoryRouter initialEntries={[path]}>
+                  <App />
+                  <Routes>
+                    <Route path="*" element={<Where />} />
+                  </Routes>
+                </MemoryRouter>
+              </RealtimeProvider>
+            </ParticipantApiProvider>
+          </Phase3ApiProvider>
+        </Phase2ApiProvider>
       </PlayApiProvider>
     </QueryClientProvider>,
   );
@@ -154,6 +168,96 @@ export function fakeOrganizerApi(over: Partial<OrganizerApi> = {}): OrganizerApi
   };
 }
 
+/** Phase 2 double: reads return "feature off / nothing yet"; writes must be provided by the test. */
+export function fakePhase2Api(over: Partial<Phase2Api> = {}): Phase2Api {
+  return {
+    guessState: async () => ({ enabled: false, suspects: [], gifts: [] }),
+    setGuess: reject('setGuess'),
+    myClues: async () => ({ clues: [] }),
+    submitClue: reject('submitClue'),
+    myMissions: async () => ({
+      enabled: false,
+      optedOut: false,
+      verification: 'none',
+      missions: [],
+    }),
+    setMissionOptOut: reject('setMissionOptOut'),
+    submitMission: reject('submitMission'),
+    reassignMission: reject('reassignMission'),
+    myGame: async () => ({ game: null, me: null }),
+    submitAnswer: reject('submitAnswer'),
+    markBingo: reject('markBingo'),
+    myCertificates: async () => ({ certificates: [] }),
+    fetchCertificate: reject('fetchCertificate'),
+    clueQueue: async () => ({ enabled: false, clues: [] }),
+    decideClue: reject('decideClue'),
+    present: reject('present'),
+    hideSpotlight: reject('hideSpotlight'),
+    organizerMissions: async () => ({
+      enabled: false,
+      verification: 'none',
+      counts: { assigned: 0, submitted: 0, verified: 0 },
+      pending: [],
+    }),
+    assignMissions: reject('assignMissions'),
+    verifyMission: reject('verifyMission'),
+    organizerGames: async () => ({
+      enabled: true,
+      canCreate: true,
+      games: [],
+      catalog: { triviaQuestions: 0, bingoSquares: 0 },
+    }),
+    createGame: reject('createGame'),
+    gameAction: reject('gameAction'),
+    bingoPending: async () => ({ marks: [] }),
+    decideBingo: reject('decideBingo'),
+    ...over,
+  };
+}
+
+/** Phase 3 double: everything reads as "off / empty"; writes must be provided by the test. */
+export function fakePhase3Api(over: Partial<Phase3Api> = {}): Phase3Api {
+  return {
+    myCoins: async () => ({ enabled: false, balance: 0, held: 0, entries: [] }),
+    myAuction: async () => ({ enabled: false, balance: 0, prize: null, you: null }),
+    placeBid: reject('placeBid'),
+    myHistory: async () => ({ enabled: false, archive: null }),
+    myHallOfFame: async () => ({ enabled: false, years: [], seasons: [] }),
+    myLifetime: async () => ({ linked: false, profile: null }),
+    startAccountLink: reject('startAccountLink'),
+    confirmAccountLink: reject('confirmAccountLink'),
+    updateFeatures: reject('updateFeatures'),
+    organizerCoins: async () => ({
+      enabled: false,
+      rules: {
+        game_play: 2,
+        game_win: 10,
+        mission_completed: 10,
+        guess_correct: 5,
+        achievement_unlock: 10,
+      },
+      issued: 0,
+    }),
+    grantCoins: reject('grantCoins'),
+    prizes: async () => ({ enabled: false, prizes: [] }),
+    createPrize: reject('createPrize'),
+    updatePrize: reject('updatePrize'),
+    deletePrize: reject('deletePrize'),
+    prizeAction: reject('prizeAction'),
+    archive: async () => ({ enabled: false, archive: null }),
+    hallOfFame: async () => ({ enabled: false, years: [], seasons: [] }),
+    categories: async () => ({ categories: [], editable: false }),
+    createCategory: reject('createCategory'),
+    updateCategory: reject('updateCategory'),
+    deleteCategory: reject('deleteCategory'),
+    customAchievements: async () => ({ achievements: [] }),
+    createCustomAchievement: reject('createCustomAchievement'),
+    deleteCustomAchievement: reject('deleteCustomAchievement'),
+    awardCustomAchievement: reject('awardCustomAchievement'),
+    ...over,
+  };
+}
+
 export function fakeAdminApi(over: Partial<AdminApi> = {}): AdminApi {
   return {
     ceremony: async () => ({
@@ -187,6 +291,9 @@ export function mountConsole(opts: {
   phase?: string;
   org?: Partial<OrganizerApi>;
   admin?: Partial<AdminApi>;
+  p2?: Partial<Phase2Api>;
+  p3?: Partial<Phase3Api>;
+  features?: Partial<EventFeatures>;
 }) {
   vi.stubGlobal(
     'fetch',
@@ -205,6 +312,9 @@ export function mountConsole(opts: {
                   roster: { unclaimed: 0, pending: 0, active: 3, removed: 0 },
                   warnings: [],
                   reactionsEnabled: true,
+                  features: { ...DEFAULT_EVENT_FEATURES, ...opts.features },
+                  phase2: Phase2SettingsSchema.parse({}),
+                  phase3: Phase3SettingsSchema.parse({}),
                 },
               },
             };
@@ -219,9 +329,13 @@ export function mountConsole(opts: {
       <RealtimeProvider factory={() => rt}>
         <OrganizerApiProvider value={fakeOrganizerApi(opts.org)}>
           <AdminApiProvider value={fakeAdminApi(opts.admin)}>
-            <MemoryRouter initialEntries={['/o/events/e1']}>
-              <App />
-            </MemoryRouter>
+            <Phase2ApiProvider value={fakePhase2Api(opts.p2)}>
+              <Phase3ApiProvider value={fakePhase3Api(opts.p3)}>
+                <MemoryRouter initialEntries={['/o/events/e1']}>
+                  <App />
+                </MemoryRouter>
+              </Phase3ApiProvider>
+            </Phase2ApiProvider>
           </AdminApiProvider>
         </OrganizerApiProvider>
       </RealtimeProvider>

@@ -1,10 +1,18 @@
+import {
+  DEFAULT_EVENT_FEATURES,
+  Phase2SettingsSchema,
+  Phase3SettingsSchema,
+} from '@santa/contracts';
 import type {
+  AuctionViewOutput,
   EventStateOutput,
   PublicGiftListOutput,
   PublicGiftOutput,
   PublicLeaderboardOutput,
   SceneOutput,
   CeremonyViewOutput,
+  GameViewOutput,
+  SpotlightOutput,
   UnmaskedGiftListOutput,
   UnmaskedLeaderboardOutput,
 } from '@santa/contracts';
@@ -88,6 +96,9 @@ export function projectEventState(
     me: me(input, viewer.participantId),
     warnings: setupWarnings(input.participants.filter((p) => p.status !== 'removed').length),
     reactionsEnabled: e.reactionsEnabled,
+    features: e.features ?? { ...DEFAULT_EVENT_FEATURES },
+    phase2: e.phase2 ?? Phase2SettingsSchema.parse({}),
+    phase3: e.phase3 ?? Phase3SettingsSchema.parse({}),
   };
   if (viewer.role === 'organizer_masked') return { ...base, role: 'organizer_masked', organizer };
   const grant = assertActiveGrant(viewer, now);
@@ -234,6 +245,12 @@ export interface SceneInput {
   votedCount: number | null;
   /** Ceremony view (public payload) when one is running/finished. */
   ceremony?: CeremonyViewOutput | null;
+  /** Phase 2: the active mini-game (already a public, validated view). */
+  game?: GameViewOutput | null;
+  /** Phase 2: the canPublish-gated presentation currently on screen. */
+  spotlight?: SpotlightOutput | null;
+  /** Phase 3: the auction prize on stage. */
+  auction?: AuctionViewOutput | null;
 }
 
 /** What the display should show now. Public data only; identical for every role. */
@@ -242,6 +259,9 @@ export function projectScene(i: SceneInput): SceneOutput {
   if (i.ceremony && i.ceremony.status !== 'idle' && i.ceremony.status !== 'cancelled') {
     return { scene: 'ceremony', ceremony: i.ceremony };
   }
+  if (i.game) return { scene: 'game', game: i.game };
+  if (i.auction) return { scene: 'auction', auction: i.auction };
+  if (i.spotlight) return { scene: 'spotlight', spotlight: i.spotlight };
   if (e.phase === 'preparation' || e.phase === 'registration' || e.phase === 'gift_registration') {
     return {
       scene: 'lobby',

@@ -1,4 +1,10 @@
-import type { Locale, Phase } from '@santa/contracts';
+import type {
+  EventFeatures,
+  Locale,
+  Phase,
+  Phase2Settings,
+  Phase3Settings,
+} from '@santa/contracts';
 import type { PublishResult } from '../ranking.js';
 
 /** Row-level inputs the server loads from the DB. Projectors are the ONLY path from these to payloads. */
@@ -21,6 +27,10 @@ export interface EventSource {
   currentGiftId: string | null;
   /** Server-driven reveal countdown seconds for the gift being opened (0/undefined = none). */
   openingCountdownSeconds?: number;
+  /** Feature switches and Phase 2/3 rules (organizer projections only); omitted = defaults. */
+  features?: EventFeatures;
+  phase2?: Phase2Settings;
+  phase3?: Phase3Settings;
   milestones: {
     giftOpeningStartedAt: string | null;
     votingClosedAt: string | null;

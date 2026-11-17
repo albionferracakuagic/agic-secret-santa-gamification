@@ -26,15 +26,23 @@ export interface ScriptOptions {
   countdownSeconds: number;
   includeSpirit: boolean;
   includeChampion: boolean;
+  /** Organizer-defined winner achievements: categoryKey -> achievement key (custom categories only). */
+  extraAchievements?: Readonly<Record<string, string>>;
 }
 
-const achievementOf = (boardKey: string) =>
+const achievementOf = (boardKey: string, extra: Readonly<Record<string, string>> = {}) =>
+  extra[boardKey] ??
   ACHIEVEMENT_CATALOG.find((a) => a.kind === 'category_winner' && a.categoryKey === boardKey)?.key;
 
-function categorySteps(a: AwardInput, grand: boolean, countdown: number): CeremonyStep[] {
+function categorySteps(
+  a: AwardInput,
+  grand: boolean,
+  countdown: number,
+  extra?: Readonly<Record<string, string>>,
+): CeremonyStep[] {
   // Unsafe categories are skipped with a neutral message: no nominees, no winner, no promise of a reveal.
   if (!a.publishable) return [{ type: 'category_skipped', boardKey: a.boardKey }];
-  const ach = achievementOf(a.boardKey);
+  const ach = achievementOf(a.boardKey, extra);
   return [
     { type: 'category', boardKey: a.boardKey, grand },
     ...(a.hasNominees ? [{ type: 'nominees', boardKey: a.boardKey } as const] : []),
@@ -52,11 +60,11 @@ export function buildCeremonyScript(
   const grand = awards.find((a) => a.boardKey === o.grandBoard);
   const steps: CeremonyStep[] = [{ type: 'intro' }];
   for (const a of awards) {
-    if (a.boardKey !== o.grandBoard) steps.push(...categorySteps(a, false, o.countdownSeconds));
+    if (a.boardKey !== o.grandBoard) steps.push(...categorySteps(a, false, o.countdownSeconds, o.extraAchievements));
   }
   if (o.includeSpirit) steps.push({ type: 'spirit' });
   if (o.includeChampion) steps.push({ type: 'champion' });
-  if (grand) steps.push(...categorySteps(grand, true, o.countdownSeconds));
+  if (grand) steps.push(...categorySteps(grand, true, o.countdownSeconds, o.extraAchievements));
   steps.push({ type: 'outro' });
   return steps;
 }

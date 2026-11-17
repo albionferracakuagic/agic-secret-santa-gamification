@@ -41,6 +41,41 @@ Organizer access to complete results is restricted: unmasked projections require
 | Removed voter | Votes deleted while voting is open; after close the locked awards are not rewritten and the case is flagged | `admin.test.ts` |
 | Delete-my-data | Ballots stay anonymous, identity erased | `admin.test.ts` "delete-my-data anonymises..." |
 
+## Phase 2: guesses, missions, games, presentations (FR-025..032, FR-041)
+
+Policy: ADR-0007. Every guess-, game- or mission-derived public output goes through `publishPeopleBoard()` = `canPublish()`; private data is readable only by its owner.
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| P2-1 | Guesses visible only to their owner (REST, sockets, organizer, display) | Participant-only routes; no guess in any organizer/display projection; `guess_result` is a personal announcement accepted only by the participant schema, sent on `p:<id>` | D `privacy-phase2.test.ts` "personal announcement...", key allowlists; API `phase2.test.ts` "other guesser never sees...", "result on THEIR stream only" (bob/display get nothing) |
+| P2-2 | Guess results are playful, never punitive | Result payload = `{outcome, cue: confetti\|wink, xp}`; no negative cue exists in the contract; incorrect = 0 XP, nothing deducted | D `privacy-phase2.test.ts` (cue `sad` rejected); DB `phase2.test.ts` |
+| P2-3 | Santa Detective / Invisible Santa / Mission Master / game winners obey canPublish | `publishPeopleBoard()`: >= 5 contributors (`detectiveMinGuessers` raise-only), top-N, hidden tail >= 2, shared ties, no totals, neutral `christmas_magic` on failure, reason code organizer-only | D `privacy-phase2.test.ts` property tests (cohorts 1..12), `phase2.test.ts`; DB `phase2.test.ts` (4 guessers -> fallback, 5-player floor for games and missions); API "presentations: canPublish gate" |
+| P2-4 | Clues are anonymous | Author id stored for authorship checks only, never projected; queue = alias + text + status; announcement = alias + text; filter blocks self-reveal and the giver's name | D `phase2.test.ts` (filter), `privacy-phase2.test.ts` allowlists; DB/API `phase2.test.ts` (scan for giver id in queue and announcement) |
+| P2-5 | Missions are private; the display learns only "a secret mission was completed" | Own-data-only routes; organizer sees counts + submissions awaiting verification; `mission_completed` carries only `at`; delivered by a jittered durable job, no public delta at completion time; audit redaction of `mission*`/`note` | D `privacy-phase2.test.ts` (extra keys rejected for every role); API `phase2.test.ts` "display learns only..." (empty delta window at completion, then exactly one generic announcement) |
+| P2-6 | Mini-game payloads leak no answers, scores or other players' state | Correct ids only after round close; scene identical for every viewer; per-person score/answer/card only on `GET /api/me/game`; winners top-N via canPublish; no `score`/`result` route names | D `privacy-phase2.test.ts` (scene scan, leaky payload rejected / stripped + alert in prod); DB `phase2.test.ts`; API sweep `privacy-api.test.ts` (new routes classified, 401/403 matrix) |
+| P2-7 | Phase 2 XP cannot leak guess/game/mission results | Non-qualifying XP only (`planPhase2Award`): Christmas Champion and Christmas Spirit ignore it; own XP is self-only | DB `phase2.test.ts` (ledger `qualifying = false`) |
+| P2-8 | Certificates only for the owner's unlocked achievements | Ownership check, identical 404 for unknown / not yours; achievements themselves come from canPublish-gated paths | API `phase2.test.ts` "certificates..." |
+| P2-9 | Delete-my-data / removal erase Phase 2 personal rows | `purgePhase2Personal()` | DB `phase2.test.ts` |
+
+Sweep tests (`privacy-api.test.ts`) run against the new routes without special cases; the world uses a raised global rate limit because the sweep replays every route per principal.
+## Phase 3: coins, auction, history, Hall of Fame, editor (FR-033/034/042..044)
+
+Policy: ADR-0008 (extends ADR-0007). Coins/bids/lifetime data are self-only; every ranking-like output (seasonal top-N) goes through `publishPeopleBoard()` = `canPublish()`.
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| P3-1 | Coins are earned only (XP-derived rules with server `rewardKey`, organizer grants); never bought, transferred or converted; no coin board | `coin_ledger` unique `(event, participant, rewardKey)`, earn hook in `awardXp`, `COIN_REASONS` has no purchase/transfer/convert; route names checked | DB `phase3.test.ts` (earn rules, replay, grant idempotency, reasons); API `phase3.test.ts` "coins are self-only..." (route-name scan) |
+| P3-2 | Balance/ledger visible only to the owner; organizer sees rules + one aggregate | `GET /api/me/coins` participant-only; `OrganizerCoinsResponse` has no per-person field | D `privacy-phase3.test.ts` (allowlists); API (organizer/display 401) |
+| P3-3 | Auction shows prices, never bidders; "you are leading" only to yourself | `AuctionView` = price + deadline + winner after close; `MyAuction.you` own position; public scene/announcements strict; bid history is not exposed anywhere | D `privacy-phase3.test.ts` (bidderId/bids rejected for every role, guard strips + alerts in prod); API `phase3.test.ts` "auction end to end" (scan of the display stream for bidder ids) |
+| P3-4 | Mystery content stays hidden until the reveal step | `reveal` null in every payload until status `revealed`; only the `mystery_reveal` announcement carries it | DB + API auction tests |
+| P3-5 | Bids cannot overspend or double-pay; timers are durable | Participant row lock + balance check + hold in one tx; outbid holds released; `closeVersion` guards stale timers; anti-snipe bounded by `maxExtensions` | DB `phase3.test.ts` (holds, release, snipe, stale/early/replay close, cancel/disable refund) |
+| P3-6 | Archive keeps PUBLIC results only | Snapshot builder reads only locked+publishable+ceremony-revealed awards (rank 1), unlocked achievements, finished games' published results; names resolved at read time (anonymised people drop out); photo URL only while the photo exists; deleted at `retention.archiveDays` | DB `phase3.test.ts` "history archive" (votes/nominees/unrevealed awards/XP/bids absent; anonymisation; retention); D `privacy-phase3.test.ts` (extra keys rejected) |
+| P3-7 | Hall of Fame / lifetime profile are positive only | Only winners, champions, achievements; no low ranks, no totals; seasonal board via canPublish (>= 5 linked accounts, top-N, hidden tail, no XP numbers) and only from events that ran the XP board | DB `phase3.test.ts` (HoF, seasons incl. floor, no-xpBoard) |
+| P3-8 | Account link needs a verified claim and a mailbox proof | Verified claim only (auto-approved guests refused); single-use hashed 30-min token; one generic 401 for wrong/used/expired; delete-my-data removes that event's titles | DB + API `phase3.test.ts` |
+| P3-9 | Feature PATCH cannot lower floors | `FeaturesPatchSchema` has no floor keys, `detectiveMinGuessers` min 5, merged settings re-validated; locked at `completed`; nothing new in `awards`; audited | D `privacy-phase3.test.ts`; DB + API `phase3.test.ts` |
+| P3-10 | Custom categories keep ballot integrity | Editable only before voting opens; `c_` key space; custom winner achievements go through the same canPublish-locked awards | DB + API `phase3.test.ts` |
+
+Scale-out (no privacy surface change): deltas relayed between instances are already role-guarded; `grant:*` channels never cross instances (`scale/scale.test.ts`).
 ## Acceptance criteria
 
 | AC | Statement | Tests |

@@ -1,6 +1,6 @@
 # Architettura — Secret Santa Games
 
-> Aggiornata al: 17/11/2026 — **MVP (M0–M7, deploy escluso)**
+> Aggiornata al: 17/11/2026 — **Phase 1–3 (deploy escluso)**
 
 Fonti: `doc/implementation-plan.md`, `doc/adr/`, `.env.example`, `package.json`, `e2e/package.json`.
 
@@ -25,6 +25,17 @@ Fonti: `doc/implementation-plan.md`, `doc/adr/`, `.env.example`, `package.json`,
 4. Mai serializzare righe DB direttamente. `Cache-Control: no-store` sulle API di stato; service worker cacha solo asset statici.
 5. Scheduling durevole: tabella `scheduled_jobs` + poller (advisory lock) + recovery allo startup (chiusura voto, cadenza board, timer cerimonia).
 
+## Moduli Phase 2–3 (ADR-0007, ADR-0008)
+
+| Area | Note |
+|---|---|
+| Guess Santa, missioni, mini-giochi, presentazioni achievement | Phase 2; pubblicazione via `canPublish()`; XP non qualificante; flag `guessSanta`/`missions` default off (ADR-0007) |
+| Certificati | PNG lato server (`apps/server/src/certificates`, satori + resvg); font da `CERT_FONTS_DIR` |
+| Santa Coins, asta | Phase 3 (ADR-0008) |
+| Storico / Hall of Fame + link account | Phase 3 |
+| Editor custom | Phase 3 |
+| Scale-out | Solo interfaccia + implementazione in-memory; nessun adapter Redis/Web PubSub, cursori per istanza |
+
 ## Realtime / projection model (ADR-0002)
 
 - Room: `e:{id}:pub`, `e:{id}:org` (solo masked), `e:{id}:p:{pid}`; il server decide i join.
@@ -41,7 +52,7 @@ Fonti: `doc/implementation-plan.md`, `doc/adr/`, `.env.example`, `package.json`,
 - Anonimato giver: alias casuali, galleria regali nascosta fino all'apertura, EXIF rimosso, log senza voti/pairing. Rivelazione giver irreversibile a livello DB.
 - Organizer mascherato (parità col partecipante); "audit unmask" = conferma + motivo + grant 10 min + banner + audit log (ADR-0004).
 - Matrice test: `doc/privacy-test-matrix.md`. Superficie sicurezza: `doc/security-surface.md`. Testi legali: `doc/legal/` (da revisione owner).
-- ADR: [0001 stack](adr/0001-stack-and-libraries.md), [0002 realtime](adr/0002-realtime-projections-and-recovery.md), [0003 privacy](adr/0003-privacy-publication-policy.md), [0004 identity](adr/0004-identity-and-auth.md), [0005 Azure/CI/jobs](adr/0005-azure-hosting-cicd-jobs.md), [0006 performance](adr/0006-performance-targets.md).
+- ADR: [0001 stack](adr/0001-stack-and-libraries.md), [0002 realtime](adr/0002-realtime-projections-and-recovery.md), [0003 privacy](adr/0003-privacy-publication-policy.md), [0004 identity](adr/0004-identity-and-auth.md), [0005 Azure/CI/jobs](adr/0005-azure-hosting-cicd-jobs.md), [0006 performance](adr/0006-performance-targets.md), [0007 Phase 2](adr/0007-phase2-privacy-and-games.md), [0008 Phase 3](adr/0008-phase3-coins-auction-history-scale.md).
 
 ## Variabili d'ambiente (`.env.example`)
 
@@ -61,6 +72,8 @@ Fonti: `doc/implementation-plan.md`, `doc/adr/`, `.env.example`, `package.json`,
 | `TRUST_PROXY_HOPS` | `1` | Numero esatto di proxy davanti (Container Apps = 1) |
 | `WEB_DIST` | vuoto | Es. `apps/web/dist`; vuoto = solo API |
 | `PLATFORM_ADMIN_EMAILS` | vuoto | Email verificate, separate da virgola |
+| `SCALE_OUT` | non impostata | `true` = il runner dei job non rimette in coda tutto allo startup (`requeueAll: false`); vedi ADR-0008 |
+| `CERT_FONTS_DIR` | non impostata | Dir font aggiuntiva per i certificati PNG; senza font trovati la generazione fallisce |
 
 In Azure i segreti arrivano da Key Vault via managed identity.
 
@@ -82,4 +95,4 @@ In Azure i segreti arrivano da Key Vault via managed identity.
 - Azure, regione Italy North. Container Apps (1 replica MVP) + ACR; PostgreSQL Flexible; Blob Storage privato (SAS brevi); ACS Email; Key Vault + managed identity; App Insights.
 - IaC Bicep in `infra/`; deploy via GitHub Actions con OIDC (`deploy.yml`).
 - Stato: **non eseguito** — richiede subscription/tenant Azure dell'owner e app registration OIDC. Immagine Docker non ancora buildata. Vedi `doc/progress.md`.
-- Scale-out futuro: Azure Web PubSub o adapter Redis; cursori su DB/Redis.
+- Scale-out futuro: Azure Web PubSub o adapter Redis; cursori su DB/Redis (oggi: solo interfaccia + in-memory).

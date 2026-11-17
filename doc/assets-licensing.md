@@ -58,3 +58,5 @@ original procedural arpeggio). The test fails the build if one of these appears.
   (no files shipped). Libraries: canvas-confetti (ISC), howler (MIT).
 - No Lottie/dotLottie animations are shipped. If one is added, it needs a manifest entry
   (`type: "lottie"`) and appears on `/credits` with its notice.
+
+- Server-side certificates (FR-041, pps/server/src/certificates) reuse the same four self-hosted fonts (Nunito OFL-1.1, Mountains of Christmas Apache-2.0) read from pps/web/public/assets/fonts (override: CERT_FONTS_DIR); their artwork is generated in code (certificateArt, seeded SVG shapes). No other font or image is used.

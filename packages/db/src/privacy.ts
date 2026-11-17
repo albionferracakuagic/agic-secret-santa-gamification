@@ -1,7 +1,8 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import type { Db } from './types.js';
 import * as s from './schema.js';
 import { writeAudit } from './audit.js';
+import { purgePhase2Personal } from './phase2.js';
 import { EventError } from './events.js';
 import { cancelJobs, enqueueJob } from './jobs.js';
 
@@ -45,6 +46,40 @@ export async function anonymizeParticipant(
       })
       .where(eq(s.participants.id, me.id));
     await tx.delete(s.claimTokens).where(eq(s.claimTokens.participantId, me.id));
+    await purgePhase2Personal(tx, me.id);
+    await tx.delete(s.accountLinkTokens).where(eq(s.accountLinkTokens.participantId, me.id));
+    if (me.userId) {
+      // lifetime titles earned at THIS event go with the delete-my-data request
+      const held = await tx
+        .select({ key: s.participantAchievements.key })
+        .from(s.participantAchievements)
+        .where(eq(s.participantAchievements.participantId, me.id));
+      if (held.length)
+        await tx
+          .delete(s.lifetimeTitles)
+          .where(
+            and(
+              eq(s.lifetimeTitles.userId, me.userId),
+              eq(s.lifetimeTitles.eventId, me.eventId),
+              inArray(s.lifetimeTitles.key, held.map((h) => h.key)),
+            ),
+          );
+      const [sibling] = await tx
+        .select({ id: s.participants.id })
+        .from(s.participants)
+        .where(
+          and(
+            eq(s.participants.userId, me.userId),
+            eq(s.participants.eventId, me.eventId),
+            ne(s.participants.id, me.id),
+          ),
+        );
+      if (!sibling) {
+        // nobody else of this account attended: the attendance badge and season XP go too
+        await tx.delete(s.lifetimeTitles).where(and(eq(s.lifetimeTitles.userId, me.userId), eq(s.lifetimeTitles.eventId, me.eventId)));
+        await tx.delete(s.seasonXp).where(and(eq(s.seasonXp.userId, me.userId), eq(s.seasonXp.eventId, me.eventId)));
+      }
+    }
     const gs = await tx.select().from(s.gifts).where(eq(s.gifts.giverId, me.id));
     const photoKeys = gs.flatMap((g) => (g.photoKey ? [g.photoKey] : []));
     if (gs.length)

@@ -12,6 +12,7 @@ import {
 import type { Principal, PrincipalStore } from '../principal.js';
 import { ReactionService, type ReactionPolicy } from './reactions.js';
 import type { RealtimeContext } from './state.js';
+import { HUB_DELTA_TOPIC, type FanoutBus, type HubDeltaMessage } from '../scale/bus.js';
 
 export interface SnapshotProvider {
   /** Returns projected payloads keyed by surface; the hub guards every value before sending. */
@@ -35,6 +36,11 @@ export interface HubOptions {
    * (non-browser clients) are allowed: they cannot ride on a victim's cookies. Default: any origin.
    */
   allowOrigin?: (origin: string) => boolean;
+  /**
+   * Scale-out: relays every public/org/participant delta to the other instances (and emits theirs locally).
+   * Omit for a single replica. Cursors are per instance: multi-writer setups need the shared cursor store (ADR-0008).
+   */
+  bus?: FanoutBus;
 }
 
 export type RevokeReason = 'expired' | 'revoked' | 'membership' | 'session';
@@ -98,6 +104,7 @@ export class RealtimeHub {
   }
 
   attach(httpServer: HttpServer): Server {
+    this.o.bus?.subscribe<HubDeltaMessage>(HUB_DELTA_TOPIC, (m) => this.deliverRemote(m));
     const allowOrigin = this.o.allowOrigin;
     this.io = new Server(httpServer, {
       serveClient: false,
@@ -273,7 +280,33 @@ export class RealtimeHub {
     const cursor = (this.cursors.get(key) ?? 0) + 1;
     this.cursors.set(key, cursor);
     this.io.to(roomFor(eventId, stream)).emit('delta', { stream, cursor, surface, payload: safe });
+    const bus = this.o.bus;
+    if (bus)
+      void bus
+        .publish<HubDeltaMessage>(HUB_DELTA_TOPIC, {
+          origin: bus.instanceId,
+          eventId,
+          stream,
+          surface,
+          cursor,
+          payload: safe,
+        })
+        .catch(() => undefined);
     return cursor;
+  }
+
+  /** A delta published by ANOTHER instance: already role-guarded there; emitted to this instance's sockets only. */
+  private deliverRemote(m: HubDeltaMessage) {
+    if (m.origin === this.o.bus?.instanceId) return;
+    if (m.stream.startsWith('grant:')) return; // unmasked channels never cross instances
+    const key = this.cursorKey(m.eventId, m.stream);
+    this.cursors.set(key, Math.max(this.cursors.get(key) ?? 0, m.cursor));
+    this.io.to(roomFor(m.eventId, m.stream)).emit('delta', {
+      stream: m.stream,
+      cursor: m.cursor,
+      surface: m.surface,
+      payload: m.payload,
+    });
   }
 
   /** Unmasked data: authz is re-checked per socket before EVERY send; failure => forced disconnect. */

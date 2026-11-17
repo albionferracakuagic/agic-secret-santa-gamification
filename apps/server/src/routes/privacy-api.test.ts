@@ -29,6 +29,8 @@ const PUBLIC = new Set([
   '/api/join/resolve',
   '/api/join/claim',
   '/api/join/display',
+  // single-use emailed token, generic 401 for any bad token, rate-limited (FR-043)
+  '/api/account-link/confirm',
 ]);
 const PUBLIC_PREFIX = ['/api/auth/', '/media/'];
 
@@ -49,6 +51,9 @@ describe('API authorisation sweep (every registered route)', () => {
 
   beforeAll(async () => {
     w = await createWorld({
+      // the sweep fires every registered route several times per principal: keep it under the test-only
+      // global limiter (the limiter itself is covered by security.test.ts)
+      rateLimitMax: 10_000,
       configure: (app: FastifyInstance) => {
         app.addHook('onRoute', (o) => {
           for (const m of [o.method].flat()) {
@@ -71,7 +76,7 @@ describe('API authorisation sweep (every registered route)', () => {
           ? 'me'
           : u.startsWith('/api/events/:eventId')
             ? 'event'
-            : u === '/api/events' || u === '/api/organizer/me'
+            : u === '/api/events' || u === '/api/organizer/me' || u === '/api/account/profile'
               ? 'organizer'
               : 'unclassified';
 

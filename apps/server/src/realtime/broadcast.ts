@@ -72,3 +72,35 @@ export async function broadcastCeremony(hub: RealtimeHub, db: Db, eventId: strin
   hub.publish(eventId, 'pub', 'scene', s['scene']);
   hub.publish(eventId, 'pub', 'giftList', s['giftList']); // winner step reveals the giver
 }
+
+/**
+ * Refreshes ONE participant's own state (XP/level) on their own stream only. Used for private activities
+ * (missions) where touching the public stream would let the display correlate a delta with a person.
+ */
+export async function broadcastParticipantState(
+  hub: RealtimeHub,
+  db: Db,
+  eventId: string,
+  participantId: string,
+) {
+  const c = await loadEventContext(db, eventId, hub.ctx);
+  const ownVotes = await db
+    .select({ categoryId: votes.categoryId, giftId: votes.giftId })
+    .from(votes)
+    .where(and(eq(votes.eventId, eventId), eq(votes.voterId, participantId)));
+  hub.publish(
+    eventId,
+    `p:${participantId}`,
+    'eventState',
+    projectEventState(
+      { role: 'participant', participantId },
+      {
+        event: c.event,
+        participants: c.people,
+        giftsRegistered: c.gifts.length,
+        ...(c.votedCount === null ? {} : { votedCount: c.votedCount }),
+        ownVotes,
+      },
+    ),
+  );
+}

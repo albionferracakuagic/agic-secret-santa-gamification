@@ -23,6 +23,9 @@ const sceneOf = (c: EventContext) =>
     join: c.join,
     votedCount: c.votedCount,
     ceremony: c.ceremony,
+    game: c.game,
+    spotlight: c.spotlight,
+    auction: c.auction,
   });
 
 /** Public (display-role) projections shared by the pub stream: gifts, board, scene. */
