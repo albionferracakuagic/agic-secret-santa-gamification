@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneSchema } from '@santa/contracts';
 import i18n from './i18n';
 import { usePrefs } from './prefs/store';
@@ -40,11 +40,23 @@ const pubGift = (id: string, name: string) => ({
   status: 'opened' as const,
 });
 
+const drawImage = vi.fn();
+
 beforeEach(async () => {
   await i18n.changeLanguage('en');
   usePrefs.setState({ sound: false, music: false, intensity: 'normal', reducedMotion: 'off' });
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
-  URL.revokeObjectURL = vi.fn();
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => ({ width: 640, height: 480, close: vi.fn() })),
+  );
+  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
+    return this.dataset.testid === 'gift-photo-preview' ? { drawImage } : null;
+  } as never;
+});
+
+afterEach(() => {
+  HTMLCanvasElement.prototype.getContext = (() => null) as never;
+  vi.unstubAllGlobals();
 });
 
 describe('gift registration', () => {
@@ -76,7 +88,12 @@ describe('gift registration', () => {
     });
     const file = new File([new Uint8Array(10)], 'p.jpg', { type: 'image/jpeg' });
     fireEvent.change(screen.getByLabelText('Photo (optional)'), { target: { files: [file] } });
-    expect((await screen.findByTestId('gift-photo')).getAttribute('src')).toBe('blob:preview');
+    const canvas = (await screen.findByTestId('gift-photo-preview')) as HTMLCanvasElement;
+    await waitFor(() => expect(drawImage).toHaveBeenCalled());
+    expect(canvas.width).toBe(320);
+    expect(canvas.hidden).toBe(false);
+    expect(canvas.getAttribute('aria-label')).toBeTruthy();
+    expect(document.querySelector('img[src^="blob:"]')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Register gift' }));
     await waitFor(() =>
       expect(saveGift).toHaveBeenCalledWith({ name: 'Warm scarf', description: 'Blue' }),

@@ -13,6 +13,16 @@ import {
 const WEB = resolve(process.cwd(), 'apps/web');
 const assets = manifest.assets as ManifestAsset[];
 
+const TEXT_EXT = /\.(svg|json|txt|md|css|html|xml)$/i;
+// Text files are hashed after CRLF->LF so the result does not depend on git autocrlf.
+const assetSha256 = (path: string): string => {
+  const buf = readFileSync(path);
+  const data = TEXT_EXT.test(path)
+    ? Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8')
+    : buf;
+  return createHash('sha256').update(data).digest('hex');
+};
+
 const walk = (dir: string): string[] =>
   existsSync(dir)
     ? readdirSync(dir).flatMap((n) => {
@@ -62,12 +72,7 @@ describe('asset licensing register (doc/assets-licensing.md)', () => {
       const a = byFile.get(f);
       expect(a, `${f} is not listed in assets.manifest.json`).toBeTruthy();
       expect(a!.sha256, `${f} needs a sha256`).toMatch(/^[0-9a-f]{64}$/);
-      expect(
-        createHash('sha256')
-          .update(readFileSync(join(WEB, f)))
-          .digest('hex'),
-        f,
-      ).toBe(a!.sha256);
+      expect(assetSha256(join(WEB, f)), f).toBe(a!.sha256);
     }
   });
 

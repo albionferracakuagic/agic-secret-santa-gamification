@@ -127,7 +127,7 @@ describe('pairing import endpoints', () => {
   it('Windows-1252 and UTF-16LE files decode correctly', async () => {
     const cp1252 = await upload({
       name: 'x.csv',
-      content: Buffer.from(ring(2).replace('Giulia;', 'Giulia;'), 'latin1'),
+      content: Buffer.from(ring(2), 'latin1'),
     });
     expect(cp1252.json()).toMatchObject({ status: 'ready', detected: { encoding: 'utf-8' } }); // ASCII-only names stay utf-8
     const withAccent = ring(3).replace('Elena', 'Elèna');

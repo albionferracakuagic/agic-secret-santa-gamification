@@ -83,7 +83,7 @@ test.describe('participant gameplay (mocked API + realtime)', () => {
     await page
       .getByLabel('Photo (optional)')
       .setInputFiles({ name: 'p.png', mimeType: 'image/png', buffer: png });
-    await expect(page.getByTestId('gift-photo')).toBeVisible();
+    await expect(page.getByTestId('gift-photo-preview')).toBeVisible();
     expect(await axe(page)).toEqual([]);
     await page.getByRole('button', { name: 'Register gift' }).click();
     await expect.poll(() => saved).toEqual({ name: 'Warm scarf', description: null });
