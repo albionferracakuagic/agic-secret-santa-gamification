@@ -1,5 +1,35 @@
 @import 'tailwindcss';
 
+/* Self-hosted, subset fonts (see doc/assets-licensing.md). Italian accents verified in every file. */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/fonts/nunito-latin-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/nunito-latin-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Mountains of Christmas';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/fonts/mountains-of-christmas-latin-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Mountains of Christmas';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/mountains-of-christmas-latin-700.woff2') format('woff2');
+}
+
 @theme {
   --color-santa-600: #b91c1c;
   --color-santa-700: #991b1b;
@@ -10,13 +40,19 @@
   --color-gold-400: #facc15;
   --color-gold-700: #854d0e;
   --color-ink-900: #1c1917;
-  --font-display: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Nunito', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Mountains of Christmas', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
 }
 
 /* Contrast pairs verified >= 4.5:1: ink-900/snow-50, white/santa-600, pine-900/snow-50, gold-700/snow-50. */
 body {
   background: var(--color-snow-50);
   color: var(--color-ink-900);
+  font-family: var(--font-body);
+}
+
+h1,
+h2 {
   font-family: var(--font-display);
 }
 

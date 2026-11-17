@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { normalizeShortCode } from '../lib/shortCode';
 import { ApiError } from '../api/client';
 import { useParticipantApi, type JoinResolve, type JoinTarget } from '../api/participant';
 
@@ -27,7 +28,7 @@ export default function Join() {
   const [params] = useSearchParams();
   const claimToken = tail === 'claim' ? (params.get('token') ?? undefined) : undefined;
   const joinToken = tail && tail !== 'claim' ? tail : undefined;
-  const presetCode = params.get('code')?.toUpperCase() ?? undefined;
+  const presetCode = normalizeShortCode(params.get('code') ?? '');
   const [step, setStep] = useState<Step>({ kind: 'code' });
   const [code, setCode] = useState('');
   const [err, setErr] = useState<string>();
@@ -80,7 +81,8 @@ export default function Join() {
           className="space-y-3"
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
-            void lookup({ shortCode: code.trim().toUpperCase() });
+            const shortCode = normalizeShortCode(code);
+            if (shortCode) void lookup({ shortCode });
           }}
         >
           <label className="block">
@@ -91,11 +93,11 @@ export default function Join() {
               onChange={(e) => setCode(e.target.value)}
               autoComplete="off"
               autoCapitalize="characters"
-              maxLength={8}
+              maxLength={20}
             />
           </label>
           <p className="text-sm">{t('join.codeHint')}</p>
-          <button className={btn} disabled={busy || code.trim().length < 6}>
+          <button className={btn} disabled={busy || !normalizeShortCode(code)}>
             {t('join.continue')}
           </button>
         </form>

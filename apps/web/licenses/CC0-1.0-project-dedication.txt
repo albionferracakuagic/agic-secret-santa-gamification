@@ -1,0 +1,10 @@
+CC0 1.0 Universal (Public Domain Dedication) - project-authored assets
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+The authors of Secret Santa Games dedicate the procedurally generated sounds, music,
+visual effects code and the application icon listed in assets.manifest.json as "CC0-1.0"
+to the public domain worldwide, to the fullest extent permitted by law, by waiving all
+copyright and related or neighboring rights. They were created for this project; no
+third-party recordings, samples, melodies or images were used.
+
+Snapshot taken 2026-11-17 from the project repository. The full legal code is at the URL above.

@@ -61,6 +61,9 @@ export function Layout() {
             <Link to="/legal/cookies" className="underline">
               {t('legal.cookies')}
             </Link>
+            <Link to="/credits" className="underline">
+              {t('credits.link')}
+            </Link>
           </nav>
         </footer>
       )}

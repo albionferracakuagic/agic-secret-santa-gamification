@@ -251,15 +251,15 @@ test.describe('public display scenes (mocked realtime)', () => {
           scene: {
             scene: 'lobby',
             participants: 7,
-            joinUrl: 'http://localhost:4173/j?code=ABC234',
-            shortCode: 'ABC234',
+            joinUrl: 'http://localhost:4173/j?code=ABCDEFGHJK',
+            shortCode: 'ABCDEFGHJK',
           },
         },
       },
     ]);
     await page.goto('/d');
     await expect(page.getByRole('img', { name: 'QR code to join the event' })).toBeVisible();
-    await expect(page.getByText('ABC234')).toBeVisible();
+    await expect(page.getByText('ABCDE-FGHJK')).toBeVisible();
     await expect(page.getByRole('region', { name: 'Sound' })).toBeVisible();
     expect(await axe(page)).toEqual([]);
   });

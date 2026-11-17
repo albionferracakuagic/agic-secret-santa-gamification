@@ -87,7 +87,7 @@ export const it: Translation = {
   join: {
     codeLabel: 'Codice evento',
     codeHint:
-      'Inquadra il QR code sullo schermo grande, o digita il codice di 6–8 caratteri mostrato.',
+      'Inquadra il QR code sullo schermo grande, o digita il codice di 10 caratteri mostrato (come ABCDE-FGHJK).',
     continue: 'Continua',
     welcome: 'Benvenuto a {{event}}!',
     search: 'Cerca il tuo nome',
@@ -292,6 +292,17 @@ export const it: Translation = {
   achievement: {
     first_gift: 'il primo regalo',
     first_vote: 'il primo voto',
+  },
+  credits: {
+    link: 'Crediti',
+    title: 'Crediti e licenze',
+    intro:
+      'Questa app contiene solo materiale originale, di pubblico dominio o con licenza aperta. Tutto è incluso nell’app, quindi questa pagina funziona anche offline.',
+    attribution: 'Crediti',
+    notices: 'Avvisi sulle licenze',
+    noLottie: 'Non usiamo animazioni Lottie: tutti gli effetti sono disegnati nel codice.',
+    libraries: 'Librerie open source',
+    own: 'Suoni, musica ed effetti sono generati nel codice dal progetto (CC0).',
   },
   access: {
     title: 'Inviti',

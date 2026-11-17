@@ -116,7 +116,7 @@ test.describe('AC1 invites', () => {
             accessId: 'a1',
             kind,
             token: 'x'.repeat(24),
-            shortCode: kind === 'join' ? 'ABC234' : null,
+            shortCode: kind === 'join' ? 'ABCDEFGHJK' : null,
             path: `/${kind === 'join' ? 'j' : 'd'}/${'x'.repeat(24)}`,
             expiresAt: '2026-12-23T18:00:00Z',
           },
@@ -127,7 +127,7 @@ test.describe('AC1 invites', () => {
     await page.goto('/o/events/e1');
     await page.getByRole('button', { name: 'Create join link and QR' }).click();
     const join = page.getByTestId('join-link');
-    await expect(join).toContainText('ABC234');
+    await expect(join).toContainText('ABCDE-FGHJK');
     await expect(join.getByRole('img', { name: 'QR code to join the event' })).toBeVisible();
     await page.getByRole('button', { name: 'Create display link' }).click();
     await expect(page.getByTestId('display-link')).toContainText('/d/');
@@ -179,7 +179,7 @@ test.describe('AC2 mobile join', () => {
       ),
     );
     await page.goto('/j');
-    await page.getByLabel('Codice evento').fill('abc234');
+    await page.getByLabel('Codice evento').fill('abcde-fghjk');
     expect(await axe(page)).toEqual([]);
     await page.getByRole('button', { name: 'Continua' }).click();
     await page.getByRole('button', { name: /Anna/ }).click();
@@ -326,8 +326,8 @@ test.describe('lifecycle: organizer-driven party with display + 3 phones (AC3-AC
           scene: {
             scene: 'lobby',
             participants: 3,
-            joinUrl: 'http://localhost:4173/j?code=ABC234',
-            shortCode: 'ABC234',
+            joinUrl: 'http://localhost:4173/j?code=ABCDEFGHJK',
+            shortCode: 'ABCDEFGHJK',
           },
         },
       },
@@ -363,7 +363,7 @@ test.describe('lifecycle: organizer-driven party with display + 3 phones (AC3-AC
 
     // AC9: display + phones are in sync from the very first screen; the phone is 'registration'
     await expect(display.getByRole('img', { name: 'QR code to join the event' })).toBeVisible();
-    await expect(display.getByText('ABC234')).toBeVisible();
+    await expect(display.getByText('ABCDE-FGHJK')).toBeVisible();
     await expect(anna.page.getByText('Now: Registration')).toBeVisible();
     await expect(carla.page.getByText(/Ora: Registrazione/)).toBeVisible(); // EN/IT per device
 

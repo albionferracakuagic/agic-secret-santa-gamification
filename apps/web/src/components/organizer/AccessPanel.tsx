@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 import { useOrganizerApi, type AccessLink } from '../../api/organizer';
+import { formatShortCode } from '../../lib/shortCode';
 import { Qr } from '../Qr';
 import { errorKey } from '../../pages/Dashboard';
 
@@ -49,7 +50,7 @@ export function AccessPanel({ eventId }: { eventId: string }) {
           {links.join.shortCode && (
             <p>
               {t('access.code')}:{' '}
-              <strong className="tracking-widest">{links.join.shortCode}</strong>
+              <strong className="tracking-widest">{formatShortCode(links.join.shortCode)}</strong>
             </p>
           )}
           <div className="h-48 w-48 rounded bg-white p-2">

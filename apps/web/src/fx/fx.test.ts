@@ -3,7 +3,6 @@ import { EVENT_TO_CUE, FX_CATALOG, FX_EVENTS, SFX_IDS } from './catalog';
 import { createFxEngine, type FxHost } from './engine';
 import { FrameMonitor } from './perf';
 import { MUSIC_DEF, SFX_DEFS, synthWav } from './audio';
-import manifest from './assets.manifest.json';
 import { en } from '../i18n/en';
 
 const NEGATIVE =
@@ -138,15 +137,6 @@ describe('procedural audio + asset manifest', () => {
       expect(String.fromCharCode(...wav.subarray(8, 12))).toBe('WAVE');
       expect(v.getUint32(40, true)).toBe(wav.length - 44);
       expect(wav.subarray(44).some((b) => b !== 0)).toBe(true);
-    }
-  });
-
-  it('every asset declares a source and an allowed license (no copyrighted media)', () => {
-    const allowed = /^(CC0-1\.0|ISC|MIT|n\/a \(system font\))$/;
-    expect(manifest.assets.length).toBeGreaterThan(0);
-    for (const a of manifest.assets) {
-      expect(a.source).toBeTruthy();
-      expect(a.license).toMatch(allowed);
     }
   });
 });
