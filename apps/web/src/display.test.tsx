@@ -147,12 +147,17 @@ describe('display scenes (SceneSchema)', () => {
     t.snapshot('pub', {
       eventState: ds('awards'),
       scene: scene({ scene: 'phase', phase: 'awards' }),
-      leaderboard: {
-        boardKey: 'b',
-        state: 'live',
-        entries: [
-          { entryId: 'g1', label: 'Gift 7', rank: 1, tied: false },
-          { entryId: 'g2', label: 'Gift 3', rank: 2, tied: true },
+      leaderboards: {
+        boards: [
+          {
+            boardKey: 'funniest',
+            state: 'live',
+            message: null,
+            entries: [
+              { entryId: 'g1', label: 'Gift 7', rank: 1, tied: false },
+              { entryId: 'g2', label: 'Gift 3', rank: 2, tied: true },
+            ],
+          },
         ],
       },
     });

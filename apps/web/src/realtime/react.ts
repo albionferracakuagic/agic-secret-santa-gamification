@@ -54,7 +54,7 @@ export function useRealtime(): { rt: RealtimeClient | undefined; state: Realtime
   return { rt, state };
 }
 
-export type SurfaceName = 'eventState' | 'giftList' | 'leaderboard' | 'scene' | 'announcement';
+export type SurfaceName = 'eventState' | 'giftList' | 'leaderboards' | 'scene' | 'announcement';
 
 /** Latest payload of a surface: the preferred stream (`pub` or the guest's `p:<id>`) first, then any other stream carrying it. */
 export function surfaceOf<T = unknown>(

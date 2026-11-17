@@ -9,6 +9,8 @@ const Console = lazy(() => import('./pages/Console'));
 const Join = lazy(() => import('./pages/Join'));
 const Participant = lazy(() => import('./pages/Participant'));
 const Display = lazy(() => import('./pages/Display'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const Legal = lazy(() => import('./pages/Legal'));
 
 export function App() {
   const { t } = useTranslation();
@@ -19,6 +21,8 @@ export function App() {
           <Route path="/o" element={<Dashboard />} />
           <Route path="/o/signin" element={<SignIn />} />
           <Route path="/o/events/:eventId" element={<Console />} />
+          <Route path="/e/profile/:id" element={<ProfilePage />} />
+          <Route path="/legal/:doc" element={<Legal />} />
           <Route path="/e/*" element={<Participant />} />
           <Route path="/d/*" element={<Display />} />
           <Route path="/j/*" element={<Join />} />

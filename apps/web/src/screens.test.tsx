@@ -134,7 +134,7 @@ describe('participant /e', () => {
   it('renders own selections only, neutral non-top message with no rank/total, and sends reactions', async () => {
     const t = setup('/e');
     t.snapshot('p:p1', { eventState: eventState({ phase: 'awards' }) });
-    t.snapshot('pub', { leaderboard: PUB_BOARD.leaderboard });
+    t.snapshot('pub', { leaderboards: { boards: [PUB_BOARD.leaderboard] } });
     expect(await screen.findByText('Your picks')).toBeTruthy();
     expect(screen.getByText('Your pick')).toBeTruthy();
     expect(screen.getByText(/Thanks for playing/)).toBeTruthy();

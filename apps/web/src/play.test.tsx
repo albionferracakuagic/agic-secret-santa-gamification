@@ -263,10 +263,15 @@ describe('reveal + leaderboard on the participant app', () => {
           },
         ],
       },
-      leaderboard: {
-        boardKey: 'b',
-        state: 'live',
-        entries: [{ entryId: 'g-mine', label: 'Gift 2', rank: 1, tied: false }],
+      leaderboards: {
+        boards: [
+          {
+            boardKey: 'funniest',
+            state: 'live',
+            message: null,
+            entries: [{ entryId: 'g-mine', label: 'Gift 2', rank: 1, tied: false }],
+          },
+        ],
       },
     });
     expect((await screen.findByTestId('reveal-list')).textContent).toContain('Marta');

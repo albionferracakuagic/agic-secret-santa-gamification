@@ -4,13 +4,17 @@ type Snap = { stream: string; data: Record<string, unknown> };
 
 /**
  * Minimal Socket.IO v4 server double over Playwright's routeWebSocket: handshake, then on `subscribe`
- * it pushes the given snapshots. `delta` / `reaction` push later updates to the page.
+ * it pushes the current snapshots. `delta` / `reaction` push later updates; `drop` simulates a network
+ * loss (the client reconnects and receives `snapshots` again, which tests may swap with `setSnapshots`).
  */
-export async function mockRealtime(page: Page, snapshots: Snap[]) {
+export async function mockRealtime(page: Page, initial: Snap[]) {
+  let snapshots = initial;
   const sockets: WebSocketRoute[] = [];
   const cursors = new Map<string, number>();
+  let connections = 0;
   await page.routeWebSocket(/socket\.io/, (ws) => {
     sockets.push(ws);
+    connections++;
     ws.send(
       '0' +
         JSON.stringify({
@@ -38,15 +42,29 @@ export async function mockRealtime(page: Page, snapshots: Snap[]) {
       }
     });
   });
+  const live = () => sockets.filter((s) => !closed.has(s));
+  const closed = new Set<WebSocketRoute>();
   return {
+    connections: () => connections,
+    setSnapshots(next: Snap[]) {
+      snapshots = next;
+    },
     delta(stream: string, surface: string, payload: unknown) {
       const cursor = (cursors.get(stream) ?? 1) + 1;
       cursors.set(stream, cursor);
-      for (const ws of sockets)
+      for (const ws of live())
         ws.send('42' + JSON.stringify(['delta', { stream, cursor, surface, payload }]));
     },
     reaction(kind: string, count = 1) {
-      for (const ws of sockets) ws.send('42' + JSON.stringify(['reaction', { kind, count }]));
+      for (const ws of live()) ws.send('42' + JSON.stringify(['reaction', { kind, count }]));
+    },
+    drop() {
+      for (const ws of live()) {
+        closed.add(ws);
+        void ws.close();
+      }
     },
   };
 }
+
+export type Realtime = Awaited<ReturnType<typeof mockRealtime>>;
