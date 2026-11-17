@@ -119,6 +119,8 @@ function DisplayStage() {
         <OpeningStage
           big
           current={scene.current}
+          countdownEndsAt={scene.countdownEndsAt}
+          now={now}
           openedCount={scene.openedCount}
           total={scene.total}
         />

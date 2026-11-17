@@ -105,6 +105,8 @@ describe('display scenes (SceneSchema)', () => {
         scene: 'opening',
         openedCount: 3,
         total: 12,
+        countdownSeconds: 3,
+        countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
         current: gift('7', 'Warm scarf'),
       }),
     });
@@ -118,7 +120,14 @@ describe('display scenes (SceneSchema)', () => {
     const t2 = setup('/d');
     t2.snapshot('pub', {
       eventState: ds('gift_opening'),
-      scene: scene({ scene: 'opening', openedCount: 4, total: 12, current: gift('8', 'Candle') }),
+      scene: scene({
+        scene: 'opening',
+        openedCount: 4,
+        total: 12,
+        countdownSeconds: 3,
+        countdownEndsAt: null,
+        current: gift('8', 'Candle'),
+      }),
     });
     expect((await screen.findAllByTestId('opening-revealed')).at(-1)!.textContent).toContain(
       'Candle',
@@ -230,7 +239,14 @@ describe('display scenes (SceneSchema)', () => {
     const t = setup('/d');
     t.snapshot('pub', {
       eventState: ds('gift_opening'),
-      scene: scene({ scene: 'opening', openedCount: 0, total: 5, current: null }),
+      scene: scene({
+        scene: 'opening',
+        openedCount: 0,
+        total: 5,
+        countdownSeconds: 3,
+        countdownEndsAt: null,
+        current: null,
+      }),
     });
     await screen.findByText('Waiting for the next gift…');
     const res = await axe.run(document.documentElement, {
