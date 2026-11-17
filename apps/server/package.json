@@ -8,6 +8,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@azure/communication-email": "^1.1.0",
     "@azure/identity": "^4.14.1",
     "@azure/storage-blob": "^12.34.0",
     "@better-auth/drizzle-adapter": "1.7.25",
@@ -15,6 +16,7 @@
     "@fastify/helmet": "^13.2.0",
     "@fastify/multipart": "^10.1.9",
     "@fastify/rate-limit": "^11.2.2",
+    "@fastify/static": "^10.1.11",
     "@santa/contracts": "*",
     "@santa/db": "*",
     "@santa/domain": "*",

@@ -75,13 +75,13 @@ describe('display scenes', () => {
   it('lobby carries the join URL + short code (never a token) until opening starts', () => {
     const s = scene({
       event: event({ phase: 'registration' }),
-      join: { url: 'https://santa.test/j?code=ABCDEFG', shortCode: 'ABCDEFG' },
+      join: { url: 'https://santa.test/j?code=ABCDEFGHJK', shortCode: 'ABCDEFGHJK' },
     });
     expect(s).toEqual({
       scene: 'lobby',
       participants: 2,
-      joinUrl: 'https://santa.test/j?code=ABCDEFG',
-      shortCode: 'ABCDEFG',
+      joinUrl: 'https://santa.test/j?code=ABCDEFGHJK',
+      shortCode: 'ABCDEFGHJK',
     });
     expect(scene({ event: event({ phase: 'gift_registration' }) })).toMatchObject({
       scene: 'lobby',

@@ -43,6 +43,13 @@
       "when": 1794866016121,
       "tag": "0005_boards_ceremony_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794904506660,
+      "tag": "0006_idempotency_keys",
+      "breakpoints": true
     }
   ]
 }

@@ -475,6 +475,20 @@ export const unmaskGrants = pgTable(
   (t) => [index('unmask_grants_event_idx').on(t.eventId, t.expiresAt)],
 );
 
+/** Persistent Idempotency-Key store (survives restarts/replicas). Rows expire; the retention job purges them. */
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
+  {
+    key: text('key').primaryKey(),
+    fingerprint: text('fingerprint').notNull(),
+    state: text('state').$type<'inflight' | 'done'>().notNull(),
+    status: integer('status'),
+    body: text('body'),
+    contentType: text('content_type'),
+    expiresAt: ts('expires_at').notNull(),
+  },
+  (t) => [index('idempotency_keys_expires_idx').on(t.expiresAt)],
+);
 export const auditLog = pgTable(
   'audit_log',
   {

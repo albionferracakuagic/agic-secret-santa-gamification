@@ -6,6 +6,7 @@ RUN npm ci && npm run build -w apps/web && npx tsc -b
 
 FROM node:24-alpine
 ENV NODE_ENV=production
+ENV WEB_DIST=/app/apps/web/dist
 WORKDIR /app
 COPY --from=build /app .
 RUN npm prune --omit=dev

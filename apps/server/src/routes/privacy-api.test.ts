@@ -379,6 +379,32 @@ describe('sockets cannot bypass publication cadence', () => {
     ).toEqual([]);
   });
 
+  it('boards carry a localized name; "is this entry mine" = entryId equals my own gift id (no per-person payload)', async () => {
+    const msgs = await snapshot(await w.guestCookie(1));
+    const board = (
+      pubData(msgs)['leaderboards'] as {
+        boards: Array<{
+          boardKey: string;
+          name: Record<string, string>;
+          entries: Array<{ entryId: string }>;
+        }>;
+      }
+    ).boards[0]!;
+    expect(board.name['en']).toBeTruthy();
+    expect(board.name['it']).toBeTruthy();
+    const mine = async (i: number) =>
+      (
+        await w.app.inject({
+          method: 'GET',
+          url: '/api/me/gift',
+          headers: { cookie: await w.guestCookie(i) },
+        })
+      ).json().gift?.giftId ?? (undefined as string | undefined);
+    const leaderGift = board.entries[0]!.entryId;
+    const owners = await Promise.all([0, 1, 2, 3, 4, 5].map(mine));
+    expect(owners.filter((g) => g === leaderGift)).toHaveLength(1);
+  });
+
   it('a participant cannot subscribe to organizer or grant streams', async () => {
     const s = w.client(await w.guestCookie(2));
     await connected(s);

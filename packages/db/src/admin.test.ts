@@ -162,8 +162,8 @@ describe('privacy controls', () => {
   it('takedown suspends participant and join access; restore reverses it; both audited with reason', async () => {
     await db
       .insert(s.eventAccess)
-      .values({ eventId, kind: 'join', tokenHash: 'jt', shortCode: 'ABC123' });
-    expect(await resolveJoinTarget(db, { shortCode: 'ABC123' }, NOW)).toBe(eventId);
+      .values({ eventId, kind: 'join', tokenHash: 'jt', shortCode: 'ABC2345678' });
+    expect(await resolveJoinTarget(db, { shortCode: 'ABC2345678' }, NOW)).toBe(eventId);
     await setEventSuspended(db, {
       eventId,
       actor: 'owner',
@@ -172,7 +172,7 @@ describe('privacy controls', () => {
       now: NOW,
     });
     expect(await findParticipantBySession(db, 'hash1')).toBeNull();
-    expect(await resolveJoinTarget(db, { shortCode: 'ABC123' }, NOW)).toBeNull();
+    expect(await resolveJoinTarget(db, { shortCode: 'ABC2345678' }, NOW)).toBeNull();
     await setEventSuspended(db, {
       eventId,
       actor: 'owner',

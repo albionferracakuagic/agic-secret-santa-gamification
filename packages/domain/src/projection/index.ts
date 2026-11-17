@@ -180,6 +180,7 @@ export function projectLeaderboard(
     board.state !== 'hidden' && board.lastPublished?.ok ? board.lastPublished : null;
   return {
     boardKey: board.boardKey,
+    name: board.name ?? { en: board.boardKey },
     state: board.state,
     // live but nothing may be shown safely => neutral fallback (no promise of a later reveal)
     message: board.state !== 'hidden' && !published ? 'christmas_magic' : null,

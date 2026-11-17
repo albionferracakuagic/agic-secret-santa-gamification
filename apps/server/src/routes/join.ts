@@ -10,6 +10,7 @@ import {
   DISPLAY_COOKIE_NAME,
   DisplayExchangeRequestSchema,
   GUEST_COOKIE_NAME,
+  SHORT_CODE_LENGTH,
   JoinResolveRequestSchema,
   JoinResolveResponseSchema,
   MeResponseSchema,
@@ -44,6 +45,7 @@ import type { EmailTransport } from '../auth/email.js';
 import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
 import { broadcastEventState } from '../realtime/broadcast.js';
+import { ShortCodeGuard, type ShortCodeGuardOptions } from '../http/shortcode-guard.js';
 import { hashToken, newToken, parseCookies, randomCode } from '../tokens.js';
 import { fail, makeGuards } from './guards.js';
 
@@ -57,6 +59,8 @@ export interface JoinRouteDeps {
   secureCookies: boolean;
   /** Per-IP requests/minute on the public endpoints (resolve+display, claim). */
   limits?: { resolve: number; claim: number };
+  /** Global short-code brute-force limits (defaults: 30 lookups/code/min, 100 failures/min overall). */
+  shortCodeLimits?: ShortCodeGuardOptions;
   clock: () => Date;
 }
 
@@ -67,6 +71,16 @@ const publicLimit = (max: number) => ({ config: { rateLimit: { max, timeWindow: 
 
 export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
   const g = makeGuards(d);
+
+  const guard = new ShortCodeGuard(d.shortCodeLimits);
+  /** Resolves a join target; short-code lookups are guarded globally (not per IP). */
+  const lookup = async (t: { joinToken: string } | { shortCode: string }, now: Date) => {
+    if ('shortCode' in t && !guard.allow(t.shortCode, now.getTime()))
+      throw new EventError('rate_limited');
+    const id = await resolveJoinTarget(d.db, targetOf(t), now);
+    if (!id && 'shortCode' in t) guard.fail(now.getTime());
+    return id;
+  };
 
   const targetOf = (t: { joinToken: string } | { shortCode: string }): JoinTarget =>
     'joinToken' in t ? { tokenHash: hashToken(t.joinToken) } : { shortCode: t.shortCode };
@@ -85,7 +99,11 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
   app.post('/api/join/resolve', publicLimit(d.limits?.resolve ?? 20), async (req, reply) => {
     const b = g.body(reply, JoinResolveRequestSchema, req.body);
     if (!b) return;
-    const eventId = await resolveJoinTarget(d.db, targetOf(b), d.clock());
+    const eventId = await lookup(b, d.clock()).catch((e: unknown) => {
+      if (e instanceof EventError && e.code === 'rate_limited') return 'locked' as const;
+      throw e;
+    });
+    if (eventId === 'locked') return fail(reply, 429, 'rate_limited');
     if (!eventId) return fail(reply, 404, 'invalid_claim'); // same answer for unknown/expired/revoked
     const info = await joinInfo(d.db, eventId, d.clock());
     return JoinResolveResponseSchema.parse({
@@ -111,17 +129,14 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
       let autoApprove = false;
 
       if (b.method === 'pick_name') {
-        const e = await resolveJoinTarget(d.db, targetOf(b.target), now);
+        const e = await lookup(b.target, now);
         if (!e) return fail(reply, 401, 'invalid_claim');
         eventId = e;
         participantId = b.participantId;
         const [ev] = await d.db.select({ s: events.settings }).from(events).where(eq(events.id, e));
         autoApprove = !!ev?.s.features.autoApproveJoin;
       } else {
-        const scope =
-          b.method === 'personal_code'
-            ? await resolveJoinTarget(d.db, targetOf(b.target), now)
-            : undefined;
+        const scope = b.method === 'personal_code' ? await lookup(b.target, now) : undefined;
         if (b.method === 'personal_code' && !scope) return fail(reply, 401, 'invalid_claim');
         const hit = await consumeClaimToken(d.db, {
           tokenHash: hashToken(b.method === 'email_link' ? b.token : b.code),
@@ -226,7 +241,7 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
       let shortCode: string | null = null;
       let accessId: string | undefined;
       for (let attempt = 0; attempt < 5 && !accessId; attempt++) {
-        shortCode = b.kind === 'join' ? randomCode(7) : null;
+        shortCode = b.kind === 'join' ? randomCode(SHORT_CODE_LENGTH) : null;
         try {
           accessId = await insertAccess(d.db, {
             eventId: g.eventParams(req),

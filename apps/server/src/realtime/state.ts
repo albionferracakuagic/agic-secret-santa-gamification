@@ -9,6 +9,7 @@ import {
   loadParticipantSources,
   loadPublishedVotedCount,
   pairings,
+  votingCategories,
   type Db,
 } from '@santa/db';
 import { XP_BOARD_KEY, type CeremonyViewOutput } from '@santa/contracts';
@@ -111,36 +112,41 @@ export async function loadEventContext(
   ctx: RealtimeContext,
   now = new Date(),
 ): Promise<EventContext> {
-  const [event, people, giftRows, votedCount, access, boardRows, ceremony] = await Promise.all([
-    loadEventSource(db, eventId),
-    loadParticipantSources(db, eventId),
-    loadGiftSources(db, eventId, ctx.storage),
-    loadPublishedVotedCount(db, eventId),
-    db
-      .select({ shortCode: eventAccess.shortCode })
-      .from(eventAccess)
-      .where(
-        and(
-          eq(eventAccess.eventId, eventId),
-          eq(eventAccess.kind, 'join'),
-          isNotNull(eventAccess.shortCode),
-          isNull(eventAccess.revokedAt),
-          or(isNull(eventAccess.expiresAt), gt(eventAccess.expiresAt, now)),
+  const [event, people, giftRows, votedCount, access, boardRows, ceremony, cats] =
+    await Promise.all([
+      loadEventSource(db, eventId),
+      loadParticipantSources(db, eventId),
+      loadGiftSources(db, eventId, ctx.storage),
+      loadPublishedVotedCount(db, eventId),
+      db
+        .select({ shortCode: eventAccess.shortCode })
+        .from(eventAccess)
+        .where(
+          and(
+            eq(eventAccess.eventId, eventId),
+            eq(eventAccess.kind, 'join'),
+            isNotNull(eventAccess.shortCode),
+            isNull(eventAccess.revokedAt),
+            or(isNull(eventAccess.expiresAt), gt(eventAccess.expiresAt, now)),
+          ),
+        )
+        .orderBy(desc(eventAccess.createdAt))
+        .limit(1),
+      db
+        .select()
+        .from(boardPublications)
+        .where(
+          and(
+            eq(boardPublications.eventId, eventId),
+            ne(boardPublications.boardKey, VOTED_COUNTER_KEY),
+          ),
         ),
-      )
-      .orderBy(desc(eventAccess.createdAt))
-      .limit(1),
-    db
-      .select()
-      .from(boardPublications)
-      .where(
-        and(
-          eq(boardPublications.eventId, eventId),
-          ne(boardPublications.boardKey, VOTED_COUNTER_KEY),
-        ),
-      ),
-    ceremonyView(db, eventId),
-  ]);
+      ceremonyView(db, eventId),
+      db
+        .select({ key: votingCategories.key, name: votingCategories.name })
+        .from(votingCategories)
+        .where(eq(votingCategories.eventId, eventId)),
+    ]);
   const code = access[0]?.shortCode ?? null;
   return {
     event,
@@ -156,6 +162,10 @@ export async function loadEventContext(
     ceremony,
     boards: boardRows.map((b) => ({
       boardKey: b.boardKey,
+      name:
+        b.boardKey === XP_BOARD_KEY
+          ? { en: 'Christmas XP', it: 'XP di Natale' }
+          : (cats.find((c) => c.key === b.boardKey)?.name ?? { en: b.boardKey }),
       state: b.state,
       lastPublished: b.lastPublished as PublishResult | null,
     })),

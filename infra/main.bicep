@@ -97,7 +97,7 @@ module storage 'modules/storage.bicep' = {
 
 module communication 'modules/communication.bicep' = {
   name: 'communication'
-  params: { namePrefix: namePrefix, tags: tags }
+  params: { namePrefix: namePrefix, tags: tags, senderPrincipalId: identity.properties.principalId }
 }
 
 module app 'modules/containerapp.bicep' = {
@@ -118,6 +118,8 @@ module app 'modules/containerapp.bicep' = {
     postgresHost: postgres.outputs.host
     postgresDatabase: postgres.outputs.databaseName
     keyVaultUri: keyVault.outputs.uri
+    acsEndpoint: communication.outputs.endpoint
+    emailSenderAddress: communication.outputs.senderAddress
     useKeyVaultSecrets: useKeyVaultSecrets
     publicBaseUrl: publicBaseUrl
   }

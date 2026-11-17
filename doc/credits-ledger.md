@@ -19,4 +19,4 @@ node scripts/credits/credits-report.mjs --append-ledger
 | Data | Sessione | Durata | Crediti | AIU | Modelli | Agenti | Attività |
 |---|---|---|---|---|---|---|---|
 | 2026-11-16 | d4d975ea | <1m | 5,00 | 18,91 | sonnet-5.5 x5 | main x5 | Initialize SLCE AI Team |
-| 2026-11-16 | 5ff9e097 | 3h 39m | 1.073,00 | 4.695,78 | sonnet-5.5 x734, opus-5.5 x22, gpt-6.1-sol x9 | 607700 x427, 5e0332 x183, main x82, ca577b x12, +15 | Create Secret Santa Games Plan |
+| 2026-11-16 | 5ff9e097 | 13h 46m | 1.157,00 | 5.294,94 | sonnet-5.5 x818, opus-5.5 x22, gpt-6.1-sol x9 | 607700 x460, 5e0332 x199, main x91, bbc07b x18, +17 | Create Secret Santa Games Plan |

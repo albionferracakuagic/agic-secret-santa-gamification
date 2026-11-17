@@ -67,12 +67,22 @@ export async function anonymizeParticipant(
   });
 }
 
-export async function isPlatformAdmin(db: Db, userId: string): Promise<boolean> {
+/**
+ * Platform admin = DB flag, or (bootstrap) a VERIFIED email listed in mails (env PLATFORM_ADMIN_EMAILS, case-insensitive).
+ * Unverified emails never qualify, so registering an address does not grant access.
+ */
+export async function isPlatformAdmin(
+  db: Db,
+  userId: string,
+  emails: readonly string[] = [],
+): Promise<boolean> {
   const [u] = await db
-    .select({ a: s.user.isPlatformAdmin })
+    .select({ a: s.user.isPlatformAdmin, email: s.user.email, verified: s.user.emailVerified })
     .from(s.user)
     .where(eq(s.user.id, userId));
-  return u?.a === true;
+  if (!u) return false;
+  if (u.a) return true;
+  return u.verified && emails.some((e) => e.trim().toLowerCase() === u.email.toLowerCase());
 }
 
 /** Suspends/restores an event: participant and display access stops while suspended. Audited with the reason. */

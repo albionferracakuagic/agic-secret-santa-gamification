@@ -14,7 +14,16 @@ export const EnvSchema = z.object({
   MICROSOFT_CLIENT_ID: Opt,
   MICROSOFT_CLIENT_SECRET: Opt,
   MICROSOFT_TENANT_ID: Opt,
-  EMAIL_TRANSPORT: z.enum(['console']).default('console'),
+  EMAIL_TRANSPORT: z.enum(['console', 'acs']).default('console'),
+  /** Azure Communication Services Email (managed identity auth; no connection string). */
+  ACS_ENDPOINT: z.url().optional(),
+  ACS_SENDER_ADDRESS: z.email().optional(),
+  /** Exact number of trusted reverse-proxy hops (Container Apps ingress = 1). 0 = trust none. */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
+  /** Built SPA directory served by this server (unset = API only). */
+  WEB_DIST: Opt,
+  /** Comma-separated emails promoted to platform admin when verified. */
+  PLATFORM_ADMIN_EMAILS: Opt,
   /** Set => Azure Blob (managed identity, user-delegation SAS); unset => local FS (dev). */
   STORAGE_ACCOUNT_NAME: Opt,
   STORAGE_CONTAINER: z.string().default('media'),
@@ -25,6 +34,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const env = EnvSchema.parse(source);
   if (env.NODE_ENV === 'production' && (!env.BETTER_AUTH_SECRET || !env.DATABASE_URL)) {
     throw new Error('BETTER_AUTH_SECRET and DATABASE_URL are required in production');
+  }
+  if (env.NODE_ENV === 'production') {
+    // the console transport prints magic links / claim URLs: never acceptable outside dev
+    if (env.EMAIL_TRANSPORT !== 'acs')
+      throw new Error(
+        'EMAIL_TRANSPORT=acs is required in production (console transport is dev-only)',
+      );
+    if (!env.ACS_ENDPOINT || !env.ACS_SENDER_ADDRESS)
+      throw new Error('ACS_ENDPOINT and ACS_SENDER_ADDRESS are required with EMAIL_TRANSPORT=acs');
   }
   return env;
 }

@@ -121,7 +121,10 @@ const LabelSchema = z.string().min(1).max(60);
 
 /** Top-N only: no totals, no rank beyond N, no entries outside the published set. */
 export const PublicLeaderboardSchema = z.strictObject({
+  /** Stable key (category key or `xp`); use it as the i18n key (`boards.<boardKey>`) or read `name`. */
   boardKey: z.string(),
+  /** Localized board title by locale code (`en`, `it`), from the category / XP board definition. */
+  name: z.record(z.string(), z.string()),
   state: z.enum(['hidden', 'live', 'paused']),
   /** `christmas_magic` = the board is on but nothing may be shown safely (neutral fallback, no promise of a reveal). */
   message: z.enum(['christmas_magic']).nullable(),

@@ -151,7 +151,13 @@ describe('ceremony scenes: role x phase x step', () => {
 describe('allowlists for new surfaces', () => {
   const keys = (s: { shape: Record<string, unknown> }) => Object.keys(s.shape).sort();
   it('exact key sets', () => {
-    expect(keys(PublicLeaderboardSchema)).toEqual(['boardKey', 'entries', 'message', 'state']);
+    expect(keys(PublicLeaderboardSchema)).toEqual([
+      'boardKey',
+      'entries',
+      'message',
+      'name',
+      'state',
+    ]);
     expect(keys(AnnouncementSchema)).toEqual(['at', 'key', 'person', 'type']);
     expect(keys(ProfileSchema)).toEqual(['achievements', 'avatar', 'displayName', 'participantId']);
     expect(keys(MyAchievementsResponseSchema)).toEqual(['achievements']);

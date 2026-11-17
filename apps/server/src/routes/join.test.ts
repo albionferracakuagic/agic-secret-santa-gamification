@@ -76,11 +76,11 @@ const xpJoined = async (pid: string) =>
   ).length;
 
 describe('join links, short codes, resolve', () => {
-  it('mints a 256-bit token + 7-char short code (hash-only storage); resolves by either; hides everything else', async () => {
+  it('mints a 256-bit token + 10-char short code (hash-only storage); resolves by either; hides everything else', async () => {
     const [anna] = await roster(['Anna Pick']);
     const a = await joinAccess();
     expect(a.token.length).toBeGreaterThanOrEqual(43);
-    expect(a.shortCode).toMatch(/^[A-Z2-9]{7}$/);
+    expect(a.shortCode).toMatch(/^[A-Z2-9]{10}$/);
     expect(a.path).toBe(`/j/${a.token}`);
     const [row] = await w.db.select().from(eventAccess).where(eq(eventAccess.id, a.accessId));
     expect(row!.tokenHash).toBe(hashToken(a.token));
@@ -145,7 +145,7 @@ describe('join links, short codes, resolve', () => {
         });
       const resolve: number[] = [];
       for (let i = 0; i < 25; i++)
-        resolve.push((await call('/api/join/resolve', { shortCode: 'AAAAAAA' }, i)).statusCode);
+        resolve.push((await call('/api/join/resolve', { shortCode: 'AAAAAAAAAA' }, i)).statusCode);
       expect(resolve.slice(0, 20).every((c) => c === 404)).toBe(true);
       expect(resolve.slice(20)).toContain(429);
 

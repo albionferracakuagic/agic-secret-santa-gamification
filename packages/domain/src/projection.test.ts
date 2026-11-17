@@ -151,7 +151,7 @@ function project(role: Role, surface: Surface, phase: Phase): unknown {
       activeParticipants: 3,
       gifts,
       people,
-      join: { url: 'https://santa.test/j?code=ABCDEFG', shortCode: 'ABCDEFG' },
+      join: { url: 'https://santa.test/j?code=ABCDEFGHJK', shortCode: 'ABCDEFGHJK' },
       votedCount: 4,
     });
   }

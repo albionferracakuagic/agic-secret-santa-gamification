@@ -23,6 +23,10 @@ export interface AuthConfig {
   secureCookies?: boolean;
 }
 
+/** Set by registerAuthRoutes from 
+eq.ip (which honours only the configured proxy hop count). */
+export const TRUSTED_IP_HEADER = 'x-sg-client-ip';
+
 export function createAuth(cfg: AuthConfig) {
   const rl = cfg.rateLimit ?? { window: 60, max: 100, magicLink: { window: 60, max: 5 } };
   return betterAuth({
@@ -73,7 +77,8 @@ export function createAuth(cfg: AuthConfig) {
     advanced: {
       cookiePrefix: 'sg',
       useSecureCookies: cfg.secureCookies ?? cfg.baseURL.startsWith('https://'),
-      ipAddress: { ipAddressHeaders: ['x-forwarded-for'] },
+      // only the header our Fastify layer sets from the trusted client IP (never a raw client-supplied X-Forwarded-For)
+      ipAddress: { ipAddressHeaders: [TRUSTED_IP_HEADER] },
     },
   });
 }

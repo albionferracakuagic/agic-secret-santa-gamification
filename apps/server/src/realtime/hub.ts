@@ -30,6 +30,11 @@ export interface HubOptions {
   reactionPolicy?: ReactionPolicy;
   /** Aggregation window for reaction bursts (ms). */
   reactionWindowMs?: number;
+  /**
+   * Origins allowed to open a socket (cross-site WebSocket hijacking guard). Requests without an Origin header
+   * (non-browser clients) are allowed: they cannot ride on a victim's cookies. Default: any origin.
+   */
+  allowOrigin?: (origin: string) => boolean;
 }
 
 export type RevokeReason = 'expired' | 'revoked' | 'membership' | 'session';
@@ -93,7 +98,15 @@ export class RealtimeHub {
   }
 
   attach(httpServer: HttpServer): Server {
-    this.io = new Server(httpServer, { serveClient: false, cors: { origin: false } });
+    const allowOrigin = this.o.allowOrigin;
+    this.io = new Server(httpServer, {
+      serveClient: false,
+      cors: { origin: false },
+      allowRequest: (req, cb) => {
+        const origin = req.headers.origin;
+        cb(null, !origin || !allowOrigin || allowOrigin(origin));
+      },
+    });
     this.io.use((socket, next) => {
       this.o.principals
         .resolve(socket.handshake.headers.cookie)

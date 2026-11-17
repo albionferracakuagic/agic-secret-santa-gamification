@@ -10,6 +10,7 @@ import {
   type PrivacyViolationError,
 } from '@santa/contracts';
 import type { Db } from '@santa/db';
+import { DbIdempotencyStore } from './http/idempotency-db.js';
 import { registerIdempotency } from './http/idempotency.js';
 import { DbPrincipalStore, type OrganizerSessions } from './principal.js';
 import { RealtimeHub, type HubOptions, type SnapshotProvider } from './realtime/hub.js';
@@ -22,6 +23,8 @@ import { registerGiftRoutes } from './routes/gifts.js';
 import { registerVotingRoutes } from './routes/voting.js';
 import { registerShowRoutes } from './routes/show.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { API_PREFIX, cspDirectives, registerWeb } from './http/web.js';
+import type { ShortCodeGuardOptions } from './http/shortcode-guard.js';
 import { loggerOptions, type LogSink } from './logging.js';
 import { LocalFsStorage, registerMediaRoute } from './storage/local.js';
 import type { StorageAdapter } from './storage/adapter.js';
@@ -55,6 +58,18 @@ export interface AppOptions {
   /** Public join endpoints: per-IP requests/minute (defaults: resolve/display 20, claim 10). */
   joinRateLimits?: { resolve: number; claim: number };
   rateLimitMax?: number;
+  /** Global short-code brute-force limits (see ShortCodeGuard). */
+  shortCodeLimits?: ShortCodeGuardOptions;
+  /** Directory of the built SPA to serve (history fallback); unset = API only. */
+  webDist?: string;
+  /** Extra CSP image origins (private blob storage host). */
+  cspImgSources?: string[];
+  /** Extra browser origins allowed to open sockets (default: only aseUrl; localhost in dev/test). */
+  allowedOrigins?: string[];
+  /** Verified emails that count as platform admins (bootstrap; env PLATFORM_ADMIN_EMAILS). */
+  platformAdminEmails?: string[];
+  /** Trusted reverse-proxy hops (default 1; 0 = none). */
+  trustProxyHops?: number;
   /** Structured request logging (off by default; tests pass a sink to verify redaction). */
   logging?: boolean | { sink: LogSink };
 }
@@ -64,19 +79,34 @@ const NO_ORGANIZERS: OrganizerSessions = {
   isCurrent: async () => false,
 };
 
+/** Same-origin (plus configured extras); any localhost origin outside production for the Vite dev server. */
+export function allowedOrigin(
+  origin: string,
+  baseUrl: string,
+  extra: string[] = [],
+  env: GuardEnv = 'development',
+): boolean {
+  if (origin === new URL(baseUrl).origin || extra.includes(origin)) return true;
+  return env !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: !opts.logging
       ? false
       : loggerOptions(typeof opts.logging === 'object' ? opts.logging.sink : undefined),
-    trustProxy: true,
+    // exact hop count (Container Apps ingress = 1): a client cannot forge X-Forwarded-For beyond the trusted hops
+    trustProxy: (_addr: string, hop: number) => hop < (opts.trustProxyHops ?? 1),
   });
   const guardEnv: GuardEnv =
     opts.guardEnv ?? (process.env['NODE_ENV'] === 'production' ? 'production' : 'development');
 
   void app.register(helmet, {
     contentSecurityPolicy: {
-      directives: { 'connect-src': ["'self'", 'ws:', 'wss:'] },
+      directives: cspDirectives(
+        opts.cspImgSources ? { imgSources: opts.cspImgSources } : {},
+        guardEnv,
+      ),
     },
   });
   void app.register(cookie);
@@ -87,6 +117,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     global: true,
     max: opts.rateLimitMax ?? 300,
     timeWindow: '1 minute',
+    allowList: (req) => req.method === 'GET' && !API_PREFIX.test(req.url.split('?')[0] ?? ''),
   });
 
   // State APIs must never be cached by browsers, proxies or the service worker.
@@ -96,7 +127,8 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     }
     return payload;
   });
-  registerIdempotency(app);
+  // DB-backed when a database is present: keys survive restarts and work across replicas
+  registerIdempotency(app, opts.db ? { store: new DbIdempotencyStore(opts.db) } : {});
 
   // Malformed ids (non-UUID path params / headers) reach Postgres as 22P02: that is a client error, not a 500.
   app.setErrorHandler((err, _req, reply) => {
@@ -107,10 +139,14 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     return reply.send(err);
   });
 
-  // Default 404 handler logs the raw URL (may hold tokens); ours does not.
-  app.setNotFoundHandler((_req, reply) =>
-    reply.status(404).send({ error: { code: 'not_found', message: 'not_found' } }),
-  );
+  // Default 404 handler logs the raw URL (may hold tokens); ours does not. With a built SPA, unknown GET paths
+  // outside the API fall back to index.html (client-side routes like /o, /e, /d, /j).
+  const spaFallback = opts.webDist ? registerWeb(app, opts.webDist) : undefined;
+  app.setNotFoundHandler((req, reply) => {
+    if (spaFallback && req.method === 'GET' && spaFallback(req.url))
+      return reply.header('Cache-Control', 'no-cache').type('text/html').sendFile('index.html');
+    return reply.status(404).send({ error: { code: 'not_found', message: 'not_found' } });
+  });
 
   // Routes are registered in app.after(): @fastify/rate-limit (and other plugins) must finish loading
   // first, otherwise their onRoute hooks never see these routes and limits silently don't apply.
@@ -149,6 +185,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       ...(opts.clock ? { clock: opts.clock } : {}),
       ...(opts.rate ? { rate: opts.rate } : {}),
       reactionPolicy: dbReactionPolicy(opts.db),
+      allowOrigin: (origin) => allowedOrigin(origin, baseUrl, opts.allowedOrigins, guardEnv),
       ...(opts.reactionWindowMs ? { reactionWindowMs: opts.reactionWindowMs } : {}),
     });
     hub.ctx = realtimeCtx;
@@ -169,6 +206,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         secureCookies: guardEnv === 'production',
         clock,
         ...(opts.joinRateLimits ? { limits: opts.joinRateLimits } : {}),
+        ...(opts.shortCodeLimits ? { shortCodeLimits: opts.shortCodeLimits } : {}),
       });
       registerGiftRoutes(app, {
         db,
@@ -199,6 +237,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         hub,
         storage,
         clock,
+        ...(opts.platformAdminEmails ? { platformAdminEmails: opts.platformAdminEmails } : {}),
       });
       if (sessions) {
         registerOrganizerRoutes(app, { db, sessions, principals, hub, guardEnv, clock });

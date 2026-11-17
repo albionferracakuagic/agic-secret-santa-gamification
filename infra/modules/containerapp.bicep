@@ -13,6 +13,8 @@ param storageAccountName string
 param postgresHost string
 param postgresDatabase string
 param keyVaultUri string
+param acsEndpoint string
+param emailSenderAddress string
 @description('Set true only after the Key Vault secrets exist (better-auth-secret, database-url).')
 param useKeyVaultSecrets bool
 @description('Public base URL; empty = the generated Container Apps FQDN.')
@@ -96,6 +98,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               { name: 'NODE_ENV', value: 'production' }
               { name: 'PORT', value: '3000' }
               { name: 'BETTER_AUTH_URL', value: baseUrl }
+              { name: 'EMAIL_TRANSPORT', value: 'acs' }
+              { name: 'ACS_ENDPOINT', value: acsEndpoint }
+              { name: 'ACS_SENDER_ADDRESS', value: emailSenderAddress }
+              { name: 'TRUST_PROXY_HOPS', value: '1' }
               { name: 'AZURE_CLIENT_ID', value: identityClientId }
               { name: 'STORAGE_ACCOUNT_NAME', value: storageAccountName }
               { name: 'POSTGRES_HOST', value: postgresHost }

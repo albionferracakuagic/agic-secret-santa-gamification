@@ -28,5 +28,20 @@ resource acs 'Microsoft.Communication/communicationServices@2023-04-01' = {
   }
 }
 
+// The server sends mail with its managed identity (no connection string): Contributor on the ACS resource.
+param senderPrincipalId string
+
+resource sendRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acs.id, senderPrincipalId, 'acs-contributor')
+  scope: acs
+  properties: {
+    principalId: senderPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+  }
+}
+
 output communicationServiceName string = acs.name
+output endpoint string = 'https://${acs.properties.hostName}'
+output senderAddress string = 'DoNotReply@${domain.properties.mailFromSenderDomain}'
 output senderDomain string = domain.properties.mailFromSenderDomain

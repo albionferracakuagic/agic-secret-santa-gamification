@@ -35,6 +35,7 @@ export interface AdminRouteDeps {
   principals: PrincipalStore;
   hub: RealtimeHub;
   storage: StorageAdapter;
+  platformAdminEmails?: readonly string[];
   clock: () => Date;
 }
 
@@ -118,7 +119,8 @@ export function registerAdminRoutes(app: FastifyInstance, d: AdminRouteDeps) {
   const platformAdmin = async (req: FastifyRequest, reply: FastifyReply) => {
     const s = await d.sessions.fromCookieHeader(req.headers.cookie);
     if (!s) return fail(reply, 401, 'unauthenticated', 'Sign in required');
-    if (!(await isPlatformAdmin(d.db, s.userId))) return fail(reply, 403, 'forbidden');
+    if (!(await isPlatformAdmin(d.db, s.userId, d.platformAdminEmails)))
+      return fail(reply, 403, 'forbidden');
     req.org = s;
   };
 

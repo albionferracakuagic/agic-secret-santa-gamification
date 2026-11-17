@@ -66,6 +66,7 @@ export const STATUS: Record<string, number> = {
   verification_required: 403,
   invalid_image: 400,
   small_cohort_ack_required: 409,
+  rate_limited: 429,
   board_hidden: 409,
   ceremony_started: 409,
   ceremony_not_running: 409,

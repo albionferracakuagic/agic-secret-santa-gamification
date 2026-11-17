@@ -5,10 +5,21 @@ import { IdSchema, IsoDateSchema, LocaleSchema, ParticipantStatusSchema } from '
 export const GUEST_COOKIE_NAME = 'sg_p';
 export const DISPLAY_COOKIE_NAME = 'sg_d';
 
+/**
+ * Short join code: 10 characters from a 32-symbol alphabet (50 bits). Display it grouped (ABCDE-FGHJK); input is
+ * case-insensitive and ignores spaces/hyphens, so the grouped form can be typed or pasted as is.
+ */
+export const SHORT_CODE_LENGTH = 10;
+export const ShortCodeSchema = z
+  .string()
+  .max(32)
+  .transform((s) => s.toUpperCase().replace(/[\s-]/g, ''))
+  .pipe(z.string().regex(/^[A-Z2-9]{10}$/));
+
 /** Identifies the event on public join endpoints: the QR/link token OR the short code (never both). */
 export const JoinTargetSchema = z.union([
   z.strictObject({ joinToken: z.string().min(16).max(128) }),
-  z.strictObject({ shortCode: z.string().regex(/^[A-Z2-9]{6,8}$/) }),
+  z.strictObject({ shortCode: ShortCodeSchema }),
 ]);
 
 /** POST /api/join/resolve -> what the join page shows. Public; rate-limited per IP. */

@@ -4,7 +4,7 @@ import { createPgDb, MIGRATIONS_FOLDER, type Db } from '@santa/db';
 import { buildApp } from './app.js';
 import { createAuth } from './auth/auth.js';
 import { loadEnv, socialFromEnv } from './auth/config.js';
-import { ConsoleEmailTransport } from './auth/email.js';
+import { createEmailTransport } from './auth/email-factory.js';
 import { createAuthModule } from './auth/routes.js';
 import { JobRunner } from './jobs/runner.js';
 import { registerRealtimeJobs } from './realtime/jobs.js';
@@ -30,7 +30,8 @@ async function connect(): Promise<Db> {
 
 const db = await connect();
 const social = socialFromEnv(env);
-const email = new ConsoleEmailTransport();
+// fails startup in production unless ACS is configured (console transport prints magic links)
+const email = createEmailTransport(env);
 const auth = createAuth({
   db,
   baseURL: env.BETTER_AUTH_URL,
@@ -41,6 +42,15 @@ const auth = createAuth({
 const app = buildApp({
   db,
   baseUrl: env.BETTER_AUTH_URL,
+  trustProxyHops: env.TRUST_PROXY_HOPS,
+  platformAdminEmails: (env.PLATFORM_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean),
+  ...(env.WEB_DIST ? { webDist: env.WEB_DIST } : {}),
+  ...(env.STORAGE_ACCOUNT_NAME
+    ? { cspImgSources: [`https://${env.STORAGE_ACCOUNT_NAME}.blob.core.windows.net`] }
+    : {}),
   logging: true,
   email,
   ...(env.STORAGE_ACCOUNT_NAME

@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import readXlsxFile from 'read-excel-file/node';
+import { isSafeZip } from './zip.js';
 
 export class ParseError extends Error {
   constructor(readonly code: 'unsupported_file' | 'empty_file' | 'invalid_file' | 'too_many_rows') {
@@ -114,6 +115,7 @@ export async function parseUpload(
   const xlsx = /\.(xlsx|xlsm)$/.test(lower) || (!/\.(csv|txt|tsv)$/.test(lower) && isZip(buf));
 
   if (xlsx) {
+    if (!isSafeZip(buf)) throw new ParseError('invalid_file'); // zip bomb / malformed archive
     let sheets: Array<{ sheet: string; data: unknown[][] }>;
     try {
       sheets = (await readXlsxFile(buf)) as Array<{ sheet: string; data: unknown[][] }>;

@@ -56,6 +56,8 @@ export interface GiftSource {
 
 export interface BoardSource {
   boardKey: string;
+  /** Localized title (defaults to the key). */
+  name?: Record<string, string>;
   state: 'hidden' | 'live' | 'paused';
   /** Only the last published result is ever projected (reconnect cannot bypass cadence). */
   lastPublished: PublishResult | null;
