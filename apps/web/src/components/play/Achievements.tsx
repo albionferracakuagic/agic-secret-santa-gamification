@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ACHIEVEMENT_CATALOG, type AnnouncementOutput } from '@santa/contracts';
+import { ACHIEVEMENT_CATALOG, type AnyAnnouncementOutput } from '@santa/contracts';
 import { usePlayApi } from '../../api/play';
 import { emitFx } from '../../fx/bus';
 
@@ -46,18 +47,32 @@ export function MyAchievements() {
   );
 }
 
-/** Unlock moment: a new announcement on the caller's stream -> FX cue, visible/ARIA text, and a list refresh. */
+/** FX cue per announcement type. Positive only: an incorrect guess gets a friendly wink. */
+export function announcementFx(a: AnyAnnouncementOutput) {
+  switch (a.type) {
+    case 'achievement':
+      return 'achievement_earned' as const;
+    case 'clue':
+      return 'achievement_earned' as const;
+    case 'mission_completed':
+      return 'mission_completed' as const;
+    case 'guess_result':
+      return a.outcome === 'correct' ? ('correct_guess' as const) : ('guess_wink' as const);
+  }
+}
+
+/** One announcement on the caller's stream -> FX cue, visible/ARIA text, and refresh of the lists it affects. */
 export function AchievementUnlock({
   announcement,
   ready,
 }: {
-  announcement: AnnouncementOutput | undefined;
+  announcement: AnyAnnouncementOutput | undefined;
   ready: boolean;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const name = useAchievementName();
-  const [shown, setShown] = useState<AnnouncementOutput>();
+  const [shown, setShown] = useState<AnyAnnouncementOutput>();
   const baseline = useRef<{ set: boolean; at?: string | undefined }>({ set: false });
   useEffect(() => {
     if (!ready) return;
@@ -68,18 +83,44 @@ export function AchievementUnlock({
     if (!announcement || announcement.at === baseline.current.at) return;
     baseline.current.at = announcement.at;
     setShown(announcement);
-    emitFx('achievement_earned');
-    void qc.invalidateQueries({ queryKey: ['my-achievements'] });
+    emitFx(announcementFx(announcement));
+    if (announcement.type === 'achievement') {
+      void qc.invalidateQueries({ queryKey: ['my-achievements'] });
+      void qc.invalidateQueries({ queryKey: ['my-certificates'] });
+    }
+    if (announcement.type === 'clue' || announcement.type === 'guess_result')
+      void qc.invalidateQueries({ queryKey: ['guess'] });
     const id = setTimeout(() => setShown(undefined), ANNOUNCE_MS);
     return () => clearTimeout(id);
   }, [announcement, ready, qc]);
+  const line = shown && announcementLine(shown, t, name);
   return (
     <div role="status" data-testid="achievement-unlock">
-      {shown && (
+      {line && (
         <p className="rounded bg-gold-400 p-3 font-semibold text-ink-900">
-          🏅 {t('achievements.unlocked', { name: name(shown.key) })}
+          {line.icon} {line.text}
         </p>
       )}
     </div>
   );
+}
+
+/** Visible/ARIA text of one announcement (the display passes its own person-aware wording for achievements). */
+export function announcementLine(
+  a: AnyAnnouncementOutput,
+  t: TFunction,
+  achievementName: (key: string) => string,
+): { icon: string; text: string } {
+  switch (a.type) {
+    case 'achievement':
+      return { icon: '🏅', text: t('achievements.unlocked', { name: achievementName(a.key) }) };
+    case 'clue':
+      return { icon: '💡', text: t('guess.newClue', { alias: a.alias, text: a.text }) };
+    case 'mission_completed':
+      return { icon: '🧝', text: t('display.missionLine') };
+    case 'guess_result':
+      return a.outcome === 'correct'
+        ? { icon: '🎉', text: t('guess.correct', { xp: a.xp }) }
+        : { icon: '😉', text: t('guess.incorrect') };
+  }
 }

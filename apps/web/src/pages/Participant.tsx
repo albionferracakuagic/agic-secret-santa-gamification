@@ -4,8 +4,9 @@ import type {
   EventStateOutput,
   PublicGiftListOutput,
   SceneOutput,
-  AnnouncementOutput,
+  AnyAnnouncementOutput,
 } from '@santa/contracts';
+import { PHASES } from '@santa/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useParticipantApi } from '../api/participant';
 import { usePlayApi } from '../api/play';
@@ -15,6 +16,10 @@ import { OpeningStage } from '../components/OpeningStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
 import { AchievementUnlock, MyAchievements } from '../components/play/Achievements';
+import { GuessPanel } from '../components/play/GuessPanel';
+import { MissionsPanel } from '../components/play/MissionsPanel';
+import { GamePanel } from '../components/play/GamePanel';
+import { Certificates } from '../components/play/Certificates';
 import { DeleteMyData } from '../components/play/DeleteMyData';
 import { Link } from 'react-router-dom';
 import { AVATAR_GLYPH, avatarGlyph } from '../fx/avatars';
@@ -32,7 +37,7 @@ export default function Participant() {
   const es = surfaceOf<PState>(state, 'participant', 'eventState');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
-  const announcement = surfaceOf<AnnouncementOutput>(state, 'participant', 'announcement');
+  const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'participant', 'announcement');
   const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const [saved, setSaved] = useState<Saved>();
   const shown = es?.me && { ...es.me, ...saved };
@@ -47,6 +52,8 @@ export default function Participant() {
 
   const phase = es?.phase;
   const active = shown?.status === 'active';
+  const reached = (p: (typeof PHASES)[number]) =>
+    !!phase && PHASES.indexOf(phase) >= PHASES.indexOf(p);
   return (
     <section aria-labelledby="part-title" className="space-y-6">
       <h1 id="part-title" className="text-2xl font-bold">
@@ -98,6 +105,9 @@ export default function Participant() {
               now={now}
             />
           )}
+          {active && <GamePanel scene={scene} now={now} />}
+          {active && reached('gift_opening') && <GuessPanel selfId={shown.participantId} />}
+          {active && reached('gift_registration') && <MissionsPanel />}
           {phase !== 'voting' && <OwnSelections me={shown} gifts={gifts} />}
           {(phase === 'reveal' || phase === 'awards' || phase === 'completed') && (
             <RevealList gifts={gifts} />
@@ -106,6 +116,7 @@ export default function Participant() {
           <AchievementUnlock announcement={announcement} ready={!!es} />
           <Standing boards={boards} />
           {active && <MyAchievements />}
+          {active && <Certificates />}
           {active && <ReactionBar send={(k) => rt?.sendReaction(k)} />}
           <Profile me={shown} onSaved={setSaved} />
           <DeleteMyData />

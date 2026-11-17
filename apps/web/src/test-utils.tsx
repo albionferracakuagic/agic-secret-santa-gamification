@@ -8,6 +8,7 @@ import { ParticipantApiProvider, type MeResponse, type ParticipantApi } from './
 import { PlayApiProvider, type PlayApi } from './api/play';
 import { OrganizerApiProvider, type OrganizerApi } from './api/organizer';
 import { AdminApiProvider, type AdminApi } from './api/admin';
+import { Phase2ApiProvider, type Phase2Api } from './api/phase2';
 import { RealtimeProvider } from './realtime/react';
 import { createRealtimeStore, type SocketLike } from './realtime/store';
 
@@ -66,6 +67,7 @@ export function setup(
   path: string,
   api: Partial<ParticipantApi> = {},
   play: Partial<PlayApi> = {},
+  p2: Partial<Phase2Api> = {},
 ) {
   const sock = fakeSocket();
   const rt = createRealtimeStore();
@@ -103,16 +105,18 @@ export function setup(
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <PlayApiProvider value={{ ...unimplementedPlay, ...play }}>
-        <ParticipantApiProvider value={fullApi}>
-          <RealtimeProvider factory={() => rt}>
-            <MemoryRouter initialEntries={[path]}>
-              <App />
-              <Routes>
-                <Route path="*" element={<Where />} />
-              </Routes>
-            </MemoryRouter>
-          </RealtimeProvider>
-        </ParticipantApiProvider>
+        <Phase2ApiProvider value={fakePhase2Api(p2)}>
+          <ParticipantApiProvider value={fullApi}>
+            <RealtimeProvider factory={() => rt}>
+              <MemoryRouter initialEntries={[path]}>
+                <App />
+                <Routes>
+                  <Route path="*" element={<Where />} />
+                </Routes>
+              </MemoryRouter>
+            </RealtimeProvider>
+          </ParticipantApiProvider>
+        </Phase2ApiProvider>
       </PlayApiProvider>
     </QueryClientProvider>,
   );
@@ -154,6 +158,48 @@ export function fakeOrganizerApi(over: Partial<OrganizerApi> = {}): OrganizerApi
   };
 }
 
+/** Phase 2 double: reads return "feature off / nothing yet"; writes must be provided by the test. */
+export function fakePhase2Api(over: Partial<Phase2Api> = {}): Phase2Api {
+  return {
+    guessState: async () => ({ enabled: false, suspects: [], gifts: [] }),
+    setGuess: reject('setGuess'),
+    myClues: async () => ({ clues: [] }),
+    submitClue: reject('submitClue'),
+    myMissions: async () => ({
+      enabled: false,
+      optedOut: false,
+      verification: 'none',
+      missions: [],
+    }),
+    setMissionOptOut: reject('setMissionOptOut'),
+    submitMission: reject('submitMission'),
+    reassignMission: reject('reassignMission'),
+    myGame: async () => ({ game: null, me: null }),
+    submitAnswer: reject('submitAnswer'),
+    markBingo: reject('markBingo'),
+    myCertificates: async () => ({ certificates: [] }),
+    fetchCertificate: reject('fetchCertificate'),
+    clueQueue: async () => ({ clues: [] }),
+    decideClue: reject('decideClue'),
+    present: reject('present'),
+    hideSpotlight: reject('hideSpotlight'),
+    organizerMissions: async () => ({
+      enabled: false,
+      verification: 'none',
+      counts: { assigned: 0, submitted: 0, verified: 0 },
+      pending: [],
+    }),
+    assignMissions: reject('assignMissions'),
+    verifyMission: reject('verifyMission'),
+    organizerGames: async () => ({ games: [], catalog: { triviaQuestions: 0, bingoSquares: 0 } }),
+    createGame: reject('createGame'),
+    gameAction: reject('gameAction'),
+    bingoPending: async () => ({ marks: [] }),
+    decideBingo: reject('decideBingo'),
+    ...over,
+  };
+}
+
 export function fakeAdminApi(over: Partial<AdminApi> = {}): AdminApi {
   return {
     ceremony: async () => ({
@@ -187,6 +233,7 @@ export function mountConsole(opts: {
   phase?: string;
   org?: Partial<OrganizerApi>;
   admin?: Partial<AdminApi>;
+  p2?: Partial<Phase2Api>;
 }) {
   vi.stubGlobal(
     'fetch',
@@ -219,9 +266,11 @@ export function mountConsole(opts: {
       <RealtimeProvider factory={() => rt}>
         <OrganizerApiProvider value={fakeOrganizerApi(opts.org)}>
           <AdminApiProvider value={fakeAdminApi(opts.admin)}>
-            <MemoryRouter initialEntries={['/o/events/e1']}>
-              <App />
-            </MemoryRouter>
+            <Phase2ApiProvider value={fakePhase2Api(opts.p2)}>
+              <MemoryRouter initialEntries={['/o/events/e1']}>
+                <App />
+              </MemoryRouter>
+            </Phase2ApiProvider>
           </AdminApiProvider>
         </OrganizerApiProvider>
       </RealtimeProvider>
