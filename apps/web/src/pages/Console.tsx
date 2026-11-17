@@ -18,6 +18,12 @@ import {
   StatsCard,
 } from '../components/organizer/AdminPanels';
 import {
+  ClueQueue,
+  GamesConsole,
+  MissionsConsole,
+  PresentationControls,
+} from '../components/organizer/Phase2Controls';
+import {
   OpeningControls,
   RevealControls,
   VotingControls,
@@ -163,6 +169,16 @@ function ConsoleInner() {
       )}
       {s.phase === 'reveal' && <RevealControls eventId={eventId} />}
       <ReactionSettings eventId={eventId} initial={s.organizer.reactionsEnabled} />
+      {PHASES.indexOf(s.phase) >= PHASES.indexOf('gift_registration') && (
+        <MissionsConsole eventId={eventId} />
+      )}
+      {PHASES.indexOf(s.phase) >= PHASES.indexOf('gift_opening') && (
+        <>
+          <ClueQueue eventId={eventId} />
+          <GamesConsole eventId={eventId} />
+          <PresentationControls eventId={eventId} />
+        </>
+      )}
       {PHASES.indexOf(s.phase) >= PHASES.indexOf('voting') && <BoardsConsole eventId={eventId} />}
       {(s.phase === 'awards' || s.phase === 'completed') && <CeremonyControls eventId={eventId} />}
       <StatsCard eventId={eventId} />

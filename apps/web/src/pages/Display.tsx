@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
-  AnnouncementOutput,
+  AnyAnnouncementOutput,
   EventStateOutput,
   PublicGiftListOutput,
   SceneOutput,
@@ -14,10 +14,11 @@ import { surfaceOf, useRealtime } from '../realtime/react';
 import { formatShortCode } from '../lib/shortCode';
 import { Qr } from '../components/Qr';
 import { Countdown } from '../components/Countdown';
-import { useAchievementName } from '../components/play/Achievements';
+import { announcementFx, useAchievementName } from '../components/play/Achievements';
 import { OpeningStage } from '../components/OpeningStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
+import { GameScene, SpotlightScene } from '../components/GameScenes';
 import { emitFx } from '../fx/bus';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
@@ -72,7 +73,7 @@ function DisplayStage() {
   const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
-  const announcement = surfaceOf<AnnouncementOutput>(state, 'pub', 'announcement');
+  const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'pub', 'announcement');
   const scale = useStageScale();
   const now = () => rt?.serverNow() ?? Date.now();
 
@@ -137,6 +138,8 @@ function DisplayStage() {
       </Scene>
     );
   else if (scene.scene === 'ceremony') body = <CeremonyScene big view={scene.ceremony} now={now} />;
+  else if (scene.scene === 'game') body = <GameScene game={scene.game} now={now} />;
+  else if (scene.scene === 'spotlight') body = <SpotlightScene spotlight={scene.spotlight} />;
   else if (scene.phase === 'gift_registration')
     body = (
       <Scene title={t('display.registrationTitle')}>
@@ -267,12 +270,12 @@ function AnnouncementOverlay({
   announcement,
   ready,
 }: {
-  announcement: AnnouncementOutput | undefined;
+  announcement: AnyAnnouncementOutput | undefined;
   ready: boolean;
 }) {
   const { t } = useTranslation();
   const achievementName = useAchievementName();
-  const [shown, setShown] = useState<AnnouncementOutput>();
+  const [shown, setShown] = useState<AnyAnnouncementOutput>();
   const baseline = useRef<{ set: boolean; at?: string | undefined }>({ set: false });
   useEffect(() => {
     if (!ready) return;
@@ -282,12 +285,28 @@ function AnnouncementOverlay({
     }
     if (!announcement || announcement.at === baseline.current.at) return;
     baseline.current.at = announcement.at;
+    if (announcement.type === 'guess_result') return; // personal: never rendered on the public display
     setShown(announcement);
-    emitFx('achievement_earned');
+    emitFx(announcementFx(announcement));
     const id = setTimeout(() => setShown(undefined), ANNOUNCE_MS);
     return () => clearTimeout(id);
   }, [announcement, ready]);
-  if (!shown) return null;
+  if (!shown || shown.type === 'guess_result') return null;
+  const line =
+    shown.type === 'achievement'
+      ? t('display.achievementLine', {
+          name: shown.person.displayName,
+          achievement: achievementName(shown.key),
+        })
+      : shown.type === 'clue'
+        ? t('display.clueLine', { alias: shown.alias, text: shown.text })
+        : t('display.missionLine');
+  const icon =
+    shown.type === 'achievement'
+      ? avatarGlyph(shown.person.avatar)
+      : shown.type === 'clue'
+        ? '💡'
+        : '🧝';
   return (
     <div
       role="status"
@@ -295,14 +314,9 @@ function AnnouncementOverlay({
       className="absolute inset-x-24 top-16 z-10 flex items-center justify-center gap-8 rounded-3xl bg-gold-400 px-12 py-8 text-ink-900 shadow-2xl"
     >
       <span aria-hidden="true" className="text-8xl">
-        {avatarGlyph(shown.person.avatar)}
+        {icon}
       </span>
-      <p className="text-5xl font-bold">
-        {t('display.achievementLine', {
-          name: shown.person.displayName,
-          achievement: achievementName(shown.key),
-        })}
-      </p>
+      <p className="text-5xl font-bold">{line}</p>
     </div>
   );
 }
