@@ -8,6 +8,17 @@ import { avatarGlyph } from '../../fx/avatars';
 import { emitFx } from '../../fx/bus';
 
 const field = 'mt-1 block min-h-12 w-full rounded border border-ink-900/40 bg-white px-3';
+const sanitizeImageSrc = (src: string | undefined) => {
+  if (!src) return undefined;
+  if (src.startsWith('/')) return src;
+  try {
+    const u = new URL(src, window.location.origin);
+    if (u.protocol === 'blob:' || u.protocol === 'https:' || u.protocol === 'http:') return src;
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
 const errKey = (e: unknown) => {
   for (const code of ['gift_locked', 'invalid_image', 'file_too_large'] as const)
     if (hasApiCode(e, code)) return `gift.error.${code}`;
@@ -71,6 +82,7 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
   };
 
   const shownPhoto = preview ?? gift?.photoUrl ?? undefined;
+  const safeShownPhoto = sanitizeImageSrc(shownPhoto);
   return (
     <section aria-labelledby="gift-title" className="space-y-3">
       <h2 id="gift-title" className="font-semibold">
@@ -113,10 +125,10 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
             </label>
           )}
           {fileErr && <p role="alert">{t(fileErr)}</p>}
-          {shownPhoto && (
+          {safeShownPhoto && (
             <div className="space-y-2">
               <img
-                src={shownPhoto}
+                src={safeShownPhoto}
                 alt={t('gift.photoAlt')}
                 className="h-40 rounded-xl object-cover"
                 data-testid="gift-photo"
