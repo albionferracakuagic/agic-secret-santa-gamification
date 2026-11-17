@@ -1,10 +1,10 @@
 # Guida per l'organizzatore
 
-> Aggiornata al: 17/11/2026 — **MVP**
+> Aggiornata al: 17/11/2026 — **Phase 1–3**
 
 ## 1. Ciclo di vita dell'evento
 
-Fasi (guidate dall'organizzatore): preparazione → registrazione → registrazione regali → apertura regali → votazione → giochi (saltata nell'MVP) → rivelazione → premi → completato.
+Fasi (guidate dall'organizzatore): preparazione → registrazione → registrazione regali → apertura regali → votazione → giochi → rivelazione → premi → completato.
 
 - Pausa/ripresa disponibile in ogni fase.
 - Passi indietro consentiti (con audit) fino all'inizio della rivelazione.
@@ -59,3 +59,13 @@ Giochi in modalità mascherata: abbinamenti, donatori, classifiche complete, det
 5. Se un dispositivo cade, la riconnessione ripristina lo stato in automatico.
 6. **Nessun deploy o riavvio durante gli eventi.** Blocca i rilasci dal giorno prima.
 7. Dopo: fase → completato; le foto seguono la policy di retention.
+
+## 8. Funzioni Phase 2–3
+
+- **Pannello feature flag**: attiva/disattiva funzioni per evento (es. guessSanta, missions; entrambe spente di default).
+- **Indovina Babbo Natale**: i partecipanti indovinano il proprio donatore; risultati pubblicati solo tramite il filtro privacy.
+- **Missioni**: sfide opzionali; il loro XP non è qualificante (non incide sui premi).
+- **Giochi**: mini-giochi nella fase giochi.
+- **Monete e asta**: le Santa Coins si guadagnano nell'evento e si spendono all'asta; il conto alla rovescia dipende dall'offset dell'orologio realtime.
+- **Storico / Hall of Fame**: eventi e vincitori passati; i partecipanti possono collegare l'account.
+- **Certificati**: PDF per partecipanti/vincitori. Achievement custom: assegnati per regola; form di assegnazione manuale non ancora disponibile.

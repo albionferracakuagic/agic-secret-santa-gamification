@@ -1,10 +1,10 @@
 # Organizer guide
 
-> Updated: 17/11/2026 — **MVP**
+> Updated: 17/11/2026 — **Phase 1–3**
 
 ## 1. Event lifecycle
 
-Phases (organizer-driven): preparation → registration → gift registration → gift opening → voting → games (skipped in MVP) → reveal → awards → completed.
+Phases (organizer-driven): preparation → registration → gift registration → gift opening → voting → games → reveal → awards → completed.
 
 - Pause/resume is available in any phase.
 - Back-steps are allowed (audited) until the reveal starts.
@@ -59,3 +59,13 @@ You play masked: pairings, givers, full rankings, vote details and others' XP ar
 5. If a device drops, reconnect restores state automatically.
 6. **No deploys or restarts during events.** Freeze releases from the day before.
 7. After: phase → completed; photos follow the retention policy.
+
+## 8. Phase 2–3 features
+
+- **Feature flags panel**: turn features on/off per event (e.g. guessSanta, missions; both off by default).
+- **Guess Santa**: participants guess their giver; results are published only through the privacy gate.
+- **Missions**: optional challenges; their XP is non-qualifying (does not affect awards).
+- **Games**: mini-games run in the games phase.
+- **Coins and auction**: Santa Coins are earned in the event and spent in the auction; auction countdown depends on the realtime clock offset.
+- **History / Hall of Fame**: past events and winners; participants can link their account.
+- **Certificates**: PDFs for participants/winners. Custom achievements: awarded by rule; manual award form not available yet.
