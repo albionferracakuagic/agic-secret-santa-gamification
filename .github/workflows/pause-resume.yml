@@ -1,0 +1,95 @@
+name: Pause / Resume
+
+# Cost guard. Manual (workflow_dispatch) plus an optional nightly auto-pause of DEV only.
+# The `pause` job targets a GitHub Environment (dev/prod): configure required reviewers on it, same as deploy.yml,
+# so every manual run needs approval before any Azure write. Auth is OIDC (no stored Azure secrets).
+# Scheduled runs cannot target a dynamic environment input; they use the `dev` environment (add reviewers there
+# only if you accept that the nightly job then waits for approval).
+# The app keeps in-memory realtime state and is designed for exactly 1 replica: pause = 0/0, resume restores 1/1.
+# Azure restarts a stopped PostgreSQL Flexible Server automatically after 7 days; the nightly job re-stops it.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, prod]
+        default: dev
+      action:
+        description: pause (stop DB, scale app to 0) or resume
+        type: choice
+        options: [pause, resume]
+        default: pause
+      confirmProd:
+        description: Required (true) to pause prod
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 23 * * *' # 23:00 UTC daily, DEV only, only if repo variable AUTO_PAUSE_DEV == 'true'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: pause-resume-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  TARGET_ENV: ${{ inputs.environment || 'dev' }}
+  TARGET_ACTION: ${{ inputs.action || 'pause' }}
+
+jobs:
+  run:
+    # Scheduled runs are skipped unless AUTO_PAUSE_DEV is explicitly 'true' (default off).
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.AUTO_PAUSE_DEV == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Guard prod pause
+        if: ${{ env.TARGET_ENV == 'prod' && env.TARGET_ACTION == 'pause' && inputs.confirmProd != true }}
+        run: |
+          echo "::error::Refusing to pause prod: set confirmProd=true (pausing takes the live app and database offline)."
+          exit 1
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve resources (by tag environment in the resource group)
+        id: res
+        run: |
+          app=$(az containerapp list -g "$RESOURCE_GROUP" --query "[?tags.environment=='$TARGET_ENV'].name | [0]" -o tsv)
+          pg=$(az postgres flexible-server list -g "$RESOURCE_GROUP" --query "[?tags.environment=='$TARGET_ENV'].name | [0]" -o tsv)
+          if [ -z "$app" ] || [ -z "$pg" ]; then echo "::error::could not resolve app/postgres for $TARGET_ENV in $RESOURCE_GROUP"; exit 1; fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "pg=$pg" >> "$GITHUB_OUTPUT"
+      - name: Pause
+        if: ${{ env.TARGET_ACTION == 'pause' }}
+        run: |
+          az containerapp update -n "${{ steps.res.outputs.app }}" -g "$RESOURCE_GROUP" --min-replicas 0 --max-replicas 0 -o none
+          state=$(az postgres flexible-server show -n "${{ steps.res.outputs.pg }}" -g "$RESOURCE_GROUP" --query state -o tsv)
+          if [ "$state" = "Ready" ]; then
+            az postgres flexible-server stop -n "${{ steps.res.outputs.pg }}" -g "$RESOURCE_GROUP" -o none
+          fi
+          echo "Paused $TARGET_ENV. Storage, ACR, Key Vault and the stopped DB's storage/backups still bill."
+      - name: Resume
+        if: ${{ env.TARGET_ACTION == 'resume' }}
+        run: |
+          pg="${{ steps.res.outputs.pg }}"; app="${{ steps.res.outputs.app }}"
+          state=$(az postgres flexible-server show -n "$pg" -g "$RESOURCE_GROUP" --query state -o tsv)
+          if [ "$state" != "Ready" ]; then
+            az postgres flexible-server start -n "$pg" -g "$RESOURCE_GROUP" -o none
+          fi
+          for i in $(seq 1 60); do
+            state=$(az postgres flexible-server show -n "$pg" -g "$RESOURCE_GROUP" --query state -o tsv)
+            echo "postgres state: $state"
+            [ "$state" = "Ready" ] && break
+            sleep 10
+          done
+          [ "$state" = "Ready" ] || { echo "::error::postgres not Ready in time"; exit 1; }
+          # Exactly 1 replica: in-memory realtime state (ADR-0005).
+          az containerapp update -n "$app" -g "$RESOURCE_GROUP" --min-replicas 1 --max-replicas 1 -o none
+          fqdn=$(az containerapp show -n "$app" -g "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          curl --fail --retry 15 --retry-delay 10 --retry-all-errors "https://$fqdn/health"

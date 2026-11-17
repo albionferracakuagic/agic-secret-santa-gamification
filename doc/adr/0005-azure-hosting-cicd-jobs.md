@@ -52,3 +52,7 @@ Status: Accepted (MVP single replica); scale-out path defined
 - Concurrency-safe: a session-level Postgres advisory lock (`MIGRATE_LOCK_KEY`) on a dedicated connection; re-runs are idempotent (drizzle journal). Logs never print the connection string.
 - Rejected: running from a GitHub runner (Postgres firewall = Azure services only) and `az containerapp exec`.
 - Bootstrap: the job exists only when `useKeyVaultSecrets=true`; the first (quickstart-image) deploy skips migration.
+
+## Addendum: cost guards
+- Owner is on pay-as-you-go with no hard cap. Added monthly Cost Management budgets (alerts only, hours of lag) per environment and a manual `pause-resume.yml` (app 0/0 + PG stop; resume restores 1/1). Optional nightly dev auto-pause via `AUTO_PAUSE_DEV`.
+- Limits: budgets never stop spending; paused environments still incur storage/ACR/Key Vault/log costs; prod pause needs explicit confirmation. Details: `infra/README.md`.
