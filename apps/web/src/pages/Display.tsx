@@ -11,6 +11,7 @@ import { useParticipantApi } from '../api/participant';
 import { avatarGlyph } from '../fx/avatars';
 import { floatReaction } from '../fx/reactions';
 import { surfaceOf, useRealtime } from '../realtime/react';
+import { formatShortCode } from '../lib/shortCode';
 import { Qr } from '../components/Qr';
 import { Countdown } from '../components/Countdown';
 import { useAchievementName } from '../components/play/Achievements';
@@ -216,7 +217,7 @@ function LobbyScene({
         </div>
         <div className="space-y-6 text-left">
           <p className="text-4xl">{t('display.scanToJoin')}</p>
-          {code && <p className="text-7xl font-bold tracking-widest">{code}</p>}
+          {code && <p className="text-7xl font-bold tracking-widest">{formatShortCode(code)}</p>}
           <Big n={participants} label={t('display.joined')} />
         </div>
       </div>

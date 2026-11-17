@@ -47,13 +47,13 @@ describe('display scenes (SceneSchema)', () => {
       scene: scene({
         scene: 'lobby',
         participants: 12,
-        joinUrl: 'https://x.test/j?code=ABC234',
-        shortCode: 'ABC234',
+        joinUrl: 'https://x.test/j?code=ABCDEFGHJK',
+        shortCode: 'ABCDEFGHJK',
       }),
     });
     expect(await screen.findByRole('img', { name: 'QR code to join the event' })).toBeTruthy();
     expect(screen.getByTestId('big-count').textContent).toBe('12');
-    expect(screen.getByText('ABC234')).toBeTruthy();
+    expect(screen.getByText('ABCDE-FGHJK')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep silent' }));
     expect(screen.queryByRole('region', { name: 'Sound' })).toBeNull();
     expect(usePrefs.getState().sound).toBe(false);

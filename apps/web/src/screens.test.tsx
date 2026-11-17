@@ -33,15 +33,17 @@ describe('join flow /j', () => {
       unclaimed: [{ participantId: 'p1', displayName: 'Anna' }],
     }));
     setup('/j', { claim, resolve, me: async () => ({ ...MY, status }) });
-    fireEvent.change(await screen.findByLabelText('Event code'), { target: { value: 'abc234' } });
+    fireEvent.change(await screen.findByLabelText('Event code'), {
+      target: { value: 'abcde-fghjk' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Welcome to Office Party!')).toBeTruthy();
-    expect(resolve).toHaveBeenCalledWith({ shortCode: 'ABC234' });
+    expect(resolve).toHaveBeenCalledWith({ shortCode: 'ABCDEFGHJK' });
     fireEvent.click(screen.getByRole('button', { name: /Anna/ }));
     expect(await screen.findByText(/organizer will confirm/)).toBeTruthy();
     expect(claim).toHaveBeenCalledWith({
       method: 'pick_name',
-      target: { shortCode: 'ABC234' },
+      target: { shortCode: 'ABCDEFGHJK' },
       participantId: 'p1',
     });
     status = 'active';
@@ -49,6 +51,16 @@ describe('join flow /j', () => {
       timeout: 5000,
     });
   }, 10_000);
+
+  it('10-character short codes: Continue stays disabled until the code is valid (case, spaces and hyphens ignored)', async () => {
+    setup('/j');
+    const input = await screen.findByLabelText('Event code');
+    const go = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
+    fireEvent.change(input, { target: { value: 'ABC234' } });
+    expect(go.disabled).toBe(true);
+    fireEvent.change(input, { target: { value: ' abcde fghjk ' } });
+    expect(go.disabled).toBe(false);
+  });
 
   it('QR landing token skips the code step; personal code claim uses the join target', async () => {
     const token = 'a'.repeat(22);
@@ -100,7 +112,9 @@ describe('join flow /j', () => {
         throw new ApiError(404, 'invalid_claim');
       },
     });
-    fireEvent.change(await screen.findByLabelText('Event code'), { target: { value: 'ZZZZZZ' } });
+    fireEvent.change(await screen.findByLabelText('Event code'), {
+      target: { value: 'ZZZZZZZZZZ' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/could not verify that code/);
   });

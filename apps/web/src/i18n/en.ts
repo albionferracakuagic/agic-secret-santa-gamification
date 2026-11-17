@@ -83,7 +83,8 @@ export const en = {
   },
   join: {
     codeLabel: 'Event code',
-    codeHint: 'Scan the QR code on the big screen, or type the 6–8 character code shown there.',
+    codeHint:
+      'Scan the QR code on the big screen, or type the 10-character code shown there (like ABCDE-FGHJK).',
     continue: 'Continue',
     welcome: 'Welcome to {{event}}!',
     search: 'Search your name',
@@ -286,6 +287,17 @@ export const en = {
   achievement: {
     first_gift: 'the first gift',
     first_vote: 'the first vote',
+  },
+  credits: {
+    link: 'Credits',
+    title: 'Credits and licenses',
+    intro:
+      'This app ships only original, public-domain or openly licensed material. Everything is stored in the app itself, so this page works offline.',
+    attribution: 'Credits',
+    notices: 'License notices',
+    noLottie: 'No Lottie animations are used: all effects are drawn in code.',
+    libraries: 'Open-source libraries',
+    own: 'Sounds, music and effects are generated in code by the project (CC0).',
   },
   access: {
     title: 'Invitations',

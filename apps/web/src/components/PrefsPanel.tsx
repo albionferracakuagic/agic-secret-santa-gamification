@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { setLocale, type AppLocale } from '../i18n';
 import { usePrefs, type Intensity, type ReducedMotionPref } from '../prefs/store';
 import { unlockAudio } from '../fx/audio';
@@ -94,6 +95,9 @@ export function PrefsPanel() {
               ))}
             </select>
           </label>
+          <Link to="/credits" className="block min-h-11 underline" onClick={() => setOpen(false)}>
+            {t('credits.link')}
+          </Link>
         </div>
       )}
     </div>

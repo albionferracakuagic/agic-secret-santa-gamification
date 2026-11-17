@@ -11,6 +11,7 @@ const Participant = lazy(() => import('./pages/Participant'));
 const Display = lazy(() => import('./pages/Display'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const Legal = lazy(() => import('./pages/Legal'));
+const Credits = lazy(() => import('./pages/Credits'));
 
 export function App() {
   const { t } = useTranslation();
@@ -23,6 +24,7 @@ export function App() {
           <Route path="/o/events/:eventId" element={<Console />} />
           <Route path="/e/profile/:id" element={<ProfilePage />} />
           <Route path="/legal/:doc" element={<Legal />} />
+          <Route path="/credits" element={<Credits />} />
           <Route path="/e/*" element={<Participant />} />
           <Route path="/d/*" element={<Display />} />
           <Route path="/j/*" element={<Join />} />

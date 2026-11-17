@@ -176,14 +176,14 @@ describe('invitations', () => {
       accessId: 'a1',
       kind,
       token: 't'.repeat(24),
-      shortCode: kind === 'join' ? 'ABC234' : null,
+      shortCode: kind === 'join' ? 'ABCDEFGHJK' : null,
       path: `/${kind === 'join' ? 'j' : 'd'}/${'t'.repeat(24)}`,
       expiresAt: '2026-12-23T18:00:00Z',
     }));
     mountConsole({ org: { createAccess } });
     fireEvent.click(await screen.findByRole('button', { name: 'Create join link and QR' }));
     const join = await screen.findByTestId('join-link');
-    expect(join.textContent).toContain('ABC234');
+    expect(join.textContent).toContain('ABCDE-FGHJK');
     expect(within(join).getByRole('img', { name: 'QR code to join the event' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Create display link' }));
     expect((await screen.findByTestId('display-link')).textContent).toContain('/d/');
@@ -219,6 +219,42 @@ describe('privacy', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my data' }));
     await waitFor(() => expect(deleteMe).toHaveBeenCalled());
     expect((await screen.findByTestId('erased')).textContent).toBe('NameGift photo');
+  });
+});
+
+describe('credits', () => {
+  it('lists attribution entries and the OFL/Apache notices, in EN and IT, from bundled text', async () => {
+    render(
+      <MemoryRouter initialEntries={['/credits']}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Credits and licenses', level: 1 }),
+    ).toBeTruthy();
+    const list = screen.getByTestId('credits-list');
+    expect(list.textContent).toContain('Nunito');
+    expect(list.textContent).toContain('Mountains of Christmas');
+    expect(screen.getByText(/SIL OPEN FONT LICENSE Version 1.1/i)).toBeTruthy();
+    expect(screen.getByTestId('lottie-notice').textContent).toMatch(/No Lottie/);
+    await i18n.changeLanguage('it');
+    expect(
+      await screen.findByRole('heading', { name: 'Crediti e licenze', level: 1 }),
+    ).toBeTruthy();
+  });
+
+  it('is linked from the footer and from the settings panel', async () => {
+    render(
+      <MemoryRouter initialEntries={['/j']}>
+        <App />
+      </MemoryRouter>,
+    );
+    const nav = await screen.findByRole('navigation', { name: 'Legal documents' });
+    expect(within(nav).getByRole('link', { name: 'Credits' }).getAttribute('href')).toBe(
+      '/credits',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Preferences' }));
+    expect(screen.getAllByRole('link', { name: 'Credits' })).toHaveLength(2);
   });
 });
 
@@ -271,14 +307,14 @@ describe('legal pages and cookie notice', () => {
     expect(localStorage.getItem('sg.cookieNotice')).toBe('ack');
   });
 
-  it('footer links to the three legal pages; the display has no chrome', async () => {
+  it('footer links to the legal pages and credits; the display has no chrome', async () => {
     const { unmount } = render(
       <MemoryRouter initialEntries={['/j']}>
         <App />
       </MemoryRouter>,
     );
     const nav = await screen.findByRole('navigation', { name: 'Legal documents' });
-    expect(within(nav).getAllByRole('link')).toHaveLength(3);
+    expect(within(nav).getAllByRole('link')).toHaveLength(4); // privacy, terms, cookies, credits
     unmount();
     setup('/d');
     expect(screen.queryByRole('navigation', { name: 'Legal documents' })).toBeNull();
