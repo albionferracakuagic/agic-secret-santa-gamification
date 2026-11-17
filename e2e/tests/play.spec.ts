@@ -198,10 +198,15 @@ test.describe('public display scenes (mocked realtime)', () => {
 
     rt.delta('pub', 'eventState', { ...base, role: 'display', phase: 'awards' });
     rt.delta('pub', 'scene', { scene: 'phase', phase: 'awards' });
-    rt.delta('pub', 'leaderboard', {
-      boardKey: 'b',
-      state: 'live',
-      entries: [{ entryId: 'g1', label: 'Gift 7', rank: 1, tied: false }],
+    rt.delta('pub', 'leaderboards', {
+      boards: [
+        {
+          boardKey: 'funniest',
+          state: 'live',
+          message: null,
+          entries: [{ entryId: 'g1', label: 'Gift 7', rank: 1, tied: false }],
+        },
+      ],
     });
     await expect(page.getByTestId('podium')).toContainText('Gift 7');
   });

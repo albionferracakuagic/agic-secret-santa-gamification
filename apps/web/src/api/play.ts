@@ -1,6 +1,9 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react';
 import {
   CastVoteResponseSchema,
+  DeleteMeResponseSchema,
+  MyAchievementsResponseSchema,
+  ProfileSchema,
   MyAssignmentResponseSchema,
   OwnGiftResponseSchema,
   OwnVotesResponseSchema,
@@ -14,6 +17,9 @@ export type MyAssignment = z.infer<typeof MyAssignmentResponseSchema>;
 export type VotingState = z.infer<typeof VotingStateSchema>;
 export type OwnVotes = z.infer<typeof OwnVotesResponseSchema>;
 export type CastVoteResponse = z.infer<typeof CastVoteResponseSchema>;
+export type MyAchievements = z.infer<typeof MyAchievementsResponseSchema>;
+export type Profile = z.infer<typeof ProfileSchema>;
+export type DeleteMeResponse = z.infer<typeof DeleteMeResponseSchema>;
 
 /** Participant gameplay endpoints (gift, assignment, voting). Responses are schema-validated by the HTTP adapter. */
 export interface PlayApi {
@@ -25,6 +31,9 @@ export interface PlayApi {
   voting(): Promise<VotingState>;
   ownVotes(): Promise<OwnVotes>;
   castVote(v: { categoryId: string; giftId: string }): Promise<CastVoteResponse>;
+  myAchievements(): Promise<MyAchievements>;
+  profile(participantId: string): Promise<Profile>;
+  deleteMe(): Promise<DeleteMeResponse>;
 }
 
 export const httpPlayApi: PlayApi = {
@@ -56,6 +65,9 @@ export const httpPlayApi: PlayApi = {
   ownVotes: async () => OwnVotesResponseSchema.parse(await api('/api/me/votes')),
   castVote: async (body) =>
     CastVoteResponseSchema.parse(await api('/api/me/votes', { method: 'POST', body })),
+  myAchievements: async () => MyAchievementsResponseSchema.parse(await api('/api/me/achievements')),
+  profile: async (id) => ProfileSchema.parse(await api('/api/profiles/' + encodeURIComponent(id))),
+  deleteMe: async () => DeleteMeResponseSchema.parse(await api('/api/me', { method: 'DELETE' })),
 };
 
 const Ctx = createContext<PlayApi>(httpPlayApi);

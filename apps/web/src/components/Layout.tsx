@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PrefsPanel } from './PrefsPanel';
 import { FxOverlay } from '../fx/Overlay';
+import { CookieNotice } from './CookieNotice';
 
 /** App chrome: skip link, language sync, focus moves to <main> on route change, FX overlay (non-blocking). */
 export function Layout() {
@@ -48,6 +49,22 @@ export function Layout() {
       >
         <Outlet />
       </main>
+      {!bare && (
+        <footer className="mx-auto max-w-3xl p-4 text-sm">
+          <nav aria-label={t('legal.nav')} className="flex flex-wrap gap-4">
+            <Link to="/legal/privacy" className="underline">
+              {t('legal.privacy')}
+            </Link>
+            <Link to="/legal/terms" className="underline">
+              {t('legal.terms')}
+            </Link>
+            <Link to="/legal/cookies" className="underline">
+              {t('legal.cookies')}
+            </Link>
+          </nav>
+        </footer>
+      )}
+      {!bare && <CookieNotice />}
       <FxOverlay />
     </>
   );

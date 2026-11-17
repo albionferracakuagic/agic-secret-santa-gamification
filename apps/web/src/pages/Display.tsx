@@ -5,7 +5,6 @@ import type {
   AnnouncementOutput,
   EventStateOutput,
   PublicGiftListOutput,
-  PublicLeaderboardOutput,
   SceneOutput,
 } from '@santa/contracts';
 import { useParticipantApi } from '../api/participant';
@@ -14,8 +13,10 @@ import { floatReaction } from '../fx/reactions';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { Qr } from '../components/Qr';
 import { Countdown } from '../components/Countdown';
+import { useAchievementName } from '../components/play/Achievements';
 import { OpeningStage } from '../components/OpeningStage';
-import { Podium } from '../components/Podium';
+import { BoardsView, type BoardsOutput } from '../components/Podium';
+import { CeremonyScene } from '../components/CeremonyScene';
 import { emitFx } from '../fx/bus';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
@@ -69,7 +70,7 @@ function DisplayStage() {
   const es = surfaceOf<DState>(state, 'pub', 'eventState');
   const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
-  const board = surfaceOf<PublicLeaderboardOutput>(state, 'pub', 'leaderboard');
+  const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
   const announcement = surfaceOf<AnnouncementOutput>(state, 'pub', 'announcement');
   const scale = useStageScale();
   const now = () => rt?.serverNow() ?? Date.now();
@@ -84,9 +85,8 @@ function DisplayStage() {
   );
   usePrevEffect(es?.votedCount, (p, n) => n !== undefined && p < n && emitFx('vote_submitted'));
   usePrevEffect(scene?.scene, (_p, n) => n === 'voting' && emitFx('voting_started'));
-  usePrevEffect(es?.phase, (_p, n) => n === 'awards' && emitFx('grand_winner'));
   usePrevEffect(
-    es && (board?.entries[0]?.entryId ?? ''),
+    es && (boards?.boards.map((b) => b.entries[0]?.entryId ?? '').join('|') ?? ''),
     (_p, n) => n && emitFx('leaderboard_entry'),
   );
   usePrevEffect(
@@ -133,6 +133,7 @@ function DisplayStage() {
         {scene.votedCount !== null && <Big n={scene.votedCount} label={t('display.voted')} />}
       </Scene>
     );
+  else if (scene.scene === 'ceremony') body = <CeremonyScene big view={scene.ceremony} now={now} />;
   else if (scene.phase === 'gift_registration')
     body = (
       <Scene title={t('display.registrationTitle')}>
@@ -140,11 +141,11 @@ function DisplayStage() {
         <p className="text-4xl">{t('display.outOf', { n: es.counts.participants })}</p>
       </Scene>
     );
-  else if (scene.phase === 'reveal') body = <RevealScene gifts={gifts} board={board} />;
+  else if (scene.phase === 'reveal') body = <RevealScene gifts={gifts} boards={boards} />;
   else if (['games', 'awards', 'completed'].includes(scene.phase))
     body = (
       <Scene title={t('display.boardTitle')}>
-        <Podium big board={board} />
+        <BoardsView big boards={boards} />
       </Scene>
     );
   else body = <Scene title={t(`phase.${scene.phase}`)} />;
@@ -223,10 +224,10 @@ function LobbyScene({
 
 function RevealScene({
   gifts,
-  board,
+  boards,
 }: {
   gifts: PublicGiftListOutput | undefined;
-  board: PublicLeaderboardOutput | undefined;
+  boards: BoardsOutput | undefined;
 }) {
   const { t } = useTranslation();
   const revealed =
@@ -252,7 +253,7 @@ function RevealScene({
           )}
         </ul>
       ) : (
-        <Podium big board={board} />
+        <BoardsView big boards={boards} />
       )}
     </Scene>
   );
@@ -267,6 +268,7 @@ function AnnouncementOverlay({
   ready: boolean;
 }) {
   const { t } = useTranslation();
+  const achievementName = useAchievementName();
   const [shown, setShown] = useState<AnnouncementOutput>();
   const baseline = useRef<{ set: boolean; at?: string | undefined }>({ set: false });
   useEffect(() => {
@@ -295,9 +297,7 @@ function AnnouncementOverlay({
       <p className="text-5xl font-bold">
         {t('display.achievementLine', {
           name: shown.person.displayName,
-          achievement: t(`achievement.${shown.key}`, {
-            defaultValue: shown.key.replace(/_/g, ' '),
-          }),
+          achievement: achievementName(shown.key),
         })}
       </p>
     </div>

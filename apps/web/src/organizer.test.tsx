@@ -221,7 +221,7 @@ describe('organizer console: approvals and reactions', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Turn reactions off' }));
     expect(await screen.findByText('Reactions are off.')).toBeTruthy();
     expect(org.setReactionsEnabled).toHaveBeenCalledWith('e1', false);
-    const row = (await screen.findByText('Carla', { selector: 'li > span' })).closest('li')!;
+    const row = (await screen.findAllByText('Carla', { selector: 'li > span' }))[0]!.closest('li')!;
     fireEvent.click(within(row).getByRole('button'));
     await waitFor(() => expect(org.muteParticipant).toHaveBeenCalledWith('e1', 'p3', true));
   });

@@ -62,7 +62,8 @@ describe('routes', () => {
   ])('renders %s', async (path, heading) => {
     mockApi(() => undefined);
     renderAt(path);
-    expect(await screen.findByRole('heading', { name: heading })).toBeTruthy();
+    // first render lazy-loads the page chunk (cold module transform in CI can exceed the 1s default)
+    expect(await screen.findByRole('heading', { name: heading }, { timeout: 5000 })).toBeTruthy();
   });
 
   it('shell: skip link first in tab order, single main landmark, lang follows locale', async () => {

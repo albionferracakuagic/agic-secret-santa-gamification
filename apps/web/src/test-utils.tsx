@@ -6,6 +6,8 @@ import type { EventStateOutput } from '@santa/contracts';
 import { App } from './App';
 import { ParticipantApiProvider, type MeResponse, type ParticipantApi } from './api/participant';
 import { PlayApiProvider, type PlayApi } from './api/play';
+import { OrganizerApiProvider, type OrganizerApi } from './api/organizer';
+import { AdminApiProvider, type AdminApi } from './api/admin';
 import { RealtimeProvider } from './realtime/react';
 import { createRealtimeStore, type SocketLike } from './realtime/store';
 
@@ -21,6 +23,9 @@ const unimplementedPlay: PlayApi = {
   voting: async () => ({ status: 'not_open', endsAt: null, votedCount: null, categories: [] }),
   ownVotes: async () => ({ votes: [] }),
   castVote: vi.fn(),
+  myAchievements: async () => ({ achievements: [] }),
+  profile: vi.fn(),
+  deleteMe: vi.fn(),
 };
 export type Handler = (...a: never[]) => void;
 export function fakeSocket() {
@@ -119,4 +124,107 @@ export function setup(
       sock.fire('snapshot', { stream, cursor: 1, data });
     });
   return { ...view, sock, rt, snapshot, fullApi };
+}
+
+const reject = (name: string) => async () => {
+  throw new Error(`unexpected call: ${name}`);
+};
+
+/** Organizer API double: read endpoints return empty data, everything else must be provided by the test. */
+export function fakeOrganizerApi(over: Partial<OrganizerApi> = {}): OrganizerApi {
+  return {
+    uploadPairing: reject('uploadPairing'),
+    latestPairing: async () => ({ import: null, reimportAllowed: false }),
+    createAccess: reject('createAccess'),
+    claimCodes: reject('claimCodes'),
+    sendEmailLinks: reject('sendEmailLinks'),
+    listRoster: async () => ({ participants: [] }),
+    approve: reject('approve'),
+    setReactionsEnabled: reject('setReactionsEnabled'),
+    muteParticipant: reject('muteParticipant'),
+    openingState: reject('openingState'),
+    openingNext: reject('openingNext'),
+    openingOrder: reject('openingOrder'),
+    listGifts: async () => [],
+    openVoting: reject('openVoting'),
+    closeVoting: reject('closeVoting'),
+    revealGift: reject('revealGift'),
+    revealAll: reject('revealAll'),
+    ...over,
+  };
+}
+
+export function fakeAdminApi(over: Partial<AdminApi> = {}): AdminApi {
+  return {
+    ceremony: async () => ({
+      status: 'idle',
+      index: 0,
+      total: 0,
+      canStart: false,
+      blockers: [],
+      outline: [],
+      pendingDecisions: [],
+    }),
+    ceremonyAct: reject('ceremonyAct'),
+    ceremonyNext: reject('ceremonyNext'),
+    decideAward: reject('decideAward'),
+    boards: async () => ({ boards: [], cadenceSeconds: 10 }),
+    boardAction: reject('boardAction'),
+    stats: reject('stats'),
+    integrity: reject('integrity'),
+    integrityDetails: reject('integrityDetails'),
+    unmask: reject('unmask'),
+    revokeUnmask: reject('revokeUnmask'),
+    removeParticipant: reject('removeParticipant'),
+    moderateGift: reject('moderateGift'),
+    audit: async () => [],
+    ...over,
+  };
+}
+
+/** Organizer console at /o/events/e1 with doubles for the organizer + admin APIs. */
+export function mountConsole(opts: {
+  phase?: string;
+  org?: Partial<OrganizerApi>;
+  admin?: Partial<AdminApi>;
+}) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      const body =
+        url === '/api/organizer/me'
+          ? { userId: 'u1', email: 'o@example.test', isPlatformAdmin: false }
+          : {
+              role: 'organizer_masked',
+              eventState: {
+                name: 'Office Party',
+                phase: opts.phase ?? 'registration',
+                paused: false,
+                counts: { participants: 3, giftsRegistered: 0 },
+                organizer: {
+                  roster: { unclaimed: 0, pending: 0, active: 3, removed: 0 },
+                  warnings: [],
+                  reactionsEnabled: true,
+                },
+              },
+            };
+      return { ok: true, status: 200, json: async () => body } as Response;
+    }),
+  );
+  const rt = createRealtimeStore();
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <RealtimeProvider factory={() => rt}>
+        <OrganizerApiProvider value={fakeOrganizerApi(opts.org)}>
+          <AdminApiProvider value={fakeAdminApi(opts.admin)}>
+            <MemoryRouter initialEntries={['/o/events/e1']}>
+              <App />
+            </MemoryRouter>
+          </AdminApiProvider>
+        </OrganizerApiProvider>
+      </RealtimeProvider>
+    </QueryClientProvider>,
+  );
 }

@@ -5,8 +5,18 @@ import { PHASES, type Phase } from '@santa/contracts';
 import { api } from '../api/client';
 import { useOrganizer } from '../auth/session';
 import { errorKey } from './Dashboard';
+import { AccessPanel } from '../components/organizer/AccessPanel';
 import { PairingWizard } from '../components/organizer/PairingWizard';
 import { ApprovalPanel, ReactionSettings } from '../components/organizer/Approvals';
+import { BoardsConsole, CeremonyControls } from '../components/organizer/ShowControls';
+import { UnmaskBanner, UnmaskForm, UnmaskProvider } from '../components/organizer/Unmask';
+import {
+  AuditViewer,
+  GiftModerationPanel,
+  IntegrityPanel,
+  RemoveParticipants,
+  StatsCard,
+} from '../components/organizer/AdminPanels';
 import {
   OpeningControls,
   RevealControls,
@@ -33,6 +43,14 @@ export const nextPhase = (p: Phase): Phase | undefined => PHASES[PHASES.indexOf(
 export const prevPhase = (p: Phase): Phase | undefined => PHASES[PHASES.indexOf(p) - 1];
 
 export default function Console() {
+  return (
+    <UnmaskProvider>
+      <ConsoleInner />
+    </UnmaskProvider>
+  );
+}
+
+function ConsoleInner() {
   const { t } = useTranslation();
   const { eventId = '' } = useParams();
   const me = useOrganizer();
@@ -66,6 +84,7 @@ export default function Console() {
       <Link to="/o" className="underline">
         {t('console.back')}
       </Link>
+      <UnmaskBanner eventId={eventId} />
       <h1 className="text-2xl font-bold">{s.name}</h1>
       <p>
         {t('console.currentPhase')}: <strong>{t(`phase.${s.phase}`)}</strong>
@@ -135,6 +154,7 @@ export default function Console() {
           {t(errorKey(act.error))}
         </p>
       )}
+      <AccessPanel eventId={eventId} />
       <PairingWizard eventId={eventId} />
       <ApprovalPanel eventId={eventId} />
       {s.phase === 'gift_opening' && <OpeningControls eventId={eventId} />}
@@ -143,6 +163,16 @@ export default function Console() {
       )}
       {s.phase === 'reveal' && <RevealControls eventId={eventId} />}
       <ReactionSettings eventId={eventId} initial={s.organizer.reactionsEnabled} />
+      {PHASES.indexOf(s.phase) >= PHASES.indexOf('voting') && <BoardsConsole eventId={eventId} />}
+      {(s.phase === 'awards' || s.phase === 'completed') && <CeremonyControls eventId={eventId} />}
+      <StatsCard eventId={eventId} />
+      <UnmaskForm eventId={eventId} />
+      {PHASES.indexOf(s.phase) >= PHASES.indexOf('voting') && <IntegrityPanel eventId={eventId} />}
+      <RemoveParticipants eventId={eventId} />
+      {PHASES.indexOf(s.phase) >= PHASES.indexOf('gift_registration') && (
+        <GiftModerationPanel eventId={eventId} />
+      )}
+      <AuditViewer eventId={eventId} />
     </div>
   );
 }

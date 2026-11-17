@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type {
   EventStateOutput,
   PublicGiftListOutput,
-  PublicLeaderboardOutput,
   SceneOutput,
+  AnnouncementOutput,
 } from '@santa/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useParticipantApi } from '../api/participant';
@@ -12,7 +12,11 @@ import { usePlayApi } from '../api/play';
 import { GiftForm, AssignmentView } from '../components/play/GiftForm';
 import { VotingPanel } from '../components/play/Voting';
 import { OpeningStage } from '../components/OpeningStage';
-import { Podium } from '../components/Podium';
+import { BoardsView, type BoardsOutput } from '../components/Podium';
+import { CeremonyScene } from '../components/CeremonyScene';
+import { AchievementUnlock, MyAchievements } from '../components/play/Achievements';
+import { DeleteMyData } from '../components/play/DeleteMyData';
+import { Link } from 'react-router-dom';
 import { AVATAR_GLYPH, avatarGlyph } from '../fx/avatars';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { ReactionBar } from '../components/ReactionBar';
@@ -27,7 +31,8 @@ export default function Participant() {
   const { rt, state } = useRealtime();
   const es = surfaceOf<PState>(state, 'participant', 'eventState');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
-  const board = surfaceOf<PublicLeaderboardOutput>(state, 'pub', 'leaderboard');
+  const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
+  const announcement = surfaceOf<AnnouncementOutput>(state, 'participant', 'announcement');
   const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const [saved, setSaved] = useState<Saved>();
   const shown = es?.me && { ...es.me, ...saved };
@@ -95,9 +100,13 @@ export default function Participant() {
           {(phase === 'reveal' || phase === 'awards' || phase === 'completed') && (
             <RevealList gifts={gifts} />
           )}
-          <Standing board={board} />
+          {scene?.scene === 'ceremony' && <CeremonyScene view={scene.ceremony} now={now} />}
+          <AchievementUnlock announcement={announcement} ready={!!es} />
+          <Standing boards={boards} />
+          {active && <MyAchievements />}
           {active && <ReactionBar send={(k) => rt?.sendReaction(k)} />}
           <Profile me={shown} onSaved={setSaved} />
+          <DeleteMyData />
         </>
       )}
     </section>
@@ -206,7 +215,10 @@ function RevealList({ gifts }: { gifts: PublicGiftListOutput | undefined }) {
           g.status === 'revealed' ? (
             <li key={g.giftId}>
               {g.alias}: {g.name} — {t('reveal.from')}{' '}
-              <span aria-hidden="true">{avatarGlyph(g.giver.avatar)}</span> {g.giver.displayName}
+              <span aria-hidden="true">{avatarGlyph(g.giver.avatar)}</span>{' '}
+              <Link className="underline" to={`/e/profile/${g.giver.participantId}`}>
+                {g.giver.displayName}
+              </Link>
             </li>
           ) : null,
         )}
@@ -216,23 +228,22 @@ function RevealList({ gifts }: { gifts: PublicGiftListOutput | undefined }) {
 }
 
 /** FR-046: only the published top-N is shown; everyone else gets a neutral, encouraging message (no rank, no totals). */
-function Standing({ board }: { board: PublicLeaderboardOutput | undefined }) {
+function Standing({ boards }: { boards: BoardsOutput | undefined }) {
   const { t } = useTranslation();
   const api = usePlayApi();
   const mine = useQuery({ queryKey: ['gift'], queryFn: () => api.getGift() });
-  if (!board || board.state === 'hidden') return null;
+  const visible = boards?.boards.filter((b) => b.state !== 'hidden') ?? [];
+  if (visible.length === 0) return null;
   const myId = mine.data?.gift?.giftId;
-  const onBoard = !!myId && board.entries.some((e) => e.entryId === myId);
+  const onBoard = !!myId && visible.some((b) => b.entries.some((e) => e.entryId === myId));
   return (
     <section aria-labelledby="board-title" className="space-y-2">
       <h2 id="board-title" className="font-semibold">
         {t('participant.boardTitle')}
       </h2>
-      {board.entries.length > 0 && (
-        <div className="rounded bg-pine-900 p-3 text-white">
-          <Podium board={board} />
-        </div>
-      )}
+      <div className="rounded bg-pine-900 p-3 text-white">
+        <BoardsView boards={boards} />
+      </div>
       <p>{t(onBoard ? 'participant.onBoard' : 'participant.encourage')}</p>
     </section>
   );

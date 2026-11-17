@@ -28,6 +28,7 @@ export default defineConfig({
     }),
   ],
   server: {
+    fs: { allow: ['../..'] }, // doc/legal/*.md is bundled as static pages
     proxy: {
       '/api': 'http://localhost:3000',
       '/health': 'http://localhost:3000',
