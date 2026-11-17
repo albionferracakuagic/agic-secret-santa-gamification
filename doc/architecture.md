@@ -25,7 +25,18 @@ Fonti: `doc/implementation-plan.md`, `doc/adr/`, `.env.example`, `package.json`,
 4. Mai serializzare righe DB direttamente. `Cache-Control: no-store` sulle API di stato; service worker cacha solo asset statici.
 5. Scheduling durevole: tabella `scheduled_jobs` + poller (advisory lock) + recovery allo startup (chiusura voto, cadenza board, timer cerimonia).
 
-## Moduli Phase 2–3 (ADR-0007, ADR-0008)`n`n| Area | Note |`n|---|---|`n| Guess Santa, missioni, mini-giochi, presentazioni achievement | Phase 2; pubblicazione via `canPublish()`; XP non qualificante; flag `guessSanta`/`missions` default off (ADR-0007) |`n| Certificati | PDF lato server (`apps/server/src/certificates`); font da `CERT_FONTS_DIR` |`n| Santa Coins, asta | Phase 3 (ADR-0008) |`n| Storico / Hall of Fame + link account | Phase 3 |`n| Editor custom | Phase 3 |`n| Scale-out | Solo interfaccia + implementazione in-memory; nessun adapter Redis/Web PubSub, cursori per istanza |`n`n## Realtime / projection model (ADR-0002)
+## Moduli Phase 2–3 (ADR-0007, ADR-0008)
+
+| Area | Note |
+|---|---|
+| Guess Santa, missioni, mini-giochi, presentazioni achievement | Phase 2; pubblicazione via `canPublish()`; XP non qualificante; flag `guessSanta`/`missions` default off (ADR-0007) |
+| Certificati | PNG lato server (`apps/server/src/certificates`, satori + resvg); font da `CERT_FONTS_DIR` |
+| Santa Coins, asta | Phase 3 (ADR-0008) |
+| Storico / Hall of Fame + link account | Phase 3 |
+| Editor custom | Phase 3 |
+| Scale-out | Solo interfaccia + implementazione in-memory; nessun adapter Redis/Web PubSub, cursori per istanza |
+
+## Realtime / projection model (ADR-0002)
 
 - Room: `e:{id}:pub`, `e:{id}:org` (solo masked), `e:{id}:p:{pid}`; il server decide i join.
 - Cursori per proiezione (pub, ogni privato, ogni organizer); nessuna versione globale.
@@ -60,7 +71,9 @@ Fonti: `doc/implementation-plan.md`, `doc/adr/`, `.env.example`, `package.json`,
 | `ACS_SENDER_ADDRESS` | — | Solo con `acs`; dominio verificato |
 | `TRUST_PROXY_HOPS` | `1` | Numero esatto di proxy davanti (Container Apps = 1) |
 | `WEB_DIST` | vuoto | Es. `apps/web/dist`; vuoto = solo API |
-| `PLATFORM_ADMIN_EMAILS` | vuoto | Email verificate, separate da virgola |`n| `SCALE_OUT` | non impostata | `true` = il runner dei job non rimette in coda tutto allo startup (`requeueAll: false`); vedi ADR-0008 |`n| `CERT_FONTS_DIR` | non impostata | Dir font aggiuntiva per i certificati PDF; senza font trovati la generazione fallisce |
+| `PLATFORM_ADMIN_EMAILS` | vuoto | Email verificate, separate da virgola |
+| `SCALE_OUT` | non impostata | `true` = il runner dei job non rimette in coda tutto allo startup (`requeueAll: false`); vedi ADR-0008 |
+| `CERT_FONTS_DIR` | non impostata | Dir font aggiuntiva per i certificati PNG; senza font trovati la generazione fallisce |
 
 In Azure i segreti arrivano da Key Vault via managed identity.
 
