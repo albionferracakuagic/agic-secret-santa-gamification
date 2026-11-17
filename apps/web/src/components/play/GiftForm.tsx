@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GIFT_MAX_PHOTO_BYTES } from '@santa/contracts';
@@ -8,20 +8,56 @@ import { avatarGlyph } from '../../fx/avatars';
 import { emitFx } from '../../fx/bus';
 
 const field = 'mt-1 block min-h-12 w-full rounded border border-ink-900/40 bg-white px-3';
-const sanitizeImageSrc = (src: string | undefined) => {
+/** Server-provided photo URL only (same-origin or https storage URL); never a DOM/user-derived value. */
+export const safePhotoUrl = (src: string | null | undefined): string | undefined => {
   if (!src) return undefined;
-  if (src.startsWith('/')) return src;
   try {
     const u = new URL(src, window.location.origin);
-    if (u.protocol === 'blob:') return u.toString();
-    if ((u.protocol === 'https:' || u.protocol === 'http:') && u.origin === window.location.origin) {
-      return u.toString();
-    }
+    if (u.protocol === 'https:' || u.origin === window.location.origin) return u.href;
   } catch {
-    return undefined;
+    // unparsable: no photo
   }
   return undefined;
 };
+
+const PREVIEW_MAX = 320;
+
+/** Client-side preview drawn on a canvas: the chosen file never becomes a URL/DOM-text sink. */
+function PhotoPreview({ file, label }: { file: File; label: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+    if (typeof createImageBitmap !== 'function') return;
+    createImageBitmap(file)
+      .then((bmp) => {
+        const canvas = ref.current;
+        const ctx = canvas?.getContext('2d');
+        if (cancelled || !canvas || !ctx) return bmp.close?.();
+        const scale = Math.min(1, PREVIEW_MAX / Math.max(bmp.width, bmp.height));
+        canvas.width = Math.max(1, Math.round(bmp.width * scale));
+        canvas.height = Math.max(1, Math.round(bmp.height * scale));
+        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        bmp.close?.();
+        setReady(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
+  return (
+    <canvas
+      ref={ref}
+      role="img"
+      aria-label={label}
+      hidden={!ready}
+      className="h-40 rounded-xl object-cover"
+      data-testid="gift-photo-preview"
+    />
+  );
+}
 const errKey = (e: unknown) => {
   for (const code of ['gift_locked', 'invalid_image', 'file_too_large'] as const)
     if (hasApiCode(e, code)) return `gift.error.${code}`;
@@ -49,9 +85,6 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
       setDescription(gift.description ?? '');
     }
   }, [giftId]);
-
-  const preview = useMemo(() => (file ? URL.createObjectURL(file) : undefined), [file]);
-  useEffect(() => () => (preview ? URL.revokeObjectURL(preview) : undefined), [preview]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -84,8 +117,7 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
     save.mutate();
   };
 
-  const shownPhoto = preview ?? gift?.photoUrl ?? undefined;
-  const safeShownPhoto = sanitizeImageSrc(shownPhoto);
+  const serverPhoto = file ? undefined : safePhotoUrl(gift?.photoUrl);
   return (
     <section aria-labelledby="gift-title" className="space-y-3">
       <h2 id="gift-title" className="font-semibold">
@@ -128,14 +160,17 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
             </label>
           )}
           {fileErr && <p role="alert">{t(fileErr)}</p>}
-          {safeShownPhoto && (
+          {(file || serverPhoto) && (
             <div className="space-y-2">
-              <img
-                src={safeShownPhoto}
-                alt={t('gift.photoAlt')}
-                className="h-40 rounded-xl object-cover"
-                data-testid="gift-photo"
-              />
+              {file && <PhotoPreview file={file} label={t('gift.photoAlt')} />}
+              {serverPhoto && (
+                <img
+                  src={serverPhoto}
+                  alt={t('gift.photoAlt')}
+                  className="h-40 rounded-xl object-cover"
+                  data-testid="gift-photo"
+                />
+              )}
               {editable && !file && gift?.photoUrl && (
                 <button
                   type="button"

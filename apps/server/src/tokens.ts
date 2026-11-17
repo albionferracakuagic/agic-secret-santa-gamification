@@ -8,13 +8,23 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const randomCode = (len: number) =>
   Array.from({ length: len }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
 
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export function parseCookies(header: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
+  const map = new Map<string, string>();
   for (const part of (header ?? '').split(';')) {
     const i = part.indexOf('=');
     if (i < 0) continue;
     const k = part.slice(0, i).trim();
-    if (k && !(k in out)) out[k] = decodeURIComponent(part.slice(i + 1).trim());
+    if (!k || UNSAFE_KEYS.has(k) || map.has(k)) continue;
+    const raw = part.slice(i + 1).trim();
+    let v = raw;
+    try {
+      v = decodeURIComponent(raw);
+    } catch {
+      // malformed escape: keep the raw value
+    }
+    map.set(k, v);
   }
-  return out;
+  return Object.assign(Object.create(null) as Record<string, string>, Object.fromEntries(map));
 }
