@@ -13,7 +13,10 @@ const sanitizeImageSrc = (src: string | undefined) => {
   if (src.startsWith('/')) return src;
   try {
     const u = new URL(src, window.location.origin);
-    if (u.protocol === 'blob:' || u.protocol === 'https:' || u.protocol === 'http:') return src;
+    if (u.protocol === 'blob:') return u.toString();
+    if ((u.protocol === 'https:' || u.protocol === 'http:') && u.origin === window.location.origin) {
+      return u.toString();
+    }
   } catch {
     return undefined;
   }
