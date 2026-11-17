@@ -1,6 +1,6 @@
 # Secret Santa Games
 
-Mobile-first PWA for Secret Santa events: organizer console, participant app, public display; realtime, privacy-by-projection. Spec: `doc/Secret_Santa_Games_Functional_Requirements.md`. Decisions: `doc/adr/`.
+Mobile-first PWA for Secret Santa events: organizer console, participant app, public display; realtime, privacy-by-projection. Spec: `doc/Secret_Santa_Games_Functional_Requirements.md`. Decisions: `doc/adr/`. Local setup: [`doc/local-development.md`](doc/local-development.md).
 
 ## Layout
 

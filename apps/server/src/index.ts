@@ -3,6 +3,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createPgDb, MIGRATIONS_FOLDER, type Db } from '@santa/db';
 import { buildApp } from './app.js';
 import { createAuth } from './auth/auth.js';
+import { loadDotenv } from './dotenv.js';
 import { loadEnv, socialFromEnv } from './auth/config.js';
 import { createEmailTransport } from './auth/email-factory.js';
 import { createAuthModule } from './auth/routes.js';
@@ -15,6 +16,7 @@ import { registerAuctionJobs } from './realtime/phase3.js';
 import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
 import { AzureBlobStorage } from './storage/azure.js';
 
+loadDotenv();
 const env = loadEnv();
 
 async function connect(): Promise<Db> {

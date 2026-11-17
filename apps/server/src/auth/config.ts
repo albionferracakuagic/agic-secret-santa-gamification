@@ -31,7 +31,9 @@ export const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const env = EnvSchema.parse(source);
+  // `KEY=` lines (e.g. a copied .env.example) mean "unset"
+  const cleaned = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== ''));
+  const env = EnvSchema.parse(cleaned);
   if (env.NODE_ENV === 'production' && (!env.BETTER_AUTH_SECRET || !env.DATABASE_URL)) {
     throw new Error('BETTER_AUTH_SECRET and DATABASE_URL are required in production');
   }
