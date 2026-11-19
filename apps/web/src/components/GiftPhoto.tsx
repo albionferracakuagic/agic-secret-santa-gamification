@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-/** Server-provided photo URL only (same-origin or HTTPS); never a DOM/user-derived value. */
+/** Server-provided photo URL only (same-origin or HTTPS). Blob URLs are reserved for local previews. */
 export const safePhotoUrl = (src: string | null | undefined): string | undefined => {
   if (!src) return undefined;
   try {
@@ -19,18 +19,20 @@ export function GiftPhoto({
   className,
   testId,
   loading,
+  fallback,
 }: {
   src: string | null | undefined;
   alt: string;
   className: string;
   testId?: string;
   loading?: 'eager' | 'lazy';
+  fallback?: ReactNode;
 }) {
   const url = useMemo(() => safePhotoUrl(src), [src]);
   const [failedUrl, setFailedUrl] = useState<string>();
   const [loadedUrl, setLoadedUrl] = useState<string>();
 
-  if (!url || failedUrl === url) return null;
+  if (!url || failedUrl === url) return fallback ?? null;
   return (
     <img
       src={url}

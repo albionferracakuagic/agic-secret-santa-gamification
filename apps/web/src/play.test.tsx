@@ -197,11 +197,17 @@ describe('opening on the participant app', () => {
         total: 6,
         countdownSeconds: 3,
         countdownEndsAt: null,
-        current: pubGift('7', 'Candle'),
+        current: {
+          ...pubGift('7', 'Candle'),
+          photoUrl: '/media/gifts/e1/candle.jpg?exp=10&sig=test',
+        },
       }),
     });
     expect(await screen.findByText('2 of 6 gifts opened')).toBeTruthy();
     expect((await screen.findByTestId('opening-revealed')).textContent).toContain('Candle');
+    expect(screen.getByTestId('opening-gift-photo').getAttribute('src')).toBe(
+      new URL('/media/gifts/e1/candle.jpg?exp=10&sig=test', window.location.origin).href,
+    );
   });
 });
 

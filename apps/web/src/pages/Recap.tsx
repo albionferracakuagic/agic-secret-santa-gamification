@@ -17,7 +17,7 @@ import { useBoardName } from '../components/Podium';
 import { useAchievementName } from '../components/play/Achievements';
 import { Certificates } from '../components/play/Certificates';
 import { RecipientReveal } from '../components/play/GiftForm';
-import { GiftPhoto, safePhotoUrl } from '../components/play/GiftPhoto';
+import { GiftPhoto, safePhotoUrl } from '../components/GiftPhoto';
 import { useLocalized } from '../lib/localized';
 import { avatarGlyph } from '../fx/avatars';
 import { isReducedMotion, usePrefs } from '../prefs/store';

@@ -6,10 +6,10 @@ import { hasApiCode } from '../../api/client';
 import { usePlayApi } from '../../api/play';
 import { avatarGlyph } from '../../fx/avatars';
 import { emitFx } from '../../fx/bus';
-import { GiftPhoto, GiftPhotoPreview, safePhotoUrl } from './GiftPhoto';
+import { GiftPhoto, GiftPhotoPreview, safePhotoUrl } from '../GiftPhoto';
 
 const field = 'mt-1 block min-h-12 w-full rounded border border-ink-900/40 bg-white px-3';
-export { safePhotoUrl } from './GiftPhoto';
+export { safePhotoUrl } from '../GiftPhoto';
 const errKey = (e: unknown) => {
   for (const code of ['gift_locked', 'invalid_image', 'file_too_large'] as const)
     if (hasApiCode(e, code)) return `gift.error.${code}`;

@@ -81,7 +81,14 @@ describe('display RevealStage', () => {
     const t = setup('/d');
     t.snapshot('pub', {
       eventState: ds,
-      scene: revealScene({ ...revealedNow(), revealed: [pair('1', 'Zed', 'Ada')] }),
+      scene: revealScene({
+        ...revealedNow(),
+        current: {
+          ...revealedNow().current,
+          photoUrl: '/media/gifts/e1/item.jpg?exp=10&sig=test',
+        },
+        revealed: [pair('1', 'Zed', 'Ada')],
+      }),
     });
     expect((await screen.findByTestId('reveal-giver')).textContent).toContain('Secret Santa: Zed');
     expect(screen.getByTestId('reveal-live').textContent).toBe(
@@ -90,6 +97,9 @@ describe('display RevealStage', () => {
     expect(screen.getByTestId('reveal-progress').getAttribute('aria-valuenow')).toBe('1');
     expect(screen.getByTestId('reveal-strip').textContent).toContain('Zed → Ada');
     expect(document.querySelector('.reveal-flip')).toBeTruthy();
+    expect(screen.getByTestId('reveal-gift-photo').getAttribute('src')).toBe(
+      new URL('/media/gifts/e1/item.jpg?exp=10&sig=test', window.location.origin).href,
+    );
   });
 
   it('reduced motion: same content, no animation classes', async () => {

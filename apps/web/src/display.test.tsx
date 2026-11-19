@@ -107,13 +107,18 @@ describe('display scenes (SceneSchema)', () => {
         total: 12,
         countdownSeconds: 3,
         countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
-        current: gift('7', 'Warm scarf'),
+        current: {
+          ...gift('7', 'Warm scarf'),
+          photoUrl:
+            'https://account.blob.core.windows.net/gifts/e1/scarf.jpg?sv=1&se=2026-12-20&sig=signed',
+        },
       }),
     });
     expect(screen.getByText('3 of 12 gifts opened')).toBeTruthy();
     expect(screen.queryByTestId('opening-revealed')).toBeNull();
     act(() => void vi.advanceTimersByTime(3100));
     expect(screen.getByTestId('opening-revealed').textContent).toContain('Warm scarf');
+    expect(screen.getByTestId('opening-gift-photo').getAttribute('src')).toContain('sig=signed');
     vi.useRealTimers();
 
     usePrefs.setState({ reducedMotion: 'on' });

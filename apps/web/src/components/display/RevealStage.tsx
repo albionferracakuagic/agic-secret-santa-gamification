@@ -6,6 +6,7 @@ import { useFxCap } from '../../fx/cap';
 import { emitFx } from '../../fx/bus';
 import { avatarGlyph } from '../../fx/avatars';
 import { RECAP_PATH } from '../../routes/recap';
+import { GiftPhoto } from '../GiftPhoto';
 
 /**
  * Display giver-reveal stage (1080p): drumroll -> card flip + giver zoom -> finale grid.
@@ -106,17 +107,17 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
               animate && current.stage === 'revealed' ? 'reveal-flip' : ''
             }`}
           >
-            {current.photoUrl ? (
-              <img
-                src={current.photoUrl}
-                alt={current.giftName}
-                className="h-[400px] w-[400px] rounded-2xl object-cover"
-              />
-            ) : (
-              <p aria-hidden="true" className="text-[12rem]">
-                🎁
-              </p>
-            )}
+            <GiftPhoto
+              src={current.photoUrl}
+              alt={current.giftName}
+              className="h-[400px] w-[400px] rounded-2xl object-cover"
+              testId="reveal-gift-photo"
+              fallback={
+                <p aria-hidden="true" className="text-[12rem]">
+                  🎁
+                </p>
+              }
+            />
             <div className="space-y-4 text-left">
               <p className="text-5xl text-gold-400">{current.alias}</p>
               <p className="text-7xl font-bold">{current.giftName}</p>
