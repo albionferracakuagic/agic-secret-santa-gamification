@@ -20,8 +20,8 @@ export const RealtimeProvider = ({
 }) => createElement(Ctx.Provider, { value: factory }, children);
 
 /** Production factory: same-origin Socket.IO with the guest/display session cookie. */
-export const socketFactory = (): RealtimeClient => {
-  const rt = createRealtimeStore();
+export const socketFactory = (eventId?: string): RealtimeClient => {
+  const rt = createRealtimeStore(eventId ? { eventId } : {});
   rt.connect(io({ withCredentials: true, transports: ['websocket', 'polling'] }));
   return rt;
 };
@@ -36,12 +36,12 @@ const EMPTY: RealtimeState = {
 };
 
 /** One realtime client per mounted page (StrictMode-safe: created and torn down in an effect). */
-export function useRealtime(): { rt: RealtimeClient | undefined; state: RealtimeState } {
-  const factory = useContext(Ctx) ?? socketFactory;
+export function useRealtime(eventId?: string): { rt: RealtimeClient | undefined; state: RealtimeState } {
+  const providedFactory = useContext(Ctx);
   const [rt, setRt] = useState<RealtimeClient>();
   const [state, setState] = useState<RealtimeState>(EMPTY);
   useEffect(() => {
-    const client = factory();
+    const client = providedFactory ? providedFactory() : socketFactory(eventId);
     setRt(client);
     setState(client.store.getState());
     const off = client.store.subscribe(setState);
@@ -50,7 +50,7 @@ export function useRealtime(): { rt: RealtimeClient | undefined; state: Realtime
       client.disconnect();
       setRt(undefined);
     };
-  }, [factory]);
+  }, [eventId, providedFactory]);
   return { rt, state };
 }
 

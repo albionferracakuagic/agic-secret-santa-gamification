@@ -15,6 +15,7 @@ import { VotingPanel } from '../components/play/Voting';
 import { OpeningStage } from '../components/OpeningStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
+import { RevealPersonal } from '../components/play/RevealPersonal';
 import { AchievementUnlock, MyAchievements } from '../components/play/Achievements';
 import { GuessPanel } from '../components/play/GuessPanel';
 import { MissionsPanel } from '../components/play/MissionsPanel';
@@ -24,6 +25,7 @@ import { HistoryPanel } from '../components/play/HistoryPanel';
 import { Certificates } from '../components/play/Certificates';
 import { DeleteMyData } from '../components/play/DeleteMyData';
 import { Link } from 'react-router-dom';
+import { RECAP_PATH, isRecapPhase } from '../routes/recap';
 import { AVATAR_GLYPH, avatarGlyph } from '../fx/avatars';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { ReactionBar } from '../components/ReactionBar';
@@ -78,6 +80,15 @@ export default function Participant() {
             {shown.status === 'pending' && <p role="status">{t('join.pending')}</p>}
             <p>{t('participant.xp', { xp: shown.xp.xp, level: shown.xp.level })}</p>
           </header>
+          {isRecapPhase(phase) && (
+            <Link
+              to={RECAP_PATH}
+              data-testid="recap-link"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gold-400 px-4 py-3 text-lg font-bold text-ink-900"
+            >
+              <span aria-hidden="true">🎄</span> {t('recap.open')}
+            </Link>
+          )}
           {active && phase === 'gift_registration' && <GiftForm canEdit />}
           {active && phase !== 'preparation' && phase !== 'registration' && <AssignmentView />}
           {active && phase === 'gift_opening' && (
@@ -117,6 +128,13 @@ export default function Participant() {
             <RevealList gifts={gifts} />
           )}
           {scene?.scene === 'ceremony' && <CeremonyScene view={scene.ceremony} now={now} />}
+          {active && scene?.scene === 'reveal' && (
+            <RevealPersonal
+              reveal={scene.reveal}
+              myId={shown.participantId}
+              sendReaction={(k) => rt?.sendReaction(k)}
+            />
+          )}
           <AchievementUnlock announcement={announcement} ready={!!es} />
           <Standing boards={boards} />
           {active && <MyAchievements />}

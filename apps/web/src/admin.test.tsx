@@ -20,6 +20,7 @@ const grant = () => ({
 describe('organizer admin', () => {
   it('stats: counts only', async () => {
     mountConsole({
+      tab: 'admin',
       phase: 'voting',
       admin: {
         stats: async () => ({
@@ -54,6 +55,7 @@ describe('organizer admin', () => {
       ],
     }));
     mountConsole({
+      tab: 'admin',
       phase: 'voting',
       admin: {
         unmask,
@@ -106,6 +108,7 @@ describe('organizer admin', () => {
   it('remove participant needs a second confirmation', async () => {
     const removeParticipant = vi.fn(async () => ({ votesRemoved: 0 }));
     mountConsole({
+      tab: 'people',
       phase: 'voting',
       org: {
         listRoster: async () => ({
@@ -125,6 +128,7 @@ describe('organizer admin', () => {
   it('gift moderation by alias: hide and remove photo; no giver shown', async () => {
     const moderateGift = vi.fn(async () => undefined);
     mountConsole({
+      tab: 'admin',
       phase: 'voting',
       org: {
         listGifts: async () => [
@@ -151,6 +155,7 @@ describe('organizer admin', () => {
 
   it('audit viewer lists entries', async () => {
     mountConsole({
+      tab: 'admin',
       admin: {
         audit: async () => [
           {
@@ -180,7 +185,7 @@ describe('invitations', () => {
       path: `/${kind === 'join' ? 'j' : 'd'}/${'t'.repeat(24)}`,
       expiresAt: '2026-12-23T18:00:00Z',
     }));
-    mountConsole({ org: { createAccess } });
+    mountConsole({ tab: 'people', org: { createAccess } });
     fireEvent.click(await screen.findByRole('button', { name: 'Create join link and QR' }));
     const join = await screen.findByTestId('join-link');
     expect(join.textContent).toContain('ABCDE-FGHJK');

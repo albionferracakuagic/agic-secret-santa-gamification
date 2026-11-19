@@ -604,6 +604,7 @@ describe('organizer phase 2 console', () => {
   it('clue moderation: approve and reject, masked (alias + text only)', async () => {
     const decideClue = vi.fn<Phase2Api['decideClue']>(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'gift_opening',
       features: { guessSanta: true },
       p2: {
@@ -635,7 +636,12 @@ describe('organizer phase 2 console', () => {
       reason: 'insufficient_votes' as const,
       achievementsUnlocked: 0,
     }));
-    mountConsole({ phase: 'gift_opening', features: { guessSanta: true }, p2: { present } });
+    mountConsole({
+      tab: 'show',
+      phase: 'gift_opening',
+      features: { guessSanta: true },
+      p2: { present },
+    });
     fireEvent.click(
       await screen.findByRole('button', { name: 'Show on display: Santa Detective' }),
     );
@@ -647,6 +653,7 @@ describe('organizer phase 2 console', () => {
     const assignMissions = vi.fn<Phase2Api['assignMissions']>(async () => ({ assigned: 3 }));
     const verifyMission = vi.fn<Phase2Api['verifyMission']>(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'gift_opening',
       features: { missions: true },
       p2: {
@@ -681,6 +688,7 @@ describe('organizer phase 2 console', () => {
     const gameAction = vi.fn<Phase2Api['gameAction']>(async () => undefined);
     const decideBingo = vi.fn<Phase2Api['decideBingo']>(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'games',
       p2: {
         organizerGames: async () => ({

@@ -225,7 +225,7 @@ describe('display auction scene', () => {
 describe('feature flags panel (organizer)', () => {
   it('flips a switch with PATCH and shows locked states', async () => {
     const updateFeatures = vi.fn<Phase3Api['updateFeatures']>(async () => ({}) as never);
-    mountConsole({ phase: 'gift_opening', p3: { updateFeatures } });
+    mountConsole({ tab: 'setup', phase: 'gift_opening', p3: { updateFeatures } });
     const sw = await screen.findByRole('switch', { name: 'Guess your Secret Santa' });
     fireEvent.click(sw);
     await waitFor(() => expect(updateFeatures).toHaveBeenCalledWith('e1', { guessSanta: true }));
@@ -237,7 +237,7 @@ describe('feature flags panel (organizer)', () => {
   });
 
   it('awards phase: nothing new can be switched on (history still can); completed: all locked', async () => {
-    mountConsole({ phase: 'awards', features: { miniGames: false } });
+    mountConsole({ tab: 'setup', phase: 'awards', features: { miniGames: false } });
     expect(
       ((await screen.findByRole('switch', { name: 'Mini-games' })) as HTMLInputElement).disabled,
     ).toBe(true);
@@ -248,7 +248,7 @@ describe('feature flags panel (organizer)', () => {
   });
 
   it('completed: every switch is locked', async () => {
-    mountConsole({ phase: 'completed' });
+    mountConsole({ tab: 'setup', phase: 'completed' });
     const sw = await screen.findAllByRole('switch');
     expect(sw.length).toBe(6);
     expect(sw.every((s) => (s as HTMLInputElement).disabled)).toBe(true);
@@ -256,7 +256,7 @@ describe('feature flags panel (organizer)', () => {
 
   it('saves rules via the same endpoint', async () => {
     const updateFeatures = vi.fn<Phase3Api['updateFeatures']>(async () => ({}) as never);
-    mountConsole({ phase: 'gift_opening', p3: { updateFeatures } });
+    mountConsole({ tab: 'setup', phase: 'gift_opening', p3: { updateFeatures } });
     fireEvent.change(await screen.findByLabelText('Coins for winning a game'), {
       target: { value: '20' },
     });
@@ -268,10 +268,11 @@ describe('feature flags panel (organizer)', () => {
 
   it('console panels follow the flags: clue queue, missions and coins appear only when enabled', async () => {
     mountConsole({
+      tab: 'show',
       phase: 'gift_opening',
       features: { guessSanta: false, missions: false, miniGames: false },
     });
-    await screen.findByTestId('features-panel');
+    await screen.findByTestId('show-opening');
     expect(screen.queryByTestId('clue-queue')).toBeNull();
     expect(screen.queryByTestId('games-console')).toBeNull();
     expect(screen.queryByTestId('missions-console')).toBeNull();
@@ -280,6 +281,7 @@ describe('feature flags panel (organizer)', () => {
 
   it('games console is hidden when the API says disabled and create is hidden when canCreate is false', async () => {
     mountConsole({
+      tab: 'show',
       phase: 'gift_opening',
       p2: {
         organizerGames: async () => ({
@@ -301,6 +303,7 @@ describe('auction + coins consoles (organizer)', () => {
     const prizeAction = vi.fn<Phase3Api['prizeAction']>(async () => undefined);
     const grantCoins = vi.fn<Phase3Api['grantCoins']>(async () => ({ granted: 7 }));
     mountConsole({
+      tab: 'show',
       phase: 'games',
       features: { coins: true, auction: true },
       p3: {
@@ -500,6 +503,7 @@ describe('history, Hall of Fame, lifetime, account link', () => {
 
   it('organizer archive console shows the archive and Hall of Fame when history is on', async () => {
     mountConsole({
+      tab: 'admin',
       phase: 'completed',
       features: { history: true },
       p3: {
@@ -519,6 +523,7 @@ describe('custom categories / achievements editor', () => {
       editable: true,
     }));
     mountConsole({
+      tab: 'setup',
       phase: 'gift_opening',
       p3: { categories: async () => ({ categories: [], editable: true }), createCategory },
     });
@@ -539,7 +544,7 @@ describe('custom categories / achievements editor', () => {
   });
 
   it('frozen editor shows the note and no add form', async () => {
-    mountConsole({ phase: 'voting' });
+    mountConsole({ tab: 'setup', phase: 'voting' });
     expect(await screen.findByText('Categories are locked once voting has opened.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add category' })).toBeNull();
   });

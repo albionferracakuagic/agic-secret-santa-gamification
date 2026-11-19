@@ -226,6 +226,7 @@ describe('organizer ceremony controls', () => {
       async (_e: string, i: number) => (cur = state({ status: 'running', index: i + 1 })) as never,
     );
     mountConsole({
+      tab: 'show',
       phase: 'awards',
       admin: { ceremony: async () => cur as never, ceremonyAct, ceremonyNext },
     });
@@ -247,6 +248,7 @@ describe('organizer ceremony controls', () => {
   it('blockers disable start; ties are decided by alias only', async () => {
     const decideAward = vi.fn(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'awards',
       admin: {
         ceremony: async () =>
@@ -323,6 +325,7 @@ describe('leaderboards surface', () => {
   it('organizer boards console: small cohorts need the acknowledgement; pause/resume/hide/publish', async () => {
     const boardAction = vi.fn(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'voting',
       admin: {
         boards: async () => ({

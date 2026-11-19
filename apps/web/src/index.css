@@ -69,11 +69,68 @@ h2 {
     transform: rotate(6deg);
   }
 }
+/* Recap entrance: subtle rise-in; JS also drops the class under the reduced-motion preference. */
+@keyframes recap-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.recap-rise {
+  animation: recap-rise 0.5s ease-out both;
+}
 .gift-box-shake {
   animation: gift-shake 0.5s ease-in-out infinite;
 }
+/* Reveal: drumroll pulse, card flip, giver zoom. JS also omits the classes when intensity is off. */
+@keyframes reveal-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+@keyframes reveal-flip {
+  from {
+    transform: rotateY(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes reveal-zoom {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.reveal-pulse {
+  animation: reveal-pulse 0.9s ease-in-out infinite;
+}
+.reveal-flip {
+  animation: reveal-flip 0.6s ease-out both;
+}
+.reveal-zoom {
+  animation: reveal-zoom 0.7s 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
 @media (prefers-reduced-motion: reduce) {
-  .gift-box-shake {
+  .reveal-pulse,
+  .reveal-flip,
+  .reveal-zoom,
+  .gift-box-shake,
+  .recap-rise {
     animation: none;
   }
 }

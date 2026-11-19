@@ -294,6 +294,8 @@ export function mountConsole(opts: {
   p2?: Partial<Phase2Api>;
   p3?: Partial<Phase3Api>;
   features?: Partial<EventFeatures>;
+  /** Console tab (`?tab=`); omitted = default (live). */
+  tab?: string;
 }) {
   vi.stubGlobal(
     'fetch',
@@ -331,7 +333,9 @@ export function mountConsole(opts: {
           <AdminApiProvider value={fakeAdminApi(opts.admin)}>
             <Phase2ApiProvider value={fakePhase2Api(opts.p2)}>
               <Phase3ApiProvider value={fakePhase3Api(opts.p3)}>
-                <MemoryRouter initialEntries={['/o/events/e1']}>
+                <MemoryRouter
+                  initialEntries={[`/o/events/e1${opts.tab ? `?tab=${opts.tab}` : ''}`]}
+                >
                   <App />
                 </MemoryRouter>
               </Phase3ApiProvider>
