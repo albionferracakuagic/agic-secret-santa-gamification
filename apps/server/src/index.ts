@@ -37,6 +37,10 @@ const email = createEmailTransport(env);
 const auth = createAuth({
   db,
   baseURL: env.BETTER_AUTH_URL,
+  // dev: browser talks to the Vite origin (proxying /api), which differs from the server port
+  ...(env.NODE_ENV === 'production'
+    ? {}
+    : { trustedOrigins: [env.BETTER_AUTH_URL, 'http://localhost:5173'] }),
   secret: env.BETTER_AUTH_SECRET ?? 'dev-only-secret-dev-only-secret-0000',
   email,
   ...social,
