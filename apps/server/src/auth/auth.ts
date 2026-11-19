@@ -15,7 +15,9 @@ export interface AuthConfig {
   /** >= 32 chars; from Key Vault in Azure. Never committed. */
   secret: string;
   email: EmailTransport;
-  trustedOrigins?: string[];
+  trustedOrigins?:
+    | string[]
+    | ((request?: Request) => string[] | Promise<string[]>);
   google?: SocialCreds | undefined;
   microsoft?: (SocialCreds & { tenantId?: string | undefined }) | undefined;
   /** Better Auth built-in limiter; magic-link sends are the abuse-prone endpoint. */

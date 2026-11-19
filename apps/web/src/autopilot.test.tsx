@@ -16,10 +16,6 @@ import { OrganizerApiProvider } from './api/organizer';
 import { LiveTab, type PhaseActions } from './components/organizer/console/LiveTab';
 import { AutopilotSettingsForm } from './components/organizer/console/tabs';
 import type { OrganizerEventState } from './components/organizer/console/types';
-import {
-  isDisplayPresenceConnected,
-  publishDisplayPresence,
-} from './realtime/displayPresence';
 import { RealtimeProvider } from './realtime/react';
 import { createRealtimeStore } from './realtime/store';
 import { fakeOrganizerApi, fakeSocket } from './test-utils';
@@ -62,6 +58,7 @@ const state = (
       roster: { active: 10, pending: 2, unclaimed: 0, removed: 0 },
       warnings: [],
       features: DEFAULT_EVENT_FEATURES,
+      displayConnected: false,
       autopilot,
     },
   }) as OrganizerEventState;
@@ -96,7 +93,12 @@ function renderAutopilot(
   const socket = fakeSocket();
   const rt = createRealtimeStore({ eventId: 'e1' });
   rt.connect(socket.s);
-  if (opts.organizerPubSnapshot || opts.organizerSnapshot) {
+  const organizerSnapshot =
+    opts.organizerSnapshot ??
+    (opts.displayConnected === undefined
+      ? undefined
+      : { displayConnected: opts.displayConnected });
+  if (opts.organizerPubSnapshot || organizerSnapshot) {
     socket.fire('connect');
     socket.fire(
       'snapshot',
@@ -109,11 +111,10 @@ function renderAutopilot(
         : {
             stream: 'org',
             cursor: 1,
-            data: { eventState: { organizer: opts.organizerSnapshot } },
+            data: { eventState: { organizer: organizerSnapshot } },
           },
     );
   }
-  if (opts.displayConnected) publishDisplayPresence('e1', 'test-display');
   const api: AutopilotApi = {
     get: vi.fn(async () => response(ap)),
     command: vi.fn(async (_eventId, command) =>
@@ -214,16 +215,37 @@ describe('console live autopilot', () => {
     );
     expect(readiness.parentElement?.textContent).toContain('Not ready');
 
-    act(() => publishDisplayPresence('e1', 'actual-display'));
+    act(() =>
+      mounted.socket.fire('snapshot', {
+        stream: 'org',
+        cursor: 1,
+        data: { eventState: { organizer: { displayConnected: false } } },
+      }),
+    );
+    act(() =>
+      mounted.socket.fire('delta', {
+        stream: 'org',
+        cursor: 2,
+        surface: 'eventState',
+        payload: { organizer: { displayConnected: true } },
+      }),
+    );
     await waitFor(() => expect(start.disabled).toBe(false));
     mounted.unmount();
   });
 
-  it('uses local presence only before the initial organizer snapshot', async () => {
-    publishDisplayPresence('e1', 'same-browser-display');
+  it('does not trust legacy same-browser presence markers', async () => {
+    localStorage.setItem(
+      'santa:display-presence:e1',
+      JSON.stringify({
+        eventId: 'e1',
+        clientId: 'legacy-display',
+        expiresAt: Date.now() + 10_000,
+      }),
+    );
     const mounted = renderAutopilot(idle(), { pairingReady: true });
     const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
-    await waitFor(() => expect(start.disabled).toBe(false));
+    await waitFor(() => expect(start.disabled).toBe(true));
     mounted.unmount();
   });
 
@@ -234,12 +256,10 @@ describe('console live autopilot', () => {
     });
     const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
     await waitFor(() => expect(start.disabled).toBe(false));
-    expect(isDisplayPresenceConnected('e1')).toBe(false);
     mounted.unmount();
   });
 
-  it('lets server false override same-browser display presence', async () => {
-    publishDisplayPresence('e1', 'same-browser-display');
+  it('lets server false keep readiness blocked', async () => {
     const mounted = renderAutopilot(idle(), {
       pairingReady: true,
       organizerSnapshot: { displayConnected: false },

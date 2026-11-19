@@ -677,6 +677,8 @@ export const en = {
     hide: 'Hide presentation',
     shown: 'Shown on the display.',
     notShown: 'Not published. The display shows a neutral message. Reason: {{reason}}.',
+    phaseUnavailable: 'Available from the {{phase}} phase.',
+    displayUnavailable: 'Connect an open display before showing this presentation.',
     kind: {
       santa_detective: 'Santa Detective',
       invisible_santa: 'Invisible Santa',

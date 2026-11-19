@@ -16,6 +16,7 @@ import { registerRevealJobs } from './realtime/reveal.js';
 import { registerAutopilotJobs } from './realtime/autopilot.js';
 import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
 import { AzureBlobStorage } from './storage/azure.js';
+import { trustedOrigins } from './http/origins.js';
 
 const env = loadEnv();
 
@@ -39,10 +40,18 @@ const email = createEmailTransport(env);
 const auth = createAuth({
   db,
   baseURL: env.BETTER_AUTH_URL,
-  // dev: browser talks to the Vite origin (proxying /api), which differs from the server port
+  // dev: browser talks to Vite/tunnel origins (proxying /api), which differ from the server port
   ...(env.NODE_ENV === 'production'
     ? {}
-    : { trustedOrigins: [env.BETTER_AUTH_URL, 'http://localhost:5173'] }),
+    : {
+        trustedOrigins: (request?: Request) =>
+          trustedOrigins(
+            request,
+            env.BETTER_AUTH_URL,
+            ['http://localhost:5173'],
+            env.NODE_ENV,
+          ),
+      }),
   secret: env.BETTER_AUTH_SECRET ?? 'dev-only-secret-dev-only-secret-0000',
   email,
   ...social,
@@ -50,6 +59,9 @@ const auth = createAuth({
 const app = buildApp({
   db,
   baseUrl: env.BETTER_AUTH_URL,
+  ...(env.NODE_ENV === 'production'
+    ? {}
+    : { allowedOrigins: ['http://localhost:5173'] }),
   trustProxyHops: env.TRUST_PROXY_HOPS,
   platformAdminEmails: (env.PLATFORM_ADMIN_EMAILS ?? '')
     .split(',')

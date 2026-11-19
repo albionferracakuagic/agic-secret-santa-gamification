@@ -161,6 +161,7 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
         autoApprove,
       });
       if (r.replacedSession) d.hub.dropParticipant(participantId, 'session'); // old device is dead
+      reply.clearCookie(DISPLAY_COOKIE_NAME, { path: '/' });
       setGuestCookie(reply, session);
       await broadcastEventState(d.hub, d.db, eventId);
       return ClaimResponseSchema.parse({
@@ -219,6 +220,7 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
     const maxAge = row.expiresAt
       ? Math.max(1, Math.floor((row.expiresAt.getTime() - d.clock().getTime()) / 1000))
       : COOKIE_MAX_AGE;
+    reply.clearCookie(GUEST_COOKIE_NAME, { path: '/' });
     reply.setCookie(DISPLAY_COOKIE_NAME, b.token, {
       httpOnly: true,
       secure: d.secureCookies,

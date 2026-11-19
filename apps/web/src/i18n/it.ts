@@ -693,6 +693,8 @@ export const it: Translation = {
     hide: 'Nascondi presentazione',
     shown: 'Mostrata sul display.',
     notShown: 'Non pubblicata. Il display mostra un messaggio neutro. Motivo: {{reason}}.',
+    phaseUnavailable: 'Disponibile dalla fase {{phase}}.',
+    displayUnavailable: 'Collega un display aperto prima di mostrare questa presentazione.',
     kind: {
       santa_detective: 'Detective di Babbo Natale',
       invisible_santa: 'Babbo Natale Invisibile',

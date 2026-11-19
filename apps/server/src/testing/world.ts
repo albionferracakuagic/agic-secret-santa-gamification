@@ -45,7 +45,7 @@ export interface World {
   displayCookie(): Promise<string>;
   organizerCookie(userId?: string, sessionId?: string): string;
   grant(opts?: { expiresInMs?: number; userId?: string }): Promise<string>;
-  client(cookie: string): Socket;
+  client(cookie: string, origin?: string): Socket;
   close(): Promise<void>;
 }
 
@@ -108,10 +108,10 @@ export async function createWorld(
         .returning({ id: unmaskGrants.id });
       return g!.id;
     },
-    client(cookie) {
+    client(cookie, origin) {
       const c = connectClient(`http://127.0.0.1:${port}`, {
         transports: ['websocket'],
-        extraHeaders: { cookie },
+        extraHeaders: { cookie, ...(origin ? { origin } : {}) },
         reconnection: false,
         forceNew: true,
       });

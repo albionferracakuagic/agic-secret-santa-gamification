@@ -57,14 +57,19 @@ export class DbSnapshotProvider implements SnapshotProvider {
 
   async snapshot(p: Principal, eventId: string, stream: string): Promise<Record<string, unknown>> {
     const c = await loadEventContext(this.db, eventId, this.ctx);
-    if (stream === 'pub') return publicSurfaces(c);
-
     const base = {
       event: c.event,
       participants: c.people,
       giftsRegistered: c.gifts.length,
       ...(c.votedCount === null ? {} : { votedCount: c.votedCount }),
     };
+
+    if (stream === 'pub') {
+      return {
+        ...publicSurfaces(c),
+        eventState: projectEventState({ role: 'display' }, { ...base, ownVotes: [] }),
+      };
+    }
 
     if (stream.startsWith('p:') && p.kind === 'guest') {
       const own = await this.db

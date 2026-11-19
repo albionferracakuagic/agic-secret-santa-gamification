@@ -57,6 +57,7 @@ test('autopilot show keeps giver private until display and personal reveal, then
         ceremonyCountdownSeconds: 3,
         features: {
           miniGames: false,
+          guessSanta: true,
           history: true,
         },
         autopilot: {
@@ -193,6 +194,12 @@ test('autopilot show keeps giver private until display and personal reveal, then
     await expect(displayPage.getByTestId('display-stage')).toBeVisible();
     await expect(participant.getByText('Marco')).toBeVisible();
     await expect(organizer.getByTestId('live-cockpit')).toBeVisible();
+    await expect(
+      organizer
+        .getByTestId('autopilot-readiness')
+        .getByText('Display connected')
+        .locator('..'),
+    ).toContainText('Ready', { timeout: 10_000 });
     const start = organizer.getByRole('button', { name: 'Start Show' });
     await expect
       .poll(
@@ -319,6 +326,19 @@ test('autopilot show keeps giver private until display and personal reveal, then
       .filter({ hasText: 'Parcel 1' });
     await expect(recapParcel).toContainText('Giulia');
     expect(await axeViolations(participant)).toEqual([]);
+
+    await organizer.goto(`/o/events/${eventId}?tab=show`);
+    const presentationRequest = organizer.waitForRequest(
+      (request) =>
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === `/api/events/${eventId}/presentations`,
+    );
+    await organizer
+      .getByRole('button', { name: 'Show on display: Santa Detective' })
+      .click();
+    expect((await presentationRequest).postDataJSON()).toEqual({ kind: 'santa_detective' });
+    await expect(displayPage.getByTestId('spotlight-scene')).toBeVisible({ timeout: 10_000 });
+    expect(new URL(displayPage.url()).pathname).toBe(`/d/${display.token}`);
   } finally {
     for (const context of guestContexts.reverse()) await context.close();
   }

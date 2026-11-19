@@ -5,7 +5,6 @@ import { SceneSchema, AnnouncementSchema } from '@santa/contracts';
 import i18n from './i18n';
 import { usePrefs } from './prefs/store';
 import { setup } from './test-utils';
-import { isDisplayPresenceConnected } from './realtime/displayPresence';
 
 const ds = (phase: string, over: Record<string, unknown> = {}) => ({
   role: 'display',
@@ -45,10 +44,10 @@ afterEach(() => {
 });
 
 describe('display scenes (SceneSchema)', () => {
-  it('bare /d is not ready until a same-event display snapshot arrives', async () => {
+  it('bare /d renders only after a display event projection arrives', async () => {
     const t = setup('/d');
     expect(await screen.findByTestId('display-stage')).toBeTruthy();
-    expect(isDisplayPresenceConnected('e1')).toBe(false);
+    expect(screen.queryByText(/Welcome to Office Party/)).toBeNull();
 
     t.snapshot('pub', {
       eventState: ds('registration'),
@@ -60,20 +59,16 @@ describe('display scenes (SceneSchema)', () => {
       }),
     });
 
-    await waitFor(() => expect(isDisplayPresenceConnected('e1')).toBe(true));
-    expect(isDisplayPresenceConnected('another-event')).toBe(false);
-
-    act(() => t.sock.fire('disconnect'));
-    await waitFor(() => expect(isDisplayPresenceConnected('e1')).toBe(false));
+    expect(await screen.findByText(/Welcome to Office Party/)).toBeTruthy();
   });
 
-  it('a non-display projection never advertises display readiness', () => {
+  it('a non-display projection is not rendered as display state', () => {
     const t = setup('/d');
     t.snapshot('pub', {
       eventState: { ...ds('registration'), role: 'participant' },
       scene: scene({ scene: 'lobby', participants: 12, joinUrl: null, shortCode: null }),
     });
-    expect(isDisplayPresenceConnected('e1')).toBe(false);
+    expect(screen.queryByText(/Welcome to Office Party/)).toBeNull();
   });
 
   it('lobby: QR from scene joinUrl, short code and joined counter; sound overlay is non-modal', async () => {

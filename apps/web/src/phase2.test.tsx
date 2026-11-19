@@ -638,7 +638,8 @@ describe('organizer phase 2 console', () => {
     }));
     mountConsole({
       tab: 'show',
-      phase: 'gift_opening',
+      phase: 'reveal',
+      displayConnected: true,
       features: { guessSanta: true },
       p2: { present },
     });
@@ -647,6 +648,45 @@ describe('organizer phase 2 console', () => {
     );
     await waitFor(() => expect(present).toHaveBeenCalledWith('e1', 'santa_detective'));
     expect(await screen.findByText(/Reason: not enough guesses/)).toBeTruthy();
+  });
+
+  it('presentations: disables unavailable phases without sending a request', async () => {
+    const present = vi.fn<Phase2Api['present']>();
+    mountConsole({
+      tab: 'show',
+      phase: 'gift_opening',
+      displayConnected: true,
+      features: { guessSanta: true },
+      p2: { present },
+    });
+
+    const buttons = await screen.findAllByRole('button', { name: /Show on display:/ });
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(buttons[0]?.getAttribute('title')).toBe('Available from the Reveal phase.');
+    expect(screen.getAllByText('Available from the Reveal phase.')).toHaveLength(2);
+    expect(screen.getByText('Available from the Games phase.')).toBeTruthy();
+    expect(present).not.toHaveBeenCalled();
+  });
+
+  it('presentations: uses connected display presence as authoritative', async () => {
+    const present = vi.fn<Phase2Api['present']>();
+    mountConsole({
+      tab: 'show',
+      phase: 'reveal',
+      displayConnected: false,
+      features: { guessSanta: true },
+      p2: { present },
+    });
+
+    const buttons = await screen.findAllByRole('button', { name: /Show on display:/ });
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(buttons[0]?.getAttribute('title')).toBe(
+      'Connect an open display before showing this presentation.',
+    );
+    expect(
+      screen.getAllByText('Connect an open display before showing this presentation.'),
+    ).toHaveLength(3);
+    expect(present).not.toHaveBeenCalled();
   });
 
   it('missions: assign, verify/reject/reassign pending submissions', async () => {

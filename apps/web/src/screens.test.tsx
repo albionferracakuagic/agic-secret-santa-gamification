@@ -9,7 +9,6 @@ import { it as itLocale } from './i18n/it';
 import { usePrefs } from './prefs/store';
 import { httpParticipantApi, type MeResponse } from './api/participant';
 import { createReactionThrottle } from './components/reactionThrottle';
-import { isDisplayPresenceConnected } from './realtime/displayPresence';
 
 beforeEach(async () => {
   localStorage.clear();
@@ -285,7 +284,6 @@ describe('display token + reaction bursts', () => {
     expect(
       await screen.findByRole('heading', { name: 'Welcome to Direct Display Event' }),
     ).toBeTruthy();
-    await waitFor(() => expect(isDisplayPresenceConnected('display-event')).toBe(true));
   });
 
   it('keeps a failed token URL without subscribing or advertising readiness', async () => {
@@ -299,7 +297,6 @@ describe('display token + reaction bursts', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByTestId('where').textContent).toBe(`/d/${token}`);
     expect(t.sock.sent).toEqual([]);
-    expect(isDisplayPresenceConnected('e1')).toBe(false);
   });
 
   it('bare /d uses its existing session without exchanging an inferred token', async () => {

@@ -19,6 +19,8 @@ export interface OrganizerEventState {
     features?: EventFeatures;
     phase2?: Phase2Settings;
     phase3?: Phase3Settings;
+    /** Authoritative server presence for a subscribed display socket. */
+    displayConnected: boolean;
   };
 }
 

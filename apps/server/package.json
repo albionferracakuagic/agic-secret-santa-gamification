@@ -13,6 +13,7 @@
     "@azure/storage-blob": "^12.34.0",
     "@better-auth/drizzle-adapter": "1.7.25",
     "@fastify/cookie": "^11.1.5",
+    "@fastify/cors": "^11.4.3",
     "@fastify/helmet": "^13.2.0",
     "@fastify/multipart": "^10.1.9",
     "@fastify/rate-limit": "^11.2.2",

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { participants, unmaskGrants } from '@santa/db';
+import { events, participants, unmaskGrants } from '@santa/db';
+import { scanForbidden } from '@santa/contracts';
 import { hashToken } from '../tokens.js';
 import {
   addOrganizer,
@@ -56,6 +57,115 @@ describe('realtime core', () => {
       clock: () => new Date('2026-12-24T20:00:00Z'),
       rate: { messagesPerSec: 50, reactionsPerSec: 3 },
     });
+  }, 60_000);
+
+  it('selects display and organizer roles from one cookie jar, tracks readiness, and broadcasts a presentation', async () => {
+    const world = await createWorld({
+      clock: () => new Date('2026-12-24T20:00:00Z'),
+      rate: { messagesPerSec: 50, reactionsPerSec: 3 },
+    });
+    try {
+      await world.db.update(events).set({ phase: 'reveal' }).where(eq(events.id, world.eventId));
+      const owner = world.organizerCookie('demo-owner', 'shared-browser-owner');
+      const access = await world.app.inject({
+        method: 'POST',
+        url: `/api/events/${world.eventId}/access`,
+        headers: {
+          cookie: owner,
+          'idempotency-key': 'display-runtime-access-xxxx',
+        },
+        payload: { kind: 'display', expiresInHours: 12 },
+      });
+      expect(access.statusCode).toBe(201);
+      const { token } = access.json() as { token: string };
+      const exchange = await world.app.inject({
+        method: 'POST',
+        url: '/api/join/display',
+        headers: { 'idempotency-key': 'display-runtime-exchange-xx' },
+        payload: { token },
+      });
+      expect(exchange.statusCode).toBe(200);
+      const displayToken = exchange.cookies.find((c) => c.name === 'sg_d')?.value;
+      expect(displayToken).toBe(token);
+      const staleGuest = await world.guestCookie(0, 'still-valid-stale-guest');
+      const sharedCookies = `${owner}; ${staleGuest}; sg_d=${displayToken}`;
+      const tunnelOrigin = 'https://shared-browser.ngrok-free.app';
+
+      const org = world.client(sharedCookies, tunnelOrigin);
+      const display = world.client(sharedCookies, tunnelOrigin);
+      const orgDeltas = collect(org, 'delta');
+      const displayDeltas = collect(display, 'delta');
+      await Promise.all([connected(org), connected(display)]);
+
+      const [orgSnapshots] = await Promise.all([subscribeAll(org, { eventId: world.eventId }, 2)]);
+      expect(orgSnapshots.find((s) => s.stream === 'org')?.data['eventState']).toMatchObject({
+        organizer: { displayConnected: false },
+      });
+      expect(
+        scanForbidden(orgSnapshots, {
+          keys: ['token', 'sessionId', 'giverId', 'recipientId', 'voterId', 'score', 'pairings'],
+        }),
+      ).toEqual([]);
+
+      const displaySnapshots = await subscribeAll(display, {}, 1);
+      const pub = displaySnapshots[0]!;
+      expect(pub.stream).toBe('pub');
+      expect(pub.data['eventState']).toMatchObject({
+        role: 'display',
+        eventId: world.eventId,
+      });
+      expect(JSON.stringify(pub.data)).not.toContain(token);
+      await waitForCondition(
+        () =>
+          latestPresence(orgDeltas) === true &&
+          orgDeltas.some(
+            (m) =>
+              (m as { payload?: { organizer?: { displayConnected?: boolean } } }).payload?.organizer
+                ?.displayConnected === true,
+          ),
+        'same-browser organizer display presence',
+      );
+      expect(
+        scanForbidden(displaySnapshots, {
+          keys: ['token', 'sessionId', 'giverId', 'recipientId', 'voterId', 'score', 'pairings'],
+        }),
+      ).toEqual([]);
+
+      const presented = await world.app.inject({
+        method: 'POST',
+        url: `/api/events/${world.eventId}/presentations`,
+        headers: {
+          cookie: owner,
+          'idempotency-key': 'display-runtime-present-xxxx',
+        },
+        payload: { kind: 'santa_detective' },
+      });
+      expect(presented.statusCode).toBe(200);
+      await waitForCondition(
+        () =>
+          displayDeltas.some(
+            (m) =>
+              (m as { surface?: string; payload?: { scene?: string } }).surface === 'scene' &&
+              (m as { payload?: { scene?: string } }).payload?.scene === 'spotlight',
+          ),
+        'display presentation scene',
+      );
+      const latestScene = [...displayDeltas]
+        .reverse()
+        .find((m) => (m as { surface?: string }).surface === 'scene') as
+        { payload?: { scene?: string; spotlight?: { kind?: string } } } | undefined;
+      expect(latestScene?.payload).toMatchObject({
+        scene: 'spotlight',
+        spotlight: { kind: 'santa_detective' },
+      });
+      expect(
+        scanForbidden([displaySnapshots, displayDeltas], {
+          keys: ['token', 'sessionId', 'giverId', 'recipientId', 'voterId', 'score', 'pairings'],
+        }),
+      ).toEqual([]);
+    } finally {
+      await world.close();
+    }
   }, 60_000);
   afterAll(async () => {
     await w.close();

@@ -1,7 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GAME_KINDS, SPOTLIGHT_KINDS, type GameKind, type SpotlightKind } from '@santa/contracts';
+import {
+  GAME_KINDS,
+  SPOTLIGHT_KINDS,
+  type GameKind,
+  type Phase,
+  type SpotlightKind,
+} from '@santa/contracts';
 import { usePhase2Api, type GameAction, type PresentResult } from '../../api/phase2';
 import { useLocalized } from '../../lib/localized';
 import { errorKey } from '../../pages/Dashboard';
@@ -80,8 +86,22 @@ export function ClueQueue({ eventId }: { eventId: string }) {
   );
 }
 
-/** Presentations: show a canPublish-gated board on the display (the reason a publish failed is organizer-only). */
-export function PresentationControls({ eventId }: { eventId: string }) {
+const PRESENT_PHASES: Record<SpotlightKind, readonly Phase[]> = {
+  santa_detective: ['reveal', 'awards', 'completed'],
+  invisible_santa: ['reveal', 'awards', 'completed'],
+  mission_master: ['games', 'reveal', 'awards', 'completed'],
+};
+
+/** Presentations: show a phase/display-gated board; publish policy remains server-controlled. */
+export function PresentationControls({
+  eventId,
+  phase,
+  displayConnected,
+}: {
+  eventId: string;
+  phase: Phase;
+  displayConnected: boolean;
+}) {
   const { t } = useTranslation();
   const api = usePhase2Api();
   const [result, setResult] = useState<PresentResult>();
@@ -98,18 +118,39 @@ export function PresentationControls({ eventId }: { eventId: string }) {
       <h2 id="present-title" className="text-xl font-semibold">
         {t('guessCtl.presentTitle')}
       </h2>
-      <div className="flex flex-wrap gap-2">
-        {SPOTLIGHT_KINDS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            className={btn}
-            disabled={present.isPending}
-            onClick={() => present.mutate(k)}
-          >
-            {t('guessCtl.show')}: {t(`guessCtl.kind.${k}`)}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-start gap-2">
+        {SPOTLIGHT_KINDS.map((k) => {
+          const phaseUnavailable = !PRESENT_PHASES[k].includes(phase);
+          const unavailable = phaseUnavailable || !displayConnected;
+          const reasonId = `presentation-${k}-reason`;
+          const firstAllowedPhase = PRESENT_PHASES[k][0]!;
+          const reason = phaseUnavailable
+            ? t('guessCtl.phaseUnavailable', {
+                phase: t(`phase.${firstAllowedPhase}`),
+              })
+            : !displayConnected
+              ? t('guessCtl.displayUnavailable')
+              : undefined;
+          return (
+            <div key={k} className="flex flex-col gap-1">
+              <button
+                type="button"
+                className={btn}
+                disabled={unavailable || present.isPending}
+                title={reason}
+                aria-describedby={reason ? reasonId : undefined}
+                onClick={() => present.mutate(k)}
+              >
+                {t('guessCtl.show')}: {t(`guessCtl.kind.${k}`)}
+              </button>
+              {reason && (
+                <p id={reasonId} className="max-w-56 text-sm">
+                  {reason}
+                </p>
+              )}
+            </div>
+          );
+        })}
         <button
           type="button"
           className={btn}

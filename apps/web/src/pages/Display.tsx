@@ -28,7 +28,6 @@ import { emitFx } from '../fx/bus';
 import { useLocalized } from '../lib/localized';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
-import { usePublishDisplayPresence } from '../realtime/displayPresence';
 
 type DState = Extract<EventStateOutput, { role: 'display' }>;
 
@@ -92,24 +91,22 @@ function DisplayStage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const { rt, state } = useRealtime();
-  const es = surfaceOf<DState>(state, 'pub', 'eventState');
+  const projected = state.surfaces.pub?.eventState;
+  const es =
+    typeof projected === 'object' &&
+    projected !== null &&
+    'role' in projected &&
+    projected.role === 'display' &&
+    'eventId' in projected &&
+    typeof projected.eventId === 'string'
+      ? (projected as DState)
+      : undefined;
   const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
   const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'pub', 'announcement');
   const scale = useStageScale();
   const now = () => rt?.serverNow() ?? Date.now();
-  const publicEventState = state.surfaces.pub?.eventState as
-    | Partial<DState>
-    | undefined;
-  const connectedDisplayEventId =
-    state.status === 'live' &&
-    publicEventState?.role === 'display' &&
-    typeof publicEventState.eventId === 'string'
-      ? publicEventState.eventId
-      : undefined;
-  usePublishDisplayPresence(connectedDisplayEventId);
-
   usePrevEffect(
     es?.counts.participants,
     (p, n) => n !== undefined && p < n && emitFx('participant_joined'),

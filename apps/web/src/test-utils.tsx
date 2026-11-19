@@ -294,6 +294,7 @@ export function mountConsole(opts: {
   p2?: Partial<Phase2Api>;
   p3?: Partial<Phase3Api>;
   features?: Partial<EventFeatures>;
+  displayConnected?: boolean;
   /** Console tab (`?tab=`); omitted = default (live). */
   tab?: string;
 }) {
@@ -315,6 +316,7 @@ export function mountConsole(opts: {
                   warnings: [],
                   reactionsEnabled: true,
                   features: { ...DEFAULT_EVENT_FEATURES, ...opts.features },
+                  displayConnected: opts.displayConnected ?? false,
                   phase2: Phase2SettingsSchema.parse({}),
                   phase3: Phase3SettingsSchema.parse({}),
                 },

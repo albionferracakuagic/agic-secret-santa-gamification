@@ -295,7 +295,13 @@ export function showPanels(eventId: string, s: OrganizerEventState): ShowPanel[]
       at('gift_opening') && {
         key: 'presentation',
         primary: ['gift_opening'],
-        node: <PresentationControls eventId={eventId} />,
+        node: (
+          <PresentationControls
+            eventId={eventId}
+            phase={s.phase}
+            displayConnected={s.organizer.displayConnected === true}
+          />
+        ),
       },
     f.coins && { key: 'coins', primary: [], node: <CoinsConsole eventId={eventId} /> },
     f.auction && {

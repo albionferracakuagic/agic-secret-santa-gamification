@@ -26,7 +26,11 @@ export interface OrganizerSessions {
 }
 
 export interface PrincipalStore {
-  resolve(cookieHeader: string | undefined): Promise<Principal | null>;
+  /**
+   * Resolves the socket principal. Supplying eventId explicitly requests organizer context,
+   * allowing an organizer and display to coexist as tabs in the same browser cookie jar.
+   */
+  resolve(cookieHeader: string | undefined, eventId?: string): Promise<Principal | null>;
   isCurrent(p: Principal): Promise<boolean>;
   isOrganizerOf(userId: string, eventId: string): Promise<boolean>;
   /** Unmask grant is active for this organizer+event right now. */
@@ -40,19 +44,13 @@ export class DbPrincipalStore implements PrincipalStore {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  async resolve(cookieHeader: string | undefined): Promise<Principal | null> {
+  async resolve(cookieHeader: string | undefined, eventId?: string): Promise<Principal | null> {
     const cookies = parseCookies(cookieHeader);
-    const guest = cookies[GUEST_COOKIE];
-    if (guest) {
-      const sessionId = hashToken(guest);
-      const [p] = await this.db
-        .select({ id: participants.id, eventId: participants.eventId })
-        .from(participants)
-        .innerJoin(events, and(eq(events.id, participants.eventId), isNull(events.suspendedAt)))
-        .where(
-          and(eq(participants.sessionTokenHash, sessionId), eq(participants.status, 'active')),
-        );
-      if (p) return { kind: 'guest', eventId: p.eventId, participantId: p.id, sessionId };
+    if (eventId) {
+      const org = await this.organizers.fromCookieHeader(cookieHeader);
+      if (org && (await this.isOrganizerOf(org.userId, eventId))) {
+        return { kind: 'organizer', userId: org.userId, sessionId: org.sessionId };
+      }
     }
     const display = cookies[DISPLAY_COOKIE];
     if (display) {
@@ -70,6 +68,18 @@ export class DbPrincipalStore implements PrincipalStore {
           ),
         );
       if (a) return { kind: 'display', eventId: a.eventId, sessionId };
+    }
+    const guest = cookies[GUEST_COOKIE];
+    if (guest) {
+      const sessionId = hashToken(guest);
+      const [p] = await this.db
+        .select({ id: participants.id, eventId: participants.eventId })
+        .from(participants)
+        .innerJoin(events, and(eq(events.id, participants.eventId), isNull(events.suspendedAt)))
+        .where(
+          and(eq(participants.sessionTokenHash, sessionId), eq(participants.status, 'active')),
+        );
+      if (p) return { kind: 'guest', eventId: p.eventId, participantId: p.id, sessionId };
     }
     const org = await this.organizers.fromCookieHeader(cookieHeader);
     return org ? { kind: 'organizer', userId: org.userId, sessionId: org.sessionId } : null;

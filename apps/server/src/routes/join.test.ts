@@ -385,6 +385,7 @@ describe('display token exchange', () => {
     expect(ex.statusCode).toBe(200);
     const c = cookieOf(ex, 'sg_d')!;
     expect(c).toMatchObject({ httpOnly: true, sameSite: 'Lax' });
+    expect(cookieOf(ex, 'sg_p')).toMatchObject({ value: '' });
     // a join token must not work as a display token
     const j = await joinAccess();
     expect((await req('POST', '/api/join/display', { body: { token: j.token } })).statusCode).toBe(

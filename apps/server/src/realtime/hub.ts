@@ -73,10 +73,11 @@ type Sock = Socket & { data: SocketData };
 const roomFor = (eventId: string, stream: string) =>
   stream.startsWith('grant:') ? stream : `e:${eventId}:${stream}`;
 
-function roleFor(p: Principal, grant = false): Role {
-  if (p.kind === 'guest') return 'participant';
-  if (p.kind === 'display') return 'display';
-  return grant ? 'organizer_unmasked' : 'organizer_masked';
+function roleForStream(stream: string): Role {
+  if (stream === 'pub') return 'display';
+  if (stream === 'org') return 'organizer_masked';
+  if (stream.startsWith('p:')) return 'participant';
+  return 'organizer_unmasked';
 }
 
 /**
@@ -192,7 +193,16 @@ export class RealtimeHub {
   private async onSubscribe(socket: Sock, raw: unknown) {
     const m = ClientEvents.subscribe.safeParse(raw ?? {});
     if (!m.success) return void socket.emit('error', { code: 'bad_request' });
-    const { principal } = socket.data;
+    let { principal } = socket.data;
+    if (m.data.eventId) {
+      const requested = await this.o.principals.resolve(
+        socket.handshake.headers.cookie,
+        m.data.eventId,
+      );
+      if (!requested) return void socket.emit('error', { code: 'forbidden' });
+      principal = requested;
+      socket.data.principal = requested;
+    }
     let eventId: string;
     let streams: string[];
     if (principal.kind === 'organizer') {
@@ -319,7 +329,7 @@ export class RealtimeHub {
     return this.guardSurfaces(
       eventId,
       stream,
-      roleFor(principal, stream.startsWith('grant:')),
+      roleForStream(stream),
       await this.o.snapshots.snapshot(principal, eventId, stream),
     );
   }
