@@ -68,6 +68,8 @@ const organizerShape = {
   features: EventFeaturesSchema,
   phase2: Phase2SettingsSchema,
   phase3: Phase3SettingsSchema,
+  /** True while at least one authenticated display socket is subscribed for this event. */
+  displayConnected: z.boolean(),
   /** Show autopilot state (organizer roles only; never on display/participant/pub projections). */
   autopilot: AutopilotStateSchema.optional(),
 };

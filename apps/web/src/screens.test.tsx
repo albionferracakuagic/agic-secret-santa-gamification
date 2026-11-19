@@ -1,19 +1,22 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REACTION_KINDS } from '@santa/contracts';
 import { ME, MY, setup } from './test-utils';
 import i18n from './i18n';
 import { en } from './i18n/en';
 import { it as itLocale } from './i18n/it';
 import { usePrefs } from './prefs/store';
-import type { MeResponse } from './api/participant';
+import { httpParticipantApi, type MeResponse } from './api/participant';
 import { createReactionThrottle } from './components/reactionThrottle';
+import { isDisplayPresenceConnected } from './realtime/displayPresence';
 
 beforeEach(async () => {
+  localStorage.clear();
   await i18n.changeLanguage('en');
   usePrefs.setState({ sound: false, music: false, intensity: 'normal', reducedMotion: 'off' });
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe('join flow /j', () => {
   it('short code -> roster name -> pending -> approved goes to /e', async () => {
@@ -224,12 +227,88 @@ describe('i18n parity for new screens', () => {
 });
 
 describe('display token + reaction bursts', () => {
-  it('exchanges the /d/<token> URL token, strips it, then shows the stage', async () => {
-    const exchange = vi.fn(async () => undefined);
-    setup('/d/' + 'c'.repeat(24), { exchangeDisplayToken: exchange });
-    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/d'));
-    expect(exchange).toHaveBeenCalledWith('c'.repeat(24));
+  it('joins from a direct token URL without replacing it and consumes the display projection', async () => {
+    const token = 'c'.repeat(24);
+    let finishExchange: (() => void) | undefined;
+    const fetchRequest = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishExchange = () => resolve(new Response(null, { status: 204 }));
+        }),
+    );
+    vi.stubGlobal('fetch', fetchRequest);
+    const t = setup(`/d/${token}`, {
+      exchangeDisplayToken: httpParticipantApi.exchangeDisplayToken,
+    });
+
+    await waitFor(() =>
+      expect(fetchRequest).toHaveBeenCalledWith(
+        '/api/join/display',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          body: JSON.stringify({ token }),
+        }),
+      ),
+    );
+    expect(screen.getByTestId('where').textContent).toBe(`/d/${token}`);
+    expect(t.sock.sent).toEqual([]);
+
+    act(() => finishExchange?.());
     expect(await screen.findByTestId('display-stage')).toBeTruthy();
+    expect(screen.getByTestId('where').textContent).toBe(`/d/${token}`);
+
+    act(() => t.sock.fire('connect'));
+    expect(t.sock.sent).toContainEqual(['subscribe', {}]);
+    t.snapshot('pub', {
+      eventState: {
+        role: 'display',
+        eventId: 'display-event',
+        name: 'Direct Display Event',
+        description: null,
+        theme: 'xmas',
+        startsAt: '2026-12-20T18:00:00Z',
+        timezone: 'UTC',
+        phase: 'registration',
+        paused: false,
+        votingEndsAt: null,
+        counts: { participants: 3, giftsRegistered: 0 },
+      },
+      scene: {
+        scene: 'lobby',
+        phase: 'registration',
+        participants: 3,
+        joinUrl: null,
+        shortCode: null,
+      },
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'Welcome to Direct Display Event' }),
+    ).toBeTruthy();
+    await waitFor(() => expect(isDisplayPresenceConnected('display-event')).toBe(true));
+  });
+
+  it('keeps a failed token URL without subscribing or advertising readiness', async () => {
+    const token = 'x'.repeat(24);
+    const t = setup(`/d/${token}`, {
+      exchangeDisplayToken: async () => {
+        throw new Error('invalid display token');
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByTestId('where').textContent).toBe(`/d/${token}`);
+    expect(t.sock.sent).toEqual([]);
+    expect(isDisplayPresenceConnected('e1')).toBe(false);
+  });
+
+  it('bare /d uses its existing session without exchanging an inferred token', async () => {
+    const exchange = vi.fn(async () => undefined);
+    const t = setup('/d', { exchangeDisplayToken: exchange });
+    expect(await screen.findByTestId('display-stage')).toBeTruthy();
+    expect(exchange).not.toHaveBeenCalled();
+    act(() => t.sock.fire('connect'));
+    expect(t.sock.sent).toContainEqual(['subscribe', {}]);
   });
 
   it('stores aggregated reaction bursts with a monotonic sequence', () => {

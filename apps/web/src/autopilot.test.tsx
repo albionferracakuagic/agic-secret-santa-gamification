@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,16 +16,24 @@ import { OrganizerApiProvider } from './api/organizer';
 import { LiveTab, type PhaseActions } from './components/organizer/console/LiveTab';
 import { AutopilotSettingsForm } from './components/organizer/console/tabs';
 import type { OrganizerEventState } from './components/organizer/console/types';
+import {
+  isDisplayPresenceConnected,
+  publishDisplayPresence,
+} from './realtime/displayPresence';
 import { RealtimeProvider } from './realtime/react';
 import { createRealtimeStore } from './realtime/store';
 import { fakeOrganizerApi, fakeSocket } from './test-utils';
 
 beforeEach(() => {
+  localStorage.clear();
   i18n.changeLanguage('en');
   document.title = 'Secret Santa Games';
   document.documentElement.lang = 'en';
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 
 const NOW = '2026-12-20T18:00:00.000Z';
 const idle = (over: Partial<AutopilotState> = {}): AutopilotState => ({
@@ -80,20 +88,32 @@ function renderAutopilot(
     eventState?: OrganizerEventState | undefined;
     api?: Partial<AutopilotApi> | undefined;
     pairingReady?: boolean | undefined;
-    displayLive?: boolean | undefined;
+    displayConnected?: boolean | undefined;
+    organizerPubSnapshot?: boolean | undefined;
+    organizerSnapshot?: { displayConnected?: boolean } | undefined;
   } = {},
 ) {
   const socket = fakeSocket();
   const rt = createRealtimeStore({ eventId: 'e1' });
   rt.connect(socket.s);
-  if (opts.displayLive) {
+  if (opts.organizerPubSnapshot || opts.organizerSnapshot) {
     socket.fire('connect');
-    socket.fire('snapshot', {
-      stream: 'pub',
-      cursor: 1,
-      data: { eventState: { role: 'display' } },
-    });
+    socket.fire(
+      'snapshot',
+      opts.organizerPubSnapshot
+        ? {
+            stream: 'pub',
+            cursor: 1,
+            data: { eventState: { role: 'display' } },
+          }
+        : {
+            stream: 'org',
+            cursor: 1,
+            data: { eventState: { organizer: opts.organizerSnapshot } },
+          },
+    );
   }
+  if (opts.displayConnected) publishDisplayPresence('e1', 'test-display');
   const api: AutopilotApi = {
     get: vi.fn(async () => response(ap)),
     command: vi.fn(async (_eventId, command) =>
@@ -169,7 +189,7 @@ describe('console live autopilot', () => {
     const ap = idle();
     const mounted = renderAutopilot(ap, {
       pairingReady: true,
-      displayLive: true,
+      displayConnected: true,
     });
     const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
     await waitFor(() => expect(start.disabled).toBe(false));
@@ -180,6 +200,83 @@ describe('console live autopilot', () => {
         fromSeq: 4,
       }),
     );
+  });
+
+  it('does not infer display readiness from the organizer pub subscription', async () => {
+    const mounted = renderAutopilot(idle(), {
+      pairingReady: true,
+      organizerPubSnapshot: true,
+    });
+    const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
+    await waitFor(() => expect(start.disabled).toBe(true));
+    const readiness = within(screen.getByTestId('autopilot-readiness')).getByText(
+      'Display connected',
+    );
+    expect(readiness.parentElement?.textContent).toContain('Not ready');
+
+    act(() => publishDisplayPresence('e1', 'actual-display'));
+    await waitFor(() => expect(start.disabled).toBe(false));
+    mounted.unmount();
+  });
+
+  it('uses local presence only before the initial organizer snapshot', async () => {
+    publishDisplayPresence('e1', 'same-browser-display');
+    const mounted = renderAutopilot(idle(), { pairingReady: true });
+    const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
+    await waitFor(() => expect(start.disabled).toBe(false));
+    mounted.unmount();
+  });
+
+  it('accepts cross-device display presence from the organizer snapshot', async () => {
+    const mounted = renderAutopilot(idle(), {
+      pairingReady: true,
+      organizerSnapshot: { displayConnected: true },
+    });
+    const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
+    await waitFor(() => expect(start.disabled).toBe(false));
+    expect(isDisplayPresenceConnected('e1')).toBe(false);
+    mounted.unmount();
+  });
+
+  it('lets server false override same-browser display presence', async () => {
+    publishDisplayPresence('e1', 'same-browser-display');
+    const mounted = renderAutopilot(idle(), {
+      pairingReady: true,
+      organizerSnapshot: { displayConnected: false },
+    });
+    const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
+    await waitFor(() => expect(start.disabled).toBe(true));
+    mounted.unmount();
+  });
+
+  it('tracks authoritative display presence deltas in both directions', async () => {
+    const mounted = renderAutopilot(idle(), {
+      pairingReady: true,
+      organizerSnapshot: { displayConnected: false },
+    });
+    const start = (await screen.findByRole('button', { name: 'Start Show' })) as HTMLButtonElement;
+    await waitFor(() => expect(start.disabled).toBe(true));
+
+    act(() =>
+      mounted.socket.fire('delta', {
+        stream: 'org',
+        cursor: 2,
+        surface: 'eventState',
+        payload: { organizer: { displayConnected: true } },
+      }),
+    );
+    await waitFor(() => expect(start.disabled).toBe(false));
+
+    act(() =>
+      mounted.socket.fire('delta', {
+        stream: 'org',
+        cursor: 3,
+        surface: 'eventState',
+        payload: { organizer: { displayConnected: false } },
+      }),
+    );
+    await waitFor(() => expect(start.disabled).toBe(true));
+    mounted.unmount();
   });
 
   it('uses state-keyed controls and confirms an irreversible skip', async () => {
@@ -199,7 +296,7 @@ describe('console live autopilot', () => {
       ],
       log: [{ at: NOW, code: 'step_started', params: { step: 'voting' } }],
     });
-    const mounted = renderAutopilot(ap, { pairingReady: true, displayLive: true });
+    const mounted = renderAutopilot(ap, { pairingReady: true, displayConnected: true });
     await screen.findByRole('button', { name: 'Hold' });
     expect(screen.getByRole('button', { name: 'Stop autopilot' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();

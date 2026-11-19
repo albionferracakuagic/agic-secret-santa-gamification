@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { participants, unmaskGrants } from '@santa/db';
 import { hashToken } from '../tokens.js';
 import {
+  addOrganizer,
   collect,
   connected,
   createWorld,
@@ -17,6 +18,28 @@ interface Snap {
   cursor: number;
   data: Record<string, { mode?: string; role?: string; me?: { xp: { xp: number } } }>;
 }
+
+const latestPresence = (deltas: unknown[]) => {
+  for (let i = deltas.length - 1; i >= 0; i--) {
+    const delta = deltas[i] as {
+      stream?: string;
+      surface?: string;
+      payload?: { organizer?: { displayConnected?: boolean } };
+    };
+    if (delta.stream === 'org' && delta.surface === 'eventState') {
+      return delta.payload?.organizer?.displayConnected;
+    }
+  }
+  return undefined;
+};
+
+const waitForCondition = async (condition: () => boolean, label: string) => {
+  for (let i = 0; i < 100; i++) {
+    if (condition()) return;
+    await sleep(20);
+  }
+  throw new Error(`timeout waiting for ${label}`);
+};
 
 const subscribeAll = async (s: ReturnType<World['client']>, payload: unknown, n: number) => {
   const snaps: Snap[] = [];
@@ -52,11 +75,13 @@ describe('realtime core', () => {
     const own = snaps.find((s) => s.stream.startsWith('p:'))!;
     expect(own.data['eventState']?.me?.xp.xp).toBe(10); // self-only XP
     expect(snaps.find((s) => s.stream === 'pub')!.data['giftList']?.mode).toBe('count_only');
+    expect(JSON.stringify(snaps)).not.toContain('displayConnected');
 
     const display = w.client(await w.displayCookie());
     await connected(display);
     const dsnaps = await subscribeAll(display, {}, 1);
     expect(dsnaps.map((s) => s.stream)).toEqual(['pub']);
+    expect(JSON.stringify(dsnaps)).not.toContain('displayConnected');
 
     const org = w.client(w.organizerCookie());
     await connected(org);
@@ -64,7 +89,59 @@ describe('realtime core', () => {
     expect(osnaps.map((s) => s.stream).sort()).toEqual(['org', 'pub']);
     expect(osnaps.find((s) => s.stream === 'org')!.data['eventState']).toMatchObject({
       role: 'organizer_masked',
+      organizer: { displayConnected: true },
     });
+    const displayGone = waitFor(display, 'disconnect');
+    display.disconnect();
+    await displayGone;
+  });
+
+  it('tracks authenticated display presence per event and preserves it until the last disconnect', async () => {
+    const other = await insertSecondEvent(w.db, 'presence-outsider');
+    await addOrganizer(w.db, other.eventId, 'stranger');
+    const org = w.client(w.organizerCookie('demo-owner', 'presence-observer'));
+    const otherOrg = w.client(w.organizerCookie('stranger', 'other-observer'));
+    await Promise.all([connected(org), connected(otherOrg)]);
+    const [orgSnaps, otherSnaps] = await Promise.all([
+      subscribeAll(org, { eventId: w.eventId }, 2),
+      subscribeAll(otherOrg, { eventId: other.eventId }, 2),
+    ]);
+    expect(orgSnaps.find((s) => s.stream === 'org')!.data['eventState']).toMatchObject({
+      organizer: { displayConnected: false },
+    });
+    expect(otherSnaps.find((s) => s.stream === 'org')!.data['eventState']).toMatchObject({
+      organizer: { displayConnected: false },
+    });
+    const orgDeltas = collect(org, 'delta');
+    const otherDeltas = collect(otherOrg, 'delta');
+
+    const d1 = w.client(await w.displayCookie());
+    const d2 = w.client(await w.displayCookie());
+    await connected(d1);
+    await connected(d2);
+    const d1Snaps = subscribeAll(d1, {}, 1);
+    const d2Snaps = subscribeAll(d2, {}, 1);
+    await Promise.all([d1Snaps, d2Snaps]);
+    await waitForCondition(
+      () => latestPresence(orgDeltas) === true,
+      'organizer presence connected delta',
+    );
+    expect(latestPresence(otherDeltas)).toBeUndefined();
+
+    const gone1 = waitFor(d1, 'disconnect');
+    d1.disconnect();
+    await gone1;
+    await sleep(50);
+    expect(latestPresence(orgDeltas)).toBe(true);
+
+    const gone2 = waitFor(d2, 'disconnect');
+    d2.disconnect();
+    await gone2;
+    await waitForCondition(
+      () => latestPresence(orgDeltas) === false,
+      'organizer presence disconnected delta',
+    );
+    expect(latestPresence(otherDeltas)).toBeUndefined();
   });
 
   it('organizer must be a member of the named event', async () => {

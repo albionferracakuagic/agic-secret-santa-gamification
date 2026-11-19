@@ -10,7 +10,6 @@ import {
   UnmaskGrantResponseSchema,
   UnmaskRequestSchema,
   UpdateEventRequestSchema,
-  guardOutput,
   type GuardEnv,
 } from '@santa/contracts';
 import {
@@ -32,7 +31,6 @@ import {
 import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
 import { broadcastEventState } from '../realtime/broadcast.js';
-import { DbSnapshotProvider } from '../realtime/snapshots.js';
 import { fail, makeGuards } from './guards.js';
 
 export interface OrganizerRouteDeps {
@@ -45,7 +43,6 @@ export interface OrganizerRouteDeps {
 }
 
 export function registerOrganizerRoutes(app: FastifyInstance, d: OrganizerRouteDeps) {
-  const snapshots = new DbSnapshotProvider(d.db);
   const { authed, member, owner, pre, run, body, eventParams } = makeGuards(d);
 
   /* ---------- events ---------- */
@@ -188,18 +185,12 @@ export function registerOrganizerRoutes(app: FastifyInstance, d: OrganizerRouteD
     const grantId = await activeGrant(req);
     if (req.headers[UNMASK_GRANT_HEADER] && !grantId) return fail(reply, 403, 'unmask_required');
     const role = grantId ? 'organizer_unmasked' : 'organizer_masked';
-    const data = await snapshots.snapshot(
+    const data = await d.hub.snapshot(
       principal,
       eventParams(req),
       grantId ? `grant:${grantId}` : 'org',
     );
-    const safe = Object.fromEntries(
-      Object.entries(data).map(([k, v]) => [
-        k,
-        guardOutput(role, k as 'eventState' | 'giftList', v, { env: d.guardEnv }),
-      ]),
-    );
-    return { role, ...safe };
+    return { role, ...data };
   });
 
   /** FR-046.9: secret data only with an active grant; everyone else gets 403. */

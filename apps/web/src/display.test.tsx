@@ -5,6 +5,7 @@ import { SceneSchema, AnnouncementSchema } from '@santa/contracts';
 import i18n from './i18n';
 import { usePrefs } from './prefs/store';
 import { setup } from './test-utils';
+import { isDisplayPresenceConnected } from './realtime/displayPresence';
 
 const ds = (phase: string, over: Record<string, unknown> = {}) => ({
   role: 'display',
@@ -34,12 +35,47 @@ const gift = (id: string, name: string, status: 'opened' | 'revealed' = 'opened'
 const scene = (s: unknown) => SceneSchema.parse(s); // fixtures must satisfy the real contract
 
 beforeEach(async () => {
+  localStorage.clear();
   await i18n.changeLanguage('en');
   usePrefs.setState({ sound: false, music: false, intensity: 'normal', reducedMotion: 'off' });
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  localStorage.clear();
+  vi.useRealTimers();
+});
 
 describe('display scenes (SceneSchema)', () => {
+  it('bare /d is not ready until a same-event display snapshot arrives', async () => {
+    const t = setup('/d');
+    expect(await screen.findByTestId('display-stage')).toBeTruthy();
+    expect(isDisplayPresenceConnected('e1')).toBe(false);
+
+    t.snapshot('pub', {
+      eventState: ds('registration'),
+      scene: scene({
+        scene: 'lobby',
+        participants: 12,
+        joinUrl: null,
+        shortCode: null,
+      }),
+    });
+
+    await waitFor(() => expect(isDisplayPresenceConnected('e1')).toBe(true));
+    expect(isDisplayPresenceConnected('another-event')).toBe(false);
+
+    act(() => t.sock.fire('disconnect'));
+    await waitFor(() => expect(isDisplayPresenceConnected('e1')).toBe(false));
+  });
+
+  it('a non-display projection never advertises display readiness', () => {
+    const t = setup('/d');
+    t.snapshot('pub', {
+      eventState: { ...ds('registration'), role: 'participant' },
+      scene: scene({ scene: 'lobby', participants: 12, joinUrl: null, shortCode: null }),
+    });
+    expect(isDisplayPresenceConnected('e1')).toBe(false);
+  });
+
   it('lobby: QR from scene joinUrl, short code and joined counter; sound overlay is non-modal', async () => {
     const t = setup('/d');
     t.snapshot('pub', {

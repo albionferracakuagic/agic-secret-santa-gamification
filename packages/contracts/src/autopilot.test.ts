@@ -104,6 +104,13 @@ describe('autopilot command + state', () => {
     expect('autopilot' in OutputSchemas.display.eventState.shape).toBe(false);
     expect('autopilot' in OutputSchemas.participant.eventState.shape).toBe(false);
   });
+
+  it('display presence is an exact organizer-only contract field', () => {
+    const shape = OrganizerMaskedEventStateSchema.shape.organizer.shape;
+    expect('displayConnected' in shape).toBe(true);
+    expect('displayConnected' in OutputSchemas.display.eventState.shape).toBe(false);
+    expect('displayConnected' in OutputSchemas.participant.eventState.shape).toBe(false);
+  });
 });
 
 describe('reveal scene', () => {

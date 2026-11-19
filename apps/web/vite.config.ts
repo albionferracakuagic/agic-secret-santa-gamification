@@ -28,6 +28,7 @@ export default defineConfig({
     }),
   ],
   server: {
+    allowedHosts: ['.ngrok-free.app', '.ngrok.io'],
     fs: { allow: ['../..'] }, // doc/legal/*.md is bundled as static pages
     proxy: {
       '/api': 'http://localhost:3000',
@@ -35,5 +36,8 @@ export default defineConfig({
       '/health': 'http://localhost:3000',
       '/socket.io': { target: 'http://localhost:3000', ws: true },
     },
+  },
+  preview: {
+    allowedHosts: ['.ngrok-free.app', '.ngrok.io'],
   },
 });

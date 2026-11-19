@@ -8,6 +8,7 @@ import type {
 } from '@santa/contracts';
 import { useAutopilotApi } from '../../../api/autopilot';
 import { useRealtime } from '../../../realtime/react';
+import { useDisplayPresence } from '../../../realtime/displayPresence';
 
 export const autopilotQueryKey = (eventId: string) => ['autopilot', eventId] as const;
 
@@ -26,6 +27,7 @@ export function useAutopilot(eventId: string, projected?: AutopilotState | undef
     enabled: !!eventId && !!projected,
   });
   const orgEventState = realtime.surfaces.org?.eventState;
+  const displayConnected = useDisplayPresence(eventId, orgEventState);
 
   useEffect(() => {
     if (orgEventState === undefined) return;
@@ -60,8 +62,7 @@ export function useAutopilot(eventId: string, projected?: AutopilotState | undef
     command,
     patch,
     realtimeStatus: realtime.status,
-    displayConnected:
-      realtime.status === 'live' && realtime.surfaces.pub?.eventState !== undefined,
+    displayConnected,
     serverNow: () => rt?.serverNow() ?? Date.now(),
   };
 }

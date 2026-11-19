@@ -91,11 +91,13 @@ describe('masked vs unmasked organizer + audit unmask', () => {
 
     const masked = (await call('GET', ev('/organizer-state'), { cookie: owner() })).json();
     expect(masked.role).toBe('organizer_masked');
+    expect(masked.eventState.organizer.displayConnected).toBe(false);
     expect(scanForbidden(masked, { keys: ['giverId', 'recipientId', 'unmask'] })).toEqual([]);
     const unmasked = (
       await call('GET', ev('/organizer-state'), { cookie: owner(), headers: grant })
     ).json();
     expect(unmasked.role).toBe('organizer_unmasked');
+    expect(unmasked.eventState.organizer.displayConnected).toBe(false);
     expect(unmasked.giftList.mode).toBe('unmasked');
 
     // a non-owned / bogus grant is refused, not silently downgraded

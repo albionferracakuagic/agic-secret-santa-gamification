@@ -153,7 +153,7 @@ export async function addOrganizer(db: Db, eventId: string, userId: string) {
   await db.insert(eventOrganizers).values({ eventId, userId, role: 'co' });
 }
 
-export async function insertSecondEvent(db: Db) {
+export async function insertSecondEvent(db: Db, token = 'outsider') {
   const [e] = await db
     .insert(events)
     .values({
@@ -171,8 +171,8 @@ export async function insertSecondEvent(db: Db) {
       displayName: 'Outsider',
       status: 'active',
       source: 'join',
-      sessionTokenHash: hashToken('outsider'),
+      sessionTokenHash: hashToken(token),
     })
     .returning();
-  return { eventId: e!.id, participantId: p!.id, cookie: `${GUEST_COOKIE}=outsider` };
+  return { eventId: e!.id, participantId: p!.id, cookie: `${GUEST_COOKIE}=${token}` };
 }

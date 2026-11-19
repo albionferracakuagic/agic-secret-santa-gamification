@@ -42,6 +42,8 @@ export interface EventStateInput {
   votedCount?: number;
   /** Caller loads ONLY the viewer's own selections. */
   ownVotes: ReadonlyArray<{ categoryId: string; giftId: string }>;
+  /** Live authenticated display presence; organizer projections only. */
+  displayConnected?: boolean | undefined;
   /** Show autopilot state: surfaced in organizer roles ONLY (display/participant never see it). */
   autopilot?: AutopilotState | undefined;
 }
@@ -105,6 +107,7 @@ export function projectEventState(
     features: e.features ?? { ...DEFAULT_EVENT_FEATURES },
     phase2: e.phase2 ?? Phase2SettingsSchema.parse({}),
     phase3: e.phase3 ?? Phase3SettingsSchema.parse({}),
+    displayConnected: input.displayConnected ?? false,
     ...(input.autopilot ? { autopilot: input.autopilot } : {}),
   };
   if (viewer.role === 'organizer_masked') return { ...base, role: 'organizer_masked', organizer };
