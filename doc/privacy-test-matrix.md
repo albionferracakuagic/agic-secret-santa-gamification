@@ -1,5 +1,7 @@
 # Privacy test matrix
 
+> Aggiornata al: 19/11/2026 — **v1.1.0**
+
 Traceability from the privacy requirements (FR-046 rules 1-10, FR-013, acceptance criteria AC7 and AC13) to the automated tests that enforce them. Policy: ADR-0002 (projection/realtime), ADR-0003 (publication policy), ADR-0004 (identity). **Adding a route, surface or output field must add or update a row here** (the sweep tests below fail on unclassified routes and on key-allowlist changes).
 
 Layers: **D** = domain/contract unit, **DB** = PGlite, **API** = Fastify inject, **WS** = Socket.IO integration.
@@ -76,6 +78,31 @@ Policy: ADR-0008 (extends ADR-0007). Coins/bids/lifetime data are self-only; eve
 | P3-10 | Custom categories keep ballot integrity | Editable only before voting opens; `c_` key space; custom winner achievements go through the same canPublish-locked awards | DB + API `phase3.test.ts` |
 
 Scale-out (no privacy surface change): deltas relayed between instances are already role-guarded; `grant:*` channels never cross instances (`scale/scale.test.ts`).
+
+## Giver reveal server and participant experience
+
+Policy: ADR-0003 (publication), ADR-0009 (durable reveal/autopilot engine).
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| R-1 | A staged gift exposes recipient/countdown only; the giver is `null` until the server writes `giverRevealedAt` | `RevealViewSchema` discriminated drumroll shape; `projectReveal()` includes giver only when gift status is `revealed`; hidden/unopened gifts are excluded | `packages/domain/src/privacy-reveal.test.ts` (exact key allowlists, drumroll/revealed property over 300 runs, `scanForbidden`, send guard); `packages/db/src/reveal.test.ts` |
+| R-2 | Drumroll deadlines and unveil are durable and cannot reveal early | `events.current_gift_id` + `scheduled_jobs` kind `reveal.unveil`; deadline re-check, staged-gift check, stale/duplicate no-op, reveal-all cancels pending unveil jobs | `packages/db/src/reveal.test.ts`; `apps/server/src/routes/reveal.test.ts` (no early giver, reconnect snapshot, duplicate delivery, cancelled stale job) |
+| R-3 | Reveal data is the same public projection on `/d` and participant sockets; participants cannot drive reveal routes | Display/participant receive the scene through role output schemas and the send guard; organizer-only `/reveal/next` and `/reveal/all` | `apps/server/src/routes/reveal.test.ts` ("participants cannot drive the reveal"); `apps/server/src/routes/autopilot.test.ts` privacy case |
+| R-4 | `/e` gives only the recipient the full-screen personal moment; other reveals are ordinary public toasts | `RevealPersonal` keys on `current.recipient.participantId`; it does not fetch pairings or organizer data; dismissal is per-gift session storage only | `apps/web/src/reveal.test.tsx` (own drumroll, reveal overlay, others' toast, reduced motion, dismissed gift) |
+| R-5 | `/e/recap` never widens reveal access | `isRecapPhase()` unlocks at awards/completed; Santa/giver comes only from an already-revealed scene/gift/archive; no recap-specific server secret source | `apps/web/src/recap.test.tsx` (locked pre-awards, drumroll omission, revealed-only giver, completed archive, omitted counters) |
+
+## Show Autopilot privacy
+
+Policy: ADR-0009. Autopilot decides from aggregate counts and coarse ceremony state; it is never present on display or participant contracts.
+
+| # | Rule | Enforced by | Tests |
+|---|---|---|---|
+| AP-1 | Autopilot state, settings and timeline are organizer-only | `autopilot` is accepted only in the organizer event-state shape; strict output schemas reject it on display/participant surfaces | `packages/contracts/src/autopilot.test.ts`; `apps/server/src/routes/autopilot.test.ts` "privacy: autopilot only in the organizer eventState..." |
+| AP-2 | Logs cannot carry names, pairings, votes, missions or organizer free text | Log `code` enum plus slug/integer/boolean parameters; schema rejects arbitrary strings and secret-shaped values | `packages/contracts/src/autopilot.test.ts` (leaky log names and giver IDs rejected); `packages/domain/src/autopilot.test.ts` |
+| AP-3 | Decisions use aggregate counts only | Server snapshot contains gift/reveal counts, voter floor boolean, game/ceremony state; no ballots, pairings, participant rows or gift identities | `packages/db/src/autopilot.ts`; `packages/db/src/autopilot.test.ts`; `apps/server/src/routes/autopilot.test.ts` |
+| AP-4 | Hold/freeze do not turn into an input lock that can be mistaken for privacy isolation | Hold stores remaining timeline time only; participant interaction remains governed by event phase. Freeze causes `frozen_held` and rejects resume until the event is unpaused | `packages/domain/src/autopilot.test.ts`; `packages/db/src/autopilot.test.ts`; `apps/server/src/routes/autopilot.test.ts` freeze/resume case |
+| AP-5 | Manual/rescheduled execution cannot reveal or duplicate work through retries | `seq` rejects stale/ahead ticks; `claim_seq`/claim TTL serializes a seq; services are idempotent; auto-resolve changes only publishable tie decisions; cancelled ceremony is polled, never restarted | `packages/domain/src/autopilot.test.ts`; `packages/db/src/autopilot.test.ts`; `apps/server/src/routes/autopilot.test.ts` manual override, stale seq and freeze cases |
+
 ## Acceptance criteria
 
 | AC | Statement | Tests |

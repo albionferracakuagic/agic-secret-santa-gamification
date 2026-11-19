@@ -124,7 +124,7 @@ test.describe('AC1 invites', () => {
         ),
       );
     });
-    await page.goto('/o/events/e1');
+    await page.goto('/o/events/e1?tab=people');
     await page.getByRole('button', { name: 'Create join link and QR' }).click();
     const join = page.getByTestId('join-link');
     await expect(join).toContainText('ABCDE-FGHJK');

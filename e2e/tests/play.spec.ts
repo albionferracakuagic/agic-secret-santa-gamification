@@ -320,7 +320,7 @@ test.describe('organizer console game controls (mocked API)', () => {
         }),
       );
     });
-    await page.goto('/o/events/e1');
+    await page.goto('/o/events/e1?tab=show');
     await expect(page.getByText('1 of 5 gifts opened')).toBeVisible();
     await page.getByRole('button', { name: 'Open next gift' }).click();
     await expect.poll(() => next).toBe(1);
