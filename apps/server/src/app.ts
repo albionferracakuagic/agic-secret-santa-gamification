@@ -22,6 +22,7 @@ import { registerJoinRoutes } from './routes/join.js';
 import { registerGiftRoutes } from './routes/gifts.js';
 import { registerVotingRoutes } from './routes/voting.js';
 import { registerShowRoutes } from './routes/show.js';
+import { registerAutopilotRoutes } from './routes/autopilot.js';
 import { registerPhase2Routes } from './routes/phase2.js';
 import { registerPhase3Routes } from './routes/phase3.js';
 import type { FanoutBus } from './scale/bus.js';
@@ -233,6 +234,13 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         clock,
       });
       registerShowRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
+      });
+      registerAutopilotRoutes(app, {
         db,
         sessions: sessions ?? NO_ORGANIZERS,
         principals,

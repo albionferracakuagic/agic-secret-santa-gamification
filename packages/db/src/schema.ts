@@ -15,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { EventSettings } from '@santa/contracts';
+import type { AutopilotState, EventSettings } from '@santa/contracts';
 import { PHASES } from '@santa/contracts';
 
 const id = () => uuid('id').primaryKey().defaultRandom();
@@ -439,6 +439,18 @@ export const ceremonyState = pgTable('ceremony_state', {
   stepEndsAt: ts('step_ends_at'),
   votingRound: integer('voting_round').notNull().default(1),
   startedAt: ts('started_at'),
+});
+
+/** Show autopilot state (ADR-0009): one row per event, the whole `AutopilotState` as validated JSON. Organizer-only data. */
+export const autopilotState = pgTable('autopilot_state', {
+  eventId: uuid('event_id')
+    .primaryKey()
+    .references(() => events.id, { onDelete: 'cascade' }),
+  state: jsonb('state').$type<AutopilotState>().notNull(),
+  /** Tick claim: the `seq` whose side effect is running (at-most-once per seq); stale claims expire (crash recovery). */
+  claimSeq: integer('claim_seq'),
+  claimedAt: ts('claimed_at'),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
 });
 
 export const scheduledJobs = pgTable(

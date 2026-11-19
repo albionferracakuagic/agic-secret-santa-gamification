@@ -1,5 +1,6 @@
 export * from './common.js';
 export * from './settings.js';
+export * from './autopilot.js';
 export * from './rest.js';
 export * from './pairing.js';
 export * from './join.js';

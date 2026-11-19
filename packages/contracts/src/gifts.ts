@@ -87,3 +87,15 @@ export const RevealGiftResponseSchema = z.strictObject({
   revealedAt: IsoDateSchema,
 });
 export const RevealAllResponseSchema = z.strictObject({ revealed: z.number().int().min(0) });
+/**
+ * Organizer "reveal next": the gift put on stage (drumroll; its giver is NOT in this response — it is revealed
+ * server-side at `countdownEndsAt` and then appears on the public scene). `done` = nothing left (finale).
+ */
+export const RevealNextResponseSchema = z.strictObject({
+  giftId: IdSchema.nullable(),
+  countdownEndsAt: IsoDateSchema.nullable(),
+  revealedCount: z.number().int().min(0),
+  total: z.number().int().min(0),
+  done: z.boolean(),
+});
+export type RevealNextResponse = z.infer<typeof RevealNextResponseSchema>;

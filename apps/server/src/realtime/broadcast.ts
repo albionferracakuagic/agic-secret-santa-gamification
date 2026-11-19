@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { votes, type Db } from '@santa/db';
+import { loadAutopilotState, votes, type Db } from '@santa/db';
 import { projectEventState } from '@santa/domain';
 import type { RealtimeHub } from './hub.js';
 import { publicSurfaces } from './snapshots.js';
@@ -36,7 +36,10 @@ export async function broadcastEventState(hub: RealtimeHub, db: Db, eventId: str
     eventId,
     'org',
     'eventState',
-    projectEventState({ role: 'organizer_masked', participantId: null }, { ...base, ownVotes: [] }),
+    projectEventState(
+      { role: 'organizer_masked', participantId: null },
+      { ...base, ownVotes: [], autopilot: await loadAutopilotState(db, eventId) },
+    ),
   );
   for (const p of c.people.filter((x) => x.status === 'active')) {
     const ownVotes = allVotes

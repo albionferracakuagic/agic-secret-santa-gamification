@@ -11,6 +11,7 @@ import {
   OwnGiftResponseSchema,
   RevealAllResponseSchema,
   RevealGiftResponseSchema,
+  RevealNextResponseSchema,
 } from '@santa/contracts';
 import {
   getAssignment,
@@ -31,6 +32,7 @@ import type { OrganizerSessions, PrincipalStore } from '../principal.js';
 import type { RealtimeHub } from '../realtime/hub.js';
 import { broadcastEventState, broadcastGifts } from '../realtime/broadcast.js';
 import { afterReveal } from '../realtime/phase2.js';
+import { revealNextGift } from '../realtime/reveal.js';
 import { ImageError, processGiftPhoto } from '../images/process.js';
 import { PHOTO_URL_TTL_SECONDS, newGiftPhotoKey, type StorageAdapter } from '../storage/adapter.js';
 import { fail, makeGuards, makeParticipantGuard } from './guards.js';
@@ -259,6 +261,21 @@ export function registerGiftRoutes(app: FastifyInstance, d: GiftRouteDeps) {
         });
       });
     },
+  );
+
+  /** Reveal show: next gift on stage with a drumroll; the giver is revealed by the durable `reveal.unveil` job. */
+  app.post('/api/events/:eventId/reveal/next', { preHandler: g.pre }, async (req, reply) =>
+    g.run(reply, async () => {
+      const r = await revealNextGift(d.hub, d.db, {
+        eventId: g.eventParams(req),
+        actor: req.org!.userId,
+        now: d.clock(),
+      });
+      return RevealNextResponseSchema.parse({
+        ...r,
+        countdownEndsAt: r.countdownEndsAt?.toISOString() ?? null,
+      });
+    }),
   );
 
   app.post('/api/events/:eventId/reveal/all', { preHandler: g.pre }, async (req, reply) =>

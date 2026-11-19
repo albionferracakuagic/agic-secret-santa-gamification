@@ -180,6 +180,8 @@ export async function changePhase(
         ...(m.votingClosedAt ? { votingClosedAt: m.votingClosedAt } : {}),
         ...(m.revealStartedAt ? { revealStartedAt: m.revealStartedAt } : {}),
         ...(m.ceremonyStartedAt ? { ceremonyStartedAt: m.ceremonyStartedAt } : {}),
+        // entering the reveal show: the last opened gift is NOT on the reveal stage
+        ...(t.patch.phase === 'reveal' && !e.revealStartedAt ? { currentGiftId: null } : {}),
         ...(t.patch.phase === 'completed' ? { completedAt: p.now } : { completedAt: null }),
         updatedAt: p.now,
       })

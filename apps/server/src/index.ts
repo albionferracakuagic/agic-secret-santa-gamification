@@ -12,6 +12,8 @@ import { registerVotingJobs } from './realtime/votingJobs.js';
 import { registerCeremonyJobs } from './realtime/ceremonyEvents.js';
 import { registerPhase2Jobs } from './realtime/phase2.js';
 import { registerAuctionJobs } from './realtime/phase3.js';
+import { registerRevealJobs } from './realtime/reveal.js';
+import { registerAutopilotJobs } from './realtime/autopilot.js';
 import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
 import { AzureBlobStorage } from './storage/azure.js';
 
@@ -81,6 +83,8 @@ registerVotingJobs(runner, app.hub!, db);
 registerCeremonyJobs(runner, app.hub!, db);
 registerPhase2Jobs(runner, app.hub!, db);
 registerAuctionJobs(runner, app.hub!, db);
+registerRevealJobs(runner, app.hub!, db);
+registerAutopilotJobs(runner, app.hub!, db);
 registerRetentionJob(runner, db, app.hub!.ctx.storage);
 await ensureDailyRetention(db);
 

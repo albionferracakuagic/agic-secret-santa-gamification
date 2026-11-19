@@ -20,6 +20,7 @@ import {
   AuctionWonAnnouncementSchema,
   MysteryRevealAnnouncementSchema,
 } from './auction.js';
+import { AutopilotStateSchema } from './autopilot.js';
 
 const Count = z.number().int().min(0);
 
@@ -67,6 +68,8 @@ const organizerShape = {
   features: EventFeaturesSchema,
   phase2: Phase2SettingsSchema,
   phase3: Phase3SettingsSchema,
+  /** Show autopilot state (organizer roles only; never on display/participant/pub projections). */
+  autopilot: AutopilotStateSchema.optional(),
 };
 
 export const ParticipantEventStateSchema = z.strictObject({
@@ -220,6 +223,41 @@ export const CeremonyViewSchema = z.strictObject({
 export type CeremonyStepOutput = z.infer<typeof CeremonyStepSchema>;
 export type CeremonyViewOutput = z.infer<typeof CeremonyViewSchema>;
 
+/* ---------------- giver reveal (public; one gift at a time on the display) ---------------- */
+
+const revealGiftCore = {
+  giftId: IdSchema,
+  alias: z.string(),
+  giftName: z.string(),
+  /** Short-lived signed URL, same rules as the gallery. */
+  photoUrl: z.string().nullable(),
+  /** Who received the gift (they opened it in front of everyone); null if not resolvable. */
+  recipient: PersonSchema.nullable(),
+};
+/**
+ * The gift on stage. `drumroll`: giver is ALWAYS null (countdown running, not yet revealed server-side).
+ * `revealed`: the giver is revealed (giverRevealedAt set) and may be shown (ADR-0003/0007: giver only once revealed).
+ */
+export const RevealCurrentSchema = z.discriminatedUnion('stage', [
+  z.strictObject({ ...revealGiftCore, stage: z.literal('drumroll'), giver: z.null() }),
+  z.strictObject({ ...revealGiftCore, stage: z.literal('revealed'), giver: PersonSchema }),
+]);
+/** An already-revealed pair (finale grid / recap). Unrevealed gifts never appear here. */
+export const RevealedPairSchema = z.strictObject({
+  ...revealGiftCore,
+  giver: PersonSchema,
+});
+export const RevealViewSchema = z.strictObject({
+  current: RevealCurrentSchema.nullable(),
+  /** Server deadline of the drumroll for `current` (null when none running). */
+  countdownEndsAt: IsoDateSchema.nullable(),
+  revealedCount: Count,
+  total: Count,
+  /** Only already-revealed pairs, sorted by alias number (never by pairing/registration order). */
+  revealed: z.array(RevealedPairSchema),
+});
+export type RevealViewOutput = z.infer<typeof RevealViewSchema>;
+
 /**
  * Display/pub "scene" payload: what the big screen should show now. Public data only
  * (same schema for every role; contains no secrets).
@@ -251,6 +289,8 @@ export const SceneSchema = z.discriminatedUnion('scene', [
   z.strictObject({ scene: z.literal('phase'), phase: PhaseSchema }),
   /** Award ceremony in progress/finished: full-screen show driven by the organizer + durable timers. */
   z.strictObject({ scene: z.literal('ceremony'), ceremony: CeremonyViewSchema }),
+  /** Giver reveal, one gift at a time (drumroll -> revealed) + already-revealed pairs. */
+  z.strictObject({ scene: z.literal('reveal'), reveal: RevealViewSchema }),
   /** Phase 2: the active mini-game (intro, rounds, timers, submission counter, published winners). */
   z.strictObject({ scene: z.literal('game'), game: GameViewSchema }),
   /** Phase 2: Santa Detective / Invisible Santa / Mission Master presentation (canPublish-gated). */
