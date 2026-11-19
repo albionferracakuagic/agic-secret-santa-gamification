@@ -355,6 +355,8 @@ export const en = {
   },
   assignment: {
     title: 'You are giving a gift to',
+    reveal: 'Reveal recipient',
+    hide: 'Hide recipient',
     secret: 'Keep it secret until the reveal!',
     verify: 'Confirm your identity (personal code or organizer approval) to see who you give to.',
     none: 'Your recipient has not been assigned yet.',

@@ -210,6 +210,21 @@ describe('recap page', () => {
     });
     expect(res.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([]);
   });
+
+  it('keeps the assigned recipient out of the recap DOM until revealed', async () => {
+    const t = setup(
+      RECAP_PATH,
+      {},
+      {
+        assignment: async () => ({
+          recipient: person('p7', 'Giulia'),
+        }),
+      },
+    );
+    t.snapshot('p:p1', { eventState: es('awards') });
+    expect(await screen.findByRole('button', { name: 'Reveal recipient' })).toBeTruthy();
+    expect(screen.queryByText('Giulia')).toBeNull();
+  });
 });
 
 describe('participant recap entry point', () => {

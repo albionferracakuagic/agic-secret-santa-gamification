@@ -16,6 +16,8 @@ import type { BoardsOutput } from '../components/Podium';
 import { useBoardName } from '../components/Podium';
 import { useAchievementName } from '../components/play/Achievements';
 import { Certificates } from '../components/play/Certificates';
+import { RecipientReveal } from '../components/play/GiftForm';
+import { GiftPhoto, safePhotoUrl } from '../components/play/GiftPhoto';
 import { useLocalized } from '../lib/localized';
 import { avatarGlyph } from '../fx/avatars';
 import { isReducedMotion, usePrefs } from '../prefs/store';
@@ -248,8 +250,8 @@ function RecapBody({ es }: { es: PState }) {
             <ul className="space-y-3" data-testid="recap-winners">
               {winners.map((w) => (
                 <li key={w.key} className="flex items-center gap-3 rounded-xl bg-snow-100 p-3">
-                  {w.photoUrl ? (
-                    <img
+                  {safePhotoUrl(w.photoUrl) ? (
+                    <GiftPhoto
                       src={w.photoUrl}
                       alt={w.giftName ?? w.label}
                       className="h-16 w-16 shrink-0 rounded-lg object-cover"
@@ -286,11 +288,7 @@ function RecapBody({ es }: { es: PState }) {
             </p>
           )}
           {ownGift && <p>{t('recap.broughtGift', { name: ownGift.name })}</p>}
-          {recipient && (
-            <p>
-              {t('recap.gaveTo')} <PersonName p={recipient} />
-            </p>
-          )}
+          {recipient && <RecipientReveal recipient={recipient} pastTense />}
           {!mySanta && !ownGift && !recipient && <p>{t('recap.myGiftNone')}</p>}
         </Card>
 
@@ -331,8 +329,8 @@ function RecapBody({ es }: { es: PState }) {
           >
             {gallery.map((g) => (
               <li key={g.giftId} className="space-y-1 rounded-xl bg-snow-100 p-2">
-                {g.photoUrl ? (
-                  <img
+                {safePhotoUrl(g.photoUrl) ? (
+                  <GiftPhoto
                     src={g.photoUrl}
                     alt={g.name}
                     loading="lazy"

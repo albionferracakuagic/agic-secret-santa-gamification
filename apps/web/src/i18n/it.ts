@@ -359,6 +359,8 @@ export const it: Translation = {
   },
   assignment: {
     title: 'Stai facendo un regalo a',
+    reveal: 'Mostra destinatario',
+    hide: 'Nascondi destinatario',
     secret: 'Tienilo segreto fino alla rivelazione!',
     verify:
       'Conferma la tua identità (codice personale o approvazione dell’organizzatore) per vedere a chi regali.',

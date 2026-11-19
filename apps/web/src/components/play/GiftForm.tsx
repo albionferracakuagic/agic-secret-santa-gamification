@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GIFT_MAX_PHOTO_BYTES } from '@santa/contracts';
@@ -6,58 +6,10 @@ import { hasApiCode } from '../../api/client';
 import { usePlayApi } from '../../api/play';
 import { avatarGlyph } from '../../fx/avatars';
 import { emitFx } from '../../fx/bus';
+import { GiftPhoto, GiftPhotoPreview, safePhotoUrl } from './GiftPhoto';
 
 const field = 'mt-1 block min-h-12 w-full rounded border border-ink-900/40 bg-white px-3';
-/** Server-provided photo URL only (same-origin or https storage URL); never a DOM/user-derived value. */
-export const safePhotoUrl = (src: string | null | undefined): string | undefined => {
-  if (!src) return undefined;
-  try {
-    const u = new URL(src, window.location.origin);
-    if (u.protocol === 'https:' || u.origin === window.location.origin) return u.href;
-  } catch {
-    // unparsable: no photo
-  }
-  return undefined;
-};
-
-const PREVIEW_MAX = 320;
-
-/** Client-side preview drawn on a canvas: the chosen file never becomes a URL/DOM-text sink. */
-function PhotoPreview({ file, label }: { file: File; label: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    setReady(false);
-    if (typeof createImageBitmap !== 'function') return;
-    createImageBitmap(file)
-      .then((bmp) => {
-        const canvas = ref.current;
-        const ctx = canvas?.getContext('2d');
-        if (cancelled || !canvas || !ctx) return bmp.close?.();
-        const scale = Math.min(1, PREVIEW_MAX / Math.max(bmp.width, bmp.height));
-        canvas.width = Math.max(1, Math.round(bmp.width * scale));
-        canvas.height = Math.max(1, Math.round(bmp.height * scale));
-        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-        bmp.close?.();
-        setReady(true);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [file]);
-  return (
-    <canvas
-      ref={ref}
-      role="img"
-      aria-label={label}
-      hidden={!ready}
-      className="h-40 rounded-xl object-cover"
-      data-testid="gift-photo-preview"
-    />
-  );
-}
+export { safePhotoUrl } from './GiftPhoto';
 const errKey = (e: unknown) => {
   for (const code of ['gift_locked', 'invalid_image', 'file_too_large'] as const)
     if (hasApiCode(e, code)) return `gift.error.${code}`;
@@ -162,13 +114,19 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
           {fileErr && <p role="alert">{t(fileErr)}</p>}
           {(file || serverPhoto) && (
             <div className="space-y-2">
-              {file && <PhotoPreview file={file} label={t('gift.photoAlt')} />}
+              {file && (
+                <GiftPhotoPreview
+                  file={file}
+                  alt={t('gift.photoAlt')}
+                  className="h-40 rounded-xl object-cover"
+                />
+              )}
               {serverPhoto && (
-                <img
+                <GiftPhoto
                   src={serverPhoto}
                   alt={t('gift.photoAlt')}
                   className="h-40 rounded-xl object-cover"
-                  data-testid="gift-photo"
+                  testId="gift-photo"
                 />
               )}
               {editable && !file && gift?.photoUrl && (
@@ -209,16 +167,45 @@ export function AssignmentView() {
   if (hasApiCode(q.error, 'verification_required'))
     return <p role="status">{t('assignment.verify')}</p>;
   if (!q.data) return <p role="status">{t('assignment.none')}</p>;
-  const r = q.data.recipient;
+  return <RecipientReveal recipient={q.data.recipient} />;
+}
+
+type Recipient = { participantId: string; displayName: string; avatar: string | null };
+
+/** Recipient details stay out of the DOM until the participant explicitly chooses to reveal them. */
+export function RecipientReveal({
+  recipient,
+  pastTense = false,
+}: {
+  recipient: Recipient;
+  pastTense?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [revealed, setRevealed] = useState(false);
+  const detailsId = useId();
   return (
-    <section aria-labelledby="assign-title" className="space-y-1">
-      <h2 id="assign-title" className="font-semibold">
-        {t('assignment.title')}
-      </h2>
-      <p className="text-xl">
-        <span aria-hidden="true">{avatarGlyph(r.avatar)}</span> {r.displayName}
-      </p>
-      <p className="text-sm">{t('assignment.secret')}</p>
-    </section>
+    <div className="space-y-2">
+      <button
+        type="button"
+        className="min-h-12 rounded border border-ink-900 px-4 font-semibold"
+        aria-expanded={revealed}
+        aria-controls={revealed ? detailsId : undefined}
+        onClick={() => setRevealed((value) => !value)}
+      >
+        {t(revealed ? 'assignment.hide' : 'assignment.reveal')}
+      </button>
+      {revealed && (
+        <section id={detailsId} aria-live="polite" className="space-y-1">
+          <p className="font-semibold">
+            {t(pastTense ? 'recap.gaveTo' : 'assignment.title')}
+          </p>
+          <p className="text-xl">
+            <span aria-hidden="true">{avatarGlyph(recipient.avatar)}</span>{' '}
+            {recipient.displayName}
+          </p>
+          <p className="text-sm">{t('assignment.secret')}</p>
+        </section>
+      )}
+    </div>
   );
 }

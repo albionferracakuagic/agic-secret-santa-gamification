@@ -40,23 +40,21 @@ const pubGift = (id: string, name: string) => ({
   status: 'opened' as const,
 });
 
-const drawImage = vi.fn();
+const createObjectURL = vi.fn(() => 'blob:gift-preview');
+const revokeObjectURL = vi.fn();
 
 beforeEach(async () => {
   await i18n.changeLanguage('en');
   usePrefs.setState({ sound: false, music: false, intensity: 'normal', reducedMotion: 'off' });
-  vi.stubGlobal(
-    'createImageBitmap',
-    vi.fn(async () => ({ width: 640, height: 480, close: vi.fn() })),
-  );
-  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
-    return this.dataset.testid === 'gift-photo-preview' ? { drawImage } : null;
-  } as never;
+  createObjectURL.mockClear();
+  revokeObjectURL.mockClear();
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
 });
 
 afterEach(() => {
-  HTMLCanvasElement.prototype.getContext = (() => null) as never;
-  vi.unstubAllGlobals();
+  Reflect.deleteProperty(URL, 'createObjectURL');
+  Reflect.deleteProperty(URL, 'revokeObjectURL');
 });
 
 describe('gift registration', () => {
@@ -88,18 +86,52 @@ describe('gift registration', () => {
     });
     const file = new File([new Uint8Array(10)], 'p.jpg', { type: 'image/jpeg' });
     fireEvent.change(screen.getByLabelText('Photo (optional)'), { target: { files: [file] } });
-    const canvas = (await screen.findByTestId('gift-photo-preview')) as HTMLCanvasElement;
-    await waitFor(() => expect(drawImage).toHaveBeenCalled());
-    expect(canvas.width).toBe(320);
-    expect(canvas.hidden).toBe(false);
-    expect(canvas.getAttribute('aria-label')).toBeTruthy();
-    expect(document.querySelector('img[src^="blob:"]')).toBeNull();
+    const preview = await screen.findByTestId('gift-photo-preview');
+    expect(createObjectURL).toHaveBeenCalledWith(file);
+    expect(preview.getAttribute('src')).toBe('blob:gift-preview');
+    expect(preview.getAttribute('alt')).toBe('Preview of your gift photo');
+    expect((preview as HTMLImageElement).hidden).toBe(true);
+    fireEvent.load(preview);
+    expect((preview as HTMLImageElement).hidden).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Register gift' }));
     await waitFor(() =>
       expect(saveGift).toHaveBeenCalledWith({ name: 'Warm scarf', description: 'Blue' }),
     );
     await waitFor(() => expect(uploadPhoto).toHaveBeenCalledWith(file));
     expect(await screen.findByText('Gift saved!')).toBeTruthy();
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:gift-preview'));
+  });
+
+  it('does not render an image when no photo URL exists', async () => {
+    const t = setup(
+      '/e',
+      {},
+      { getGift: async () => ({ gift: ownGift, editable: false }) },
+    );
+    t.snapshot('p:p1', { eventState: es('gift_registration') });
+    await screen.findByDisplayValue('Mug');
+    expect(screen.queryByTestId('gift-photo')).toBeNull();
+    expect(screen.queryByAltText('Preview of your gift photo')).toBeNull();
+  });
+
+  it('renders persisted photos from safe URLs and removes them after a load failure', async () => {
+    const t = setup(
+      '/e',
+      {},
+      {
+        getGift: async () => ({
+          gift: { ...ownGift, photoUrl: '/uploads/mug.jpg' },
+          editable: false,
+        }),
+      },
+    );
+    t.snapshot('p:p1', { eventState: es('gift_registration') });
+    const photo = await screen.findByTestId('gift-photo');
+    expect(photo.getAttribute('src')).toBe(new URL('/uploads/mug.jpg', window.location.origin).href);
+    fireEvent.load(photo);
+    expect((photo as HTMLImageElement).hidden).toBe(false);
+    fireEvent.error(photo);
+    await waitFor(() => expect(screen.queryByTestId('gift-photo')).toBeNull());
   });
 
   it('rejects non-images and oversize photos on the client', async () => {
@@ -116,7 +148,7 @@ describe('gift registration', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/too large/);
   });
 
-  it('assignment: shows the recipient; unverified claims get a friendly pointer instead', async () => {
+  it('assignment: recipient is absent until revealed, then hidden on the second click', async () => {
     const t = setup(
       '/e',
       {},
@@ -127,9 +159,19 @@ describe('gift registration', () => {
       },
     );
     t.snapshot('p:p1', { eventState: es('gift_registration') });
+    expect(await screen.findByRole('button', { name: 'Reveal recipient' })).toBeTruthy();
+    expect(screen.queryByText('You are giving a gift to')).toBeNull();
+    expect(screen.queryByText('Bruno')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal recipient' }));
     expect(await screen.findByText('Bruno')).toBeTruthy();
+    expect(screen.getByText('You are giving a gift to')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide recipient' }));
+    expect(screen.queryByText('Bruno')).toBeNull();
+    expect(screen.queryByText('You are giving a gift to')).toBeNull();
+  });
 
-    const t2 = setup(
+  it('assignment: unverified claims get a friendly pointer instead', async () => {
+    const t = setup(
       '/e',
       {},
       {
@@ -138,7 +180,7 @@ describe('gift registration', () => {
         },
       },
     );
-    t2.snapshot('p:p1', { eventState: es('gift_registration') });
+    t.snapshot('p:p1', { eventState: es('gift_registration') });
     expect((await screen.findAllByText(/Confirm your identity/)).length).toBeGreaterThan(0);
   });
 });
