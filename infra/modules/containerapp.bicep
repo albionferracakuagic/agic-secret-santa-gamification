@@ -19,6 +19,12 @@ param emailSenderAddress string
 param useKeyVaultSecrets bool
 @description('Public base URL; empty = the generated Container Apps FQDN.')
 param publicBaseUrl string = ''
+@description('Google OAuth client id (public). Empty = Google sign-in disabled.')
+param googleClientId string = ''
+@description('Microsoft Entra OAuth client id (public). Empty = Microsoft sign-in disabled.')
+param microsoftClientId string = ''
+@description('Microsoft tenant id (public); empty = app default.')
+param microsoftTenantId string = ''
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsName
@@ -42,8 +48,12 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
 var appName = '${namePrefix}-app'
 var baseUrl = empty(publicBaseUrl) ? 'https://${appName}.${env.properties.defaultDomain}' : publicBaseUrl
 
+var googleEnabled = useKeyVaultSecrets && !empty(googleClientId)
+var microsoftEnabled = useKeyVaultSecrets && !empty(microsoftClientId)
+
 var kvSecrets = useKeyVaultSecrets
-  ? [
+  ? concat(
+      [
       {
         name: 'better-auth-secret'
         keyVaultUrl: '${keyVaultUri}secrets/better-auth-secret'
@@ -54,14 +64,51 @@ var kvSecrets = useKeyVaultSecrets
         keyVaultUrl: '${keyVaultUri}secrets/database-url'
         identity: identityId
       }
-    ]
+    ],
+      googleEnabled
+        ? [
+            {
+              name: 'google-client-secret'
+              keyVaultUrl: '${keyVaultUri}secrets/google-client-secret'
+              identity: identityId
+            }
+          ]
+        : [],
+      microsoftEnabled
+        ? [
+            {
+              name: 'microsoft-client-secret'
+              keyVaultUrl: '${keyVaultUri}secrets/microsoft-client-secret'
+              identity: identityId
+            }
+          ]
+        : []
+    )
   : []
 
+// The client id is only passed together with its secret, so a half-configured provider never reaches the app.
 var secretEnv = useKeyVaultSecrets
-  ? [
-      { name: 'BETTER_AUTH_SECRET', secretRef: 'better-auth-secret' }
-      { name: 'DATABASE_URL', secretRef: 'database-url' }
-    ]
+  ? concat(
+      [
+        { name: 'BETTER_AUTH_SECRET', secretRef: 'better-auth-secret' }
+        { name: 'DATABASE_URL', secretRef: 'database-url' }
+      ],
+      googleEnabled
+        ? [
+            { name: 'GOOGLE_CLIENT_ID', value: googleClientId }
+            { name: 'GOOGLE_CLIENT_SECRET', secretRef: 'google-client-secret' }
+          ]
+        : [],
+      microsoftEnabled
+        ? concat(
+            [
+              { name: 'MICROSOFT_CLIENT_ID', value: microsoftClientId }
+              { name: 'MICROSOFT_CLIENT_SECRET', secretRef: 'microsoft-client-secret' }
+            ],
+            empty(microsoftTenantId) ? [] : [{ name: 'MICROSOFT_TENANT_ID', value: microsoftTenantId }]
+          )
+        : []
+    )
   : []
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
@@ -122,6 +169,51 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+// Manual-trigger job running the DB migrations (ADR-0005) with the same image, identity and database-url secret.
+// Only exists once Key Vault secrets are wired; the workflow points it at the new image before each run.
+resource migrateJob 'Microsoft.App/jobs@2024-03-01' = if (useKeyVaultSecrets) {
+  name: '${namePrefix}-migrate'
+  location: location
+  tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identityId}': {} }
+  }
+  properties: {
+    environmentId: env.id
+    configuration: {
+      triggerType: 'Manual'
+      replicaTimeout: 900
+      replicaRetryLimit: 0
+      manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
+      registries: [{ server: registryLoginServer, identity: identityId }]
+      secrets: [
+        {
+          name: 'database-url'
+          keyVaultUrl: '${keyVaultUri}secrets/database-url'
+          identity: identityId
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'migrate'
+          image: image
+          command: ['node', 'packages/db/dist/migrate-cli.js']
+          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          env: [
+            { name: 'NODE_ENV', value: 'production' }
+            { name: 'AZURE_CLIENT_ID', value: identityClientId }
+            { name: 'DATABASE_URL', secretRef: 'database-url' }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+output migrateJobName string = useKeyVaultSecrets ? migrateJob.name : ''
 output appName string = app.name
 output fqdn string = app.properties.configuration.ingress.fqdn
 output baseUrl string = baseUrl

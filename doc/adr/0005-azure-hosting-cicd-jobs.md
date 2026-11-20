@@ -45,3 +45,10 @@ Status: Accepted (MVP single replica); scale-out path defined
 - − Single replica: reconnect blip on deploy/node maintenance → policy: no deploys during an event window.
 - − Burstable PG is a ceiling (ADR-0006 load test validates).
 - − Single region; DR = PITR only.
+
+## Addendum: production migrations (deploy fix)
+- The server skips `migrate()` in production, so the deploy workflow runs migrations itself: a manual-trigger Container Apps **Job** (`<prefix>-migrate`, Bicep `Microsoft.App/jobs`) using the same image, managed identity and `database-url` Key Vault secret, command `node packages/db/dist/migrate-cli.js`.
+- It runs *before* the new revision rolls out (expand/contract keeps the running revision compatible). The workflow updates the job image to the new tag, starts it, polls until `Succeeded`, and fails the deploy otherwise.
+- Concurrency-safe: a session-level Postgres advisory lock (`MIGRATE_LOCK_KEY`) on a dedicated connection; re-runs are idempotent (drizzle journal). Logs never print the connection string.
+- Rejected: running from a GitHub runner (Postgres firewall = Azure services only) and `az containerapp exec`.
+- Bootstrap: the job exists only when `useKeyVaultSecrets=true`; the first (quickstart-image) deploy skips migration.
