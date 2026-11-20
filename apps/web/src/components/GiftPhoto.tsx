@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
+const PREVIEW_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 /** Server-provided photo URL only (same-origin or HTTPS). Blob URLs are reserved for local previews. */
 export const safePhotoUrl = (src: string | null | undefined): string | undefined => {
   if (!src) return undefined;
@@ -62,6 +64,11 @@ export function GiftPhotoPreview({
   const [loadedUrl, setLoadedUrl] = useState<string>();
 
   useEffect(() => {
+    // Match the server's allowed raster formats exactly; do not allow SVG or MIME parameters.
+    if (!PREVIEW_IMAGE_TYPES.has(file.type)) {
+      setUrl(undefined);
+      return;
+    }
     if (typeof URL.createObjectURL !== 'function') return;
     try {
       const next = URL.createObjectURL(file);

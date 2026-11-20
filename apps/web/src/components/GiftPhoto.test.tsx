@@ -56,4 +56,44 @@ describe('gift photo URLs', () => {
     Reflect.deleteProperty(URL, 'createObjectURL');
     Reflect.deleteProperty(URL, 'revokeObjectURL');
   });
+
+  it('does not create previews for HTML or SVG files', () => {
+    const createObjectURL = vi.fn(() => 'blob:unsafe-preview');
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+
+    for (const [name, type] of [
+      ['gift.html', 'text/html'],
+      ['gift.svg', 'image/svg+xml'],
+      ['gift.svg', 'image/svg+xml;charset=utf-8'],
+    ]) {
+      const view = render(
+        <GiftPhotoPreview
+          file={new File(['unsafe'], name, { type })}
+          alt="Preview"
+          className="preview"
+        />,
+      );
+      view.unmount();
+    }
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    Reflect.deleteProperty(URL, 'createObjectURL');
+  });
+
+  it.each(['image/jpeg', 'image/png', 'image/webp'])(
+    'creates previews for the supported %s format',
+    (type) => {
+      const createObjectURL = vi.fn(() => 'blob:supported-preview');
+      Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+      const file = new File(['image'], `gift.${type.slice('image/'.length)}`, { type });
+
+      const view = render(
+        <GiftPhotoPreview file={file} alt="Preview" className="preview" />,
+      );
+
+      expect(createObjectURL).toHaveBeenCalledWith(file);
+      view.unmount();
+      Reflect.deleteProperty(URL, 'createObjectURL');
+    },
+  );
 });
