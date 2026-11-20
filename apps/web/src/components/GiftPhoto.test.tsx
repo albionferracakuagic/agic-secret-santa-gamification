@@ -41,7 +41,8 @@ describe('gift photo URLs', () => {
     const revokeObjectURL = vi.fn();
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
-    const file = new File(['image'], 'gift.jpg', { type: 'image/jpeg' });
+    const imagePart: BlobPart = 'image';
+    const file = new File([imagePart], 'gift.jpg', { type: 'image/jpeg' });
 
     const view = render(
       <GiftPhotoPreview file={file} alt="Preview" className="preview" />,
