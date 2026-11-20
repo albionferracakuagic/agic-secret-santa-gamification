@@ -34,6 +34,9 @@ export function createDomHost(d: DomHostDeps): FxHost & { dispose(): void } {
     c.height = d.root.clientHeight || 600;
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.shadowColor = 'rgba(28,25,23,0.3)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 0.75;
     for (const f of flakes) {
       f.y += f.v;
       if (f.y > c.height) {
