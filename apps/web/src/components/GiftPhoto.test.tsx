@@ -91,13 +91,14 @@ describe('gift photo URLs', () => {
     const createObjectURL = vi.fn(() => 'blob:unsafe-preview');
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
 
-    for (const [name, type, contents] of [
+    const cases: [string, string, string][] = [
       ['gift.html', 'text/html', '<html>unsafe</html>'],
       ['gift.svg', 'image/svg+xml', '<svg>unsafe</svg>'],
       ['gift.svg', 'image/svg+xml;charset=utf-8', '<svg>unsafe</svg>'],
       ['spoofed.png', 'image/png', '<svg><script>alert(1)</script></svg>'],
       ['spoofed.jpg', 'image/jpeg', '<html>unsafe</html>'],
-    ]) {
+    ];
+    for (const [name, type, contents] of cases) {
       const view = render(
         <GiftPhotoPreview
           file={new File([contents], name, { type })}
@@ -129,7 +130,7 @@ describe('gift photo URLs', () => {
         ],
       };
       const file = new File(
-        [new Uint8Array(signatures[type])],
+        [new Uint8Array(signatures[type] ?? [])],
         `gift.${type.slice('image/'.length)}`,
         { type },
       );

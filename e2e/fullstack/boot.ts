@@ -36,6 +36,8 @@ const app = buildApp({
   webDist: resolve(import.meta.dirname, '../../apps/web/dist'),
   storage: new LocalFsStorage(mkdtempSync(join(tmpdir(), 'santa-e2e-')), 'e2e-media-secret'),
   rateLimitMax: 100_000,
+  // Specs share one server/IP; per-route join limits (10 claims/min) would starve later specs.
+  joinRateLimits: { resolve: 100_000, claim: 100_000 },
   clock,
 });
 
