@@ -42,6 +42,10 @@ const pubGift = (id: string, name: string) => ({
 
 const createObjectURL = vi.fn(() => 'blob:gift-preview');
 const revokeObjectURL = vi.fn();
+const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0]);
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+let rasterizedBlob: Blob;
+let restoreCanvas: () => void = () => undefined;
 
 beforeEach(async () => {
   await i18n.changeLanguage('en');
@@ -50,9 +54,31 @@ beforeEach(async () => {
   revokeObjectURL.mockClear();
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+  // jsdom has no createImageBitmap/canvas: mock the rasterizer GiftPhoto uses for local previews.
+  rasterizedBlob = new Blob(['rasterized pixels'], { type: 'image/png' });
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => ({ width: 2, height: 3, close: vi.fn() }) as unknown as ImageBitmap),
+  );
+  const getContextSpy = vi
+    .spyOn(HTMLCanvasElement.prototype, 'getContext')
+    .mockReturnValue(
+      new Proxy({}, { get: () => () => undefined }) as unknown as CanvasRenderingContext2D,
+    );
+  const toBlobSpy = vi
+    .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+    .mockImplementation((callback) => {
+      callback(rasterizedBlob);
+    });
+  restoreCanvas = () => {
+    getContextSpy.mockRestore();
+    toBlobSpy.mockRestore();
+  };
 });
 
 afterEach(() => {
+  restoreCanvas();
+  vi.unstubAllGlobals();
   Reflect.deleteProperty(URL, 'createObjectURL');
   Reflect.deleteProperty(URL, 'revokeObjectURL');
 });
@@ -84,10 +110,10 @@ describe('gift registration', () => {
     fireEvent.change(screen.getByLabelText('Short description (optional)'), {
       target: { value: 'Blue' },
     });
-    const file = new File([new Uint8Array(10)], 'p.jpg', { type: 'image/jpeg' });
+    const file = new File([JPEG_BYTES], 'p.jpg', { type: 'image/jpeg' });
     fireEvent.change(screen.getByLabelText('Photo (optional)'), { target: { files: [file] } });
     const preview = await screen.findByTestId('gift-photo-preview');
-    expect(createObjectURL).toHaveBeenCalledWith(file);
+    expect(createObjectURL).toHaveBeenCalledWith(rasterizedBlob);
     expect(preview.getAttribute('src')).toBe('blob:gift-preview');
     expect(preview.getAttribute('alt')).toBe('Preview of your gift photo');
     expect((preview as HTMLImageElement).hidden).toBe(true);
@@ -112,7 +138,7 @@ describe('gift registration', () => {
     expect(screen.getByText('Drag and drop a photo here, or choose one.')).toBeTruthy();
     expect(screen.getByText('Image file (JPG or PNG recommended), max 5 MB.')).toBeTruthy();
 
-    const first = new File([new Uint8Array(10)], 'first.jpg', { type: 'image/jpeg' });
+    const first = new File([JPEG_BYTES], 'first.jpg', { type: 'image/jpeg' });
     fireEvent.drop(screen.getByTestId('gift-photo-dropzone'), {
       dataTransfer: { files: [first] },
     });
@@ -120,7 +146,7 @@ describe('gift registration', () => {
     expect(screen.getByText('first.jpg selected')).toBeTruthy();
     expect(screen.getByText('Replace photo')).toBeTruthy();
 
-    const second = new File([new Uint8Array(10)], 'second.png', { type: 'image/png' });
+    const second = new File([PNG_BYTES], 'second.png', { type: 'image/png' });
     fireEvent.change(input, { target: { files: [second] } });
     expect(await screen.findByText('second.png selected')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Remove photo' }));
