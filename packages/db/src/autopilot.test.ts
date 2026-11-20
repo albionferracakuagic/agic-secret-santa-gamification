@@ -317,25 +317,84 @@ describe('autopilot: hold / resume / stop / skip', () => {
 });
 
 describe('autopilot: settings', () => {
-  it('patches preset/overrides (null clears), view returns effective timings', async () => {
+  it('patches valid settings and clears each timing override with null', async () => {
     await updateAutopilotSettings(db, {
       eventId,
       actor: 'owner',
       now: T0,
-      patch: { preset: 'quick', votingMinutes: 7 },
+      patch: {
+        preset: 'quick',
+        openingGiftSeconds: 30,
+        votingMinutes: 7,
+        gamesMinutes: 8,
+        revealGiftSeconds: 15,
+        interludeSeconds: 9,
+        includeExtras: false,
+      },
     });
     let v = await autopilotView(db, eventId);
-    expect(v.settings).toMatchObject({ preset: 'quick', votingMinutes: 7 });
-    expect(v.timings).toMatchObject({ votingMinutes: 7, openingGiftSeconds: 20 });
-    await updateAutopilotSettings(db, { eventId, actor: 'owner', now: T0, patch: { votingMinutes: null } });
+    expect(v.settings).toMatchObject({
+      preset: 'quick',
+      openingGiftSeconds: 30,
+      votingMinutes: 7,
+      gamesMinutes: 8,
+      revealGiftSeconds: 15,
+      interludeSeconds: 9,
+      includeExtras: false,
+    });
+    expect(v.timings).toMatchObject({ votingMinutes: 7, openingGiftSeconds: 30 });
+    await updateAutopilotSettings(db, {
+      eventId,
+      actor: 'owner',
+      now: T0,
+      patch: {
+        openingGiftSeconds: null,
+        votingMinutes: null,
+        gamesMinutes: null,
+        revealGiftSeconds: null,
+        interludeSeconds: null,
+      },
+    });
     v = await autopilotView(db, eventId);
-    expect(v.timings.votingMinutes).toBe(3);
+    expect(v.timings).toEqual({
+      openingGiftSeconds: 20,
+      votingMinutes: 3,
+      gamesMinutes: 5,
+      revealGiftSeconds: 12,
+      interludeSeconds: 5,
+    });
     expect(v.state.status).toBe('idle');
     expect(
       await code(
         updateAutopilotSettings(db, { eventId, actor: 'owner', now: T0, patch: { votingMinutes: 999 } }),
       ),
     ).not.toBe('ok');
+  });
+
+  it('rejects caller-supplied property names without changing stored settings', async () => {
+    await updateAutopilotSettings(db, {
+      eventId,
+      actor: 'owner',
+      now: T0,
+      patch: { preset: 'quick', votingMinutes: 7 },
+    });
+
+    const invalidPatches = [
+      JSON.parse('{"preset":"relaxed","__proto__":{"polluted":true}}'),
+      JSON.parse('{"preset":"relaxed","constructor":{"prototype":{"polluted":true}}}'),
+      JSON.parse('{"preset":"relaxed","unrecognized":true}'),
+    ];
+    for (const patch of invalidPatches) {
+      expect(
+        await code(updateAutopilotSettings(db, { eventId, actor: 'owner', now: T0, patch })),
+      ).not.toBe('ok');
+    }
+
+    expect((await autopilotView(db, eventId)).settings).toMatchObject({
+      preset: 'quick',
+      votingMinutes: 7,
+    });
+    expect(Object.prototype.hasOwnProperty.call(Object.prototype, 'polluted')).toBe(false);
   });
 });
 

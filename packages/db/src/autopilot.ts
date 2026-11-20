@@ -352,9 +352,27 @@ export async function updateAutopilotSettings(
   return db.transaction(async (tx) => {
     const e = await loadEvent(tx, p.eventId, true);
     if (e.phase === 'completed') throw new EventError('features_locked');
-    const merged: Record<string, unknown> = { ...autopilotSettings(e.settings), ...patch };
-    for (const [k, v] of Object.entries(merged)) if (v === null) delete merged[k];
-    const parsed = EventSettingsSchema.safeParse({ ...e.settings, autopilot: merged });
+    const merged = { ...autopilotSettings(e.settings), ...patch };
+    const settings = {
+      preset: merged.preset,
+      ...(merged.openingGiftSeconds === null || merged.openingGiftSeconds === undefined
+        ? {}
+        : { openingGiftSeconds: merged.openingGiftSeconds }),
+      ...(merged.votingMinutes === null || merged.votingMinutes === undefined
+        ? {}
+        : { votingMinutes: merged.votingMinutes }),
+      ...(merged.gamesMinutes === null || merged.gamesMinutes === undefined
+        ? {}
+        : { gamesMinutes: merged.gamesMinutes }),
+      ...(merged.revealGiftSeconds === null || merged.revealGiftSeconds === undefined
+        ? {}
+        : { revealGiftSeconds: merged.revealGiftSeconds }),
+      ...(merged.interludeSeconds === null || merged.interludeSeconds === undefined
+        ? {}
+        : { interludeSeconds: merged.interludeSeconds }),
+      includeExtras: merged.includeExtras,
+    };
+    const parsed = EventSettingsSchema.safeParse({ ...e.settings, autopilot: settings });
     if (!parsed.success)
       throw new EventError(
         'invalid_settings',
