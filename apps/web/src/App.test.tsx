@@ -35,6 +35,27 @@ const renderAt = (path: string) =>
   );
 
 const ME = { userId: 'u1', email: 'o@example.test', isPlatformAdmin: false };
+const participantState = {
+  role: 'participant',
+  eventId: 'e1',
+  name: 'Office Party',
+  description: null,
+  theme: 'xmas',
+  startsAt: '2026-12-20T18:00:00Z',
+  timezone: 'UTC',
+  phase: 'registration',
+  votingEndsAt: null,
+  paused: false,
+  counts: { participants: 1, giftsRegistered: 0 },
+  me: {
+    participantId: 'p1',
+    displayName: 'Anna',
+    avatar: 'santa',
+    status: 'active',
+    xp: { xp: 0, level: 1 },
+    votes: [],
+  },
+};
 const autopilotState = (
   status: 'idle' | 'running' | 'held' | 'done',
   stepEndsAt: string | null = null,
@@ -87,7 +108,9 @@ describe('routes', () => {
     ['/j', 'Join event'],
     ['/unknown', 'Join event'],
   ])('renders %s', async (path, heading) => {
-    mockApi(() => undefined);
+    mockApi((url) =>
+      path === '/e' && url === '/api/me/state' ? { body: participantState } : undefined,
+    );
     renderAt(path);
     // first render lazy-loads the page chunk (cold module transform in CI can exceed the 1s default)
     expect(await screen.findByRole('heading', { name: heading }, { timeout: 5000 })).toBeTruthy();

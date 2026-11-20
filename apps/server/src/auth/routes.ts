@@ -83,7 +83,13 @@ export function registerAuthRoutes(app: FastifyInstance, mod: AuthModule) {
       response.headers.forEach((value, key) => {
         if (key.toLowerCase() !== 'set-cookie') reply.header(key, value);
       });
-      const cookies = response.headers.getSetCookie();
+      const cookies = response.headers
+        .getSetCookie()
+        .map((cookie) =>
+          req.protocol === 'https' && !/(?:^|;\s*)Secure(?:;|$)/i.test(cookie)
+            ? `${cookie}; Secure`
+            : cookie,
+        );
       if (cookies.length) reply.header('set-cookie', cookies);
       return reply.send(response.body ? await response.text() : null);
     },

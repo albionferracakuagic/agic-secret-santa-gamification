@@ -3,6 +3,13 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const upstream = 'http://localhost:3000';
+const forwardedProxy = {
+  target: upstream,
+  changeOrigin: false,
+  xfwd: true,
+} as const;
+
 export default defineConfig({
   plugins: [
     react(),
@@ -31,10 +38,10 @@ export default defineConfig({
     allowedHosts: ['.ngrok-free.app', '.ngrok.io'],
     fs: { allow: ['../..'] }, // doc/legal/*.md is bundled as static pages
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/media': 'http://localhost:3000',
-      '/health': 'http://localhost:3000',
-      '/socket.io': { target: 'http://localhost:3000', ws: true },
+      '/api': { ...forwardedProxy },
+      '/media': { ...forwardedProxy },
+      '/health': { ...forwardedProxy },
+      '/socket.io': { ...forwardedProxy, ws: true },
     },
   },
   preview: {

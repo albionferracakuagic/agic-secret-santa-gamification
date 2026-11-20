@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 import type {
   EventStateOutput,
   PublicGiftListOutput,
@@ -36,9 +37,22 @@ type Me = PState['me'];
 type Saved = Pick<Me, 'displayName' | 'avatar'>;
 
 export default function Participant() {
+  const api = useParticipantApi();
+  const { t } = useTranslation();
+  const session = useQuery({
+    queryKey: ['participant-session'],
+    queryFn: () => api.state(),
+    retry: false,
+  });
+  if (session.isPending) return <p role="status">{t('participant.connecting')}</p>;
+  if (session.isError) return <Navigate to="/j" replace />;
+  return <ParticipantSession initial={session.data} />;
+}
+
+function ParticipantSession({ initial }: { initial: PState }) {
   const { t } = useTranslation();
   const { rt, state } = useRealtime();
-  const es = surfaceOf<PState>(state, 'participant', 'eventState');
+  const es = surfaceOf<PState>(state, 'participant', 'eventState') ?? initial;
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
   const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'participant', 'announcement');

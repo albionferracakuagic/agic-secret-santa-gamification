@@ -165,6 +165,63 @@ describe('join links, short codes, resolve', () => {
 });
 
 describe('claim paths', () => {
+  it('retains the participant session through an ngrok HTTPS join and strict state reload', async () => {
+    const [ngrokParticipant] = await roster(['Ngrok Participant']);
+    const a = await joinAccess();
+    const origin = 'https://foo.ngrok-free.app';
+    const proxyHeaders = {
+      origin,
+      host: 'localhost:3000',
+      'x-forwarded-host': 'foo.ngrok-free.app',
+      'x-forwarded-proto': 'https',
+    };
+    const claimed = await w.app.inject({
+      method: 'POST',
+      url: '/api/join/claim',
+      payload: {
+        method: 'pick_name',
+        target: { joinToken: a.token },
+        participantId: ngrokParticipant!.id,
+      },
+      headers: {
+        ...proxyHeaders,
+        cookie: 'sg.session_token=organizer-session; sg_d=stale-display-session',
+        'idempotency-key': 'ngrok-join-xxxxxxxx',
+      },
+    });
+    expect(claimed.statusCode).toBe(200);
+    expect(claimed.headers['access-control-allow-origin']).toBe(origin);
+    const guest = cookieOf(claimed)!;
+    expect(guest).toMatchObject({
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+      path: '/',
+    });
+    const setCookies = ([] as string[]).concat(claimed.headers['set-cookie'] ?? []);
+    expect(setCookies.some((c) => c.startsWith('sg_p='))).toBe(true);
+    expect(setCookies.some((c) => c.startsWith('sg_d=') && /Max-Age=0/i.test(c))).toBe(true);
+    expect(setCookies.some((c) => c.startsWith('sg.session_token='))).toBe(false);
+    expect(setCookies.find((c) => c.startsWith('sg_p='))).not.toMatch(/Domain=/i);
+
+    const state = await w.app.inject({
+      method: 'GET',
+      url: '/api/me/state',
+      headers: {
+        ...proxyHeaders,
+        cookie: `sg_p=${guest.value}; sg.session_token=organizer-session`,
+      },
+    });
+    expect(state.statusCode).toBe(200);
+    expect(state.headers['cache-control']).toBe('no-store');
+    expect(state.json()).toMatchObject({
+      role: 'participant',
+      eventId: w.eventId,
+      me: { participantId: ngrokParticipant!.id, displayName: 'Ngrok Participant' },
+    });
+    expect((await w.app.inject({ method: 'GET', url: '/api/me/state' })).statusCode).toBe(401);
+  });
+
   it('(c) pick name -> pending (no access) -> second device refused -> organizer approves -> active, verified, XP +10 once', async () => {
     const [bruno] = await roster(['Bruno Pending']);
     const a = await joinAccess();
@@ -404,6 +461,31 @@ describe('display token exchange', () => {
     expect((await req('POST', '/api/join/display', { body: { token: d.token } })).statusCode).toBe(
       401,
     );
+  });
+
+  it('display exchange clears only the participant role over forwarded HTTPS', async () => {
+    const res = await req('POST', ev('/access'), {
+      cookie: OWNER(),
+      body: { kind: 'display', expiresInHours: 12 },
+    });
+    const exchanged = await w.app.inject({
+      method: 'POST',
+      url: '/api/join/display',
+      payload: { token: res.json().token },
+      headers: {
+        origin: 'https://foo.ngrok-free.app',
+        host: 'localhost:3000',
+        'x-forwarded-host': 'foo.ngrok-free.app',
+        'x-forwarded-proto': 'https',
+        cookie: 'sg_p=participant-session; sg.session_token=organizer-session',
+        'idempotency-key': 'ngrok-display-xxxxxxxx',
+      },
+    });
+    expect(exchanged.statusCode).toBe(200);
+    expect(cookieOf(exchanged, 'sg_d')).toMatchObject({ secure: true, path: '/', sameSite: 'Lax' });
+    const setCookies = ([] as string[]).concat(exchanged.headers['set-cookie'] ?? []);
+    expect(setCookies.some((c) => c.startsWith('sg_p=') && /Max-Age=0/i.test(c))).toBe(true);
+    expect(setCookies.some((c) => c.startsWith('sg.session_token='))).toBe(false);
   });
 });
 

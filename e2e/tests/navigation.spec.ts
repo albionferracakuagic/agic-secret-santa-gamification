@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { displayState, json } from './support/fixtures';
+import { displayState, json, meOf, participantState } from './support/fixtures';
 
 test('mobile navigation reflows and uses the selected language', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
@@ -59,6 +59,9 @@ test('organizer destinations stay off guest routes, even in the same browser ses
   await nav.getByRole('link', { name: 'Join event' }).click();
   await expect(page.getByRole('heading', { name: 'Join event' })).toBeVisible();
   await expect(page.locator('a[href^="/o"]')).toHaveCount(0);
+  await page.route('**/api/me/state', (r) =>
+    r.fulfill(json(participantState('registration', meOf('p1', 'Anna')))),
+  );
   await page.goto('/e');
   await expect(page.getByRole('heading', { name: 'Participant app' })).toBeVisible();
   await expect(page.locator('a[href^="/o"]')).toHaveCount(0);

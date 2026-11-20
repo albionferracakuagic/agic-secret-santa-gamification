@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { json, meOf, participantState } from './support/fixtures';
 
 const axe = (page: Page) =>
   new AxeBuilder({ page })
@@ -28,7 +29,10 @@ test.describe('mobile join', () => {
     expect(await axe(page)).toEqual([]);
   });
 
-  test('participant app waiting state is axe clean', async ({ page }) => {
+  test('participant app is axe clean before realtime connects', async ({ page }) => {
+    await page.route('**/api/me/state', (r) =>
+      r.fulfill(json(participantState('registration', meOf('p1', 'Anna')))),
+    );
     await page.goto('/e');
     await expect(page.getByRole('heading', { name: 'Participant app' })).toBeVisible();
     expect(await axe(page)).toEqual([]);

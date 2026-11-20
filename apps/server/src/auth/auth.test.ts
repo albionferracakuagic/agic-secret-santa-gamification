@@ -7,6 +7,7 @@ import { createAuth } from './auth.js';
 import { MemoryEmailTransport } from './email.js';
 import { loadEnv, socialFromEnv } from './config.js';
 import { createAuthModule } from './routes.js';
+import { trustedOrigins } from '../http/origins.js';
 
 const BASE = 'http://localhost:3000';
 const SECRET = 'test-secret-test-secret-test-secret-0000';
@@ -91,6 +92,71 @@ describe('organizer auth (magic link)', () => {
     const codes: number[] = [];
     for (let i = 0; i < 8; i++) codes.push((await requestLink(`spam${i}@example.test`)).statusCode);
     expect(codes).toContain(429);
+  });
+
+  it('keeps the Better Auth session cookie on an approved ngrok HTTPS origin', async () => {
+    const origin = 'https://foo.ngrok-free.app';
+    const tunnelEmail = new MemoryEmailTransport();
+    const tunnelAuth = createAuth({
+      db,
+      baseURL: BASE,
+      trustedOrigins: (request) => trustedOrigins(request, BASE, [], 'test'),
+      secret: SECRET,
+      email: tunnelEmail,
+    });
+    const tunnelApp = buildApp({
+      db,
+      auth: createAuthModule(tunnelAuth, db),
+      baseUrl: BASE,
+      guardEnv: 'test',
+    });
+    try {
+      const sent = await tunnelApp.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in/magic-link',
+        headers: {
+          origin,
+          host: 'localhost:3000',
+          'x-forwarded-host': 'foo.ngrok-free.app',
+          'x-forwarded-proto': 'https',
+          'content-type': 'application/json',
+        },
+        payload: { email: 'tunnel@example.test', callbackURL: '/o' },
+      });
+      expect(sent.statusCode).toBe(200);
+      const link = /Sign in: (\S+)/.exec(tunnelEmail.sent[0]!.text)![1]!;
+      const url = new URL(link);
+      const verified = await tunnelApp.inject({
+        method: 'GET',
+        url: url.pathname + url.search,
+        headers: {
+          origin,
+          host: 'localhost:3000',
+          'x-forwarded-host': 'foo.ngrok-free.app',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      expect(verified.statusCode).toBe(302);
+      const cookies = ([] as string[]).concat(verified.headers['set-cookie'] ?? []);
+      const session = cookies.find((c) => c.includes('session_token='))!;
+      expect(session).toMatch(/HttpOnly/i);
+      expect(session).toMatch(/Secure/i);
+      expect(session).toMatch(/SameSite=Lax/i);
+      expect(session).toMatch(/Path=\//i);
+      expect(session).not.toMatch(/Domain=/i);
+      const cookie = session.split(';')[0]!;
+      expect(
+        (
+          await tunnelApp.inject({
+            method: 'GET',
+            url: '/api/organizer/me',
+            headers: { cookie, origin, 'x-forwarded-proto': 'https' },
+          })
+        ).statusCode,
+      ).toBe(200);
+    } finally {
+      await tunnelApp.close();
+    }
   });
 });
 

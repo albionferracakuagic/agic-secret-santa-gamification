@@ -171,6 +171,16 @@ describe('participant /e', () => {
     expect(t.sock.sent).toContainEqual(['reaction.send', { kind: 'applause' }]);
   });
 
+  it('redirects to join when a reload has no participant session', async () => {
+    const { ApiError } = await import('./api/client');
+    setup('/e', {
+      state: async () => {
+        throw new ApiError(401, 'unauthenticated');
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/j'));
+  });
+
   it('profile edit calls the API with trimmed name and avatar', async () => {
     const updateProfile = vi.fn(async (p: { displayName?: string; avatar?: string | null }) => ({
       ...MY,
