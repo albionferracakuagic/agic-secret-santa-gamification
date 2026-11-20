@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Layout } from './components/Layout';
+import Home from './pages/Home';
 import { RECAP_PATH } from './routes/recap';
 
 const SignIn = lazy(() => import('./pages/SignIn'));
@@ -22,6 +23,8 @@ export function App() {
     <Suspense fallback={<p>{t('a11y.loading')}</p>}>
       <Routes>
         <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="/create" element={<Navigate to="/o" replace />} />
           <Route path="/o" element={<Dashboard />} />
           <Route path="/o/signin" element={<SignIn />} />
           <Route path="/o/events/:eventId" element={<Console />} />

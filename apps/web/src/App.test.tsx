@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import axe from 'axe-core';
@@ -92,6 +92,72 @@ describe('routes', () => {
     // first render lazy-loads the page chunk (cold module transform in CI can exceed the 1s default)
     expect(await screen.findByRole('heading', { name: heading }, { timeout: 5000 })).toBeTruthy();
   });
+
+  it('home gives signed-out visitors public create/join actions, without dashboard links', async () => {
+    mockApi((url) => (url === '/api/organizer/me' ? { status: 401 } : undefined));
+    renderAt('/');
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    expect(within(nav).getByRole('link', { name: 'Home' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(within(nav).queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    const create = within(screen.getByRole('main')).getByRole('link', { name: 'Create event' });
+    expect(create.getAttribute('href')).toBe('/create');
+    fireEvent.click(create);
+    expect(await screen.findByRole('heading', { name: 'Organizer sign-in' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(calls.some(({ url }) => url === '/api/events')).toBe(false);
+  });
+
+  it('shows dashboard only with an organizer session and event details only for an accessible event', async () => {
+    mockApi((url) => {
+      if (url === '/api/organizer/me') return { body: ME };
+      if (url === '/api/events') {
+        return { body: { events: [{ id: 'e1', name: 'Office Party', phase: 'preparation' }] } };
+      }
+      if (url === '/api/events/e1/organizer-state') return { body: state() };
+      return undefined;
+    });
+    renderAt('/');
+    fireEvent.click(await screen.findByRole('link', { name: 'Dashboard' }));
+    expect(screen.getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    fireEvent.click(await screen.findByRole('link', { name: 'Open console' }));
+    const event = await screen.findByRole('link', { name: 'Event details' });
+    expect(event.getAttribute('aria-current')).toBe('page');
+    expect(event.getAttribute('href')).toBe('/o/events/e1');
+    expect(screen.getByRole('link', { name: 'Dashboard' }).hasAttribute('aria-current')).toBe(
+      false,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Join event' }));
+    expect(await screen.findByRole('heading', { name: 'Join event' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Event details' })).toBeNull();
+  });
+
+  it('does not advertise details for a forbidden event', async () => {
+    mockApi((url) =>
+      url === '/api/organizer/me'
+        ? { body: ME }
+        : { status: 403, body: { error: { code: 'forbidden' } } },
+    );
+    renderAt('/o/events/forbidden-event');
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Event details' })).toBeNull();
+    expect(document.querySelector('a[href*="forbidden-event"]')).toBeNull();
+  });
+
+  it.each(['/j', '/e', '/e/recap', '/link', '/d'])(
+    'does not request organizer identity on %s',
+    async (path) => {
+      mockApi((url) => (url === '/api/organizer/me' ? { body: ME } : undefined));
+      renderAt(path);
+      await screen.findByRole('main');
+      expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+      expect(calls.some(({ url }) => url === '/api/organizer/me')).toBe(false);
+    },
+  );
 
   it('shell: skip link first in tab order, single main landmark, lang follows locale', async () => {
     mockApi(() => undefined);

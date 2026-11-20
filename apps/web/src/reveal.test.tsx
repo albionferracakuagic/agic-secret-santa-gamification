@@ -66,13 +66,14 @@ beforeEach(async () => {
 afterEach(() => vi.useRealTimers());
 
 describe('display RevealStage', () => {
-  it('drumroll: countdown + recipient, never any giver text', async () => {
+  it('drumroll: countdown without either name in the DOM or live text', async () => {
     const t = setup('/d');
     t.snapshot('pub', { eventState: ds, scene: revealScene(drumroll()) });
     expect(await screen.findByTestId('reveal-drumroll')).toBeTruthy();
     expect(screen.getByTestId('reveal-countdown').textContent).toMatch(/^[5-8]$/);
-    expect(screen.getByText('Gift for Ada')).toBeTruthy();
-    expect(screen.getByTestId('reveal-live').textContent).toBe("Drumroll for Ada's gift");
+    expect(screen.getByText('A gift is about to be revealed')).toBeTruthy();
+    expect(screen.getByTestId('reveal-live').textContent).toBe('Drumroll for the next gift');
+    expect(screen.getByTestId('reveal-stage').textContent).not.toContain('Ada');
     expect(screen.queryByText(/Secret Santa:/)).toBeNull();
     expect(screen.getByTestId('reveal-stage').textContent).not.toContain('Zed');
   });
@@ -90,7 +91,7 @@ describe('display RevealStage', () => {
         revealed: [pair('1', 'Zed', 'Ada')],
       }),
     });
-    expect((await screen.findByTestId('reveal-giver')).textContent).toContain('Secret Santa: Zed');
+    expect((await screen.findByTestId('reveal-giver')).textContent).toContain('Zed → Ada');
     expect(screen.getByTestId('reveal-live').textContent).toBe(
       'Revealed: Zed was Secret Santa of Ada',
     );
@@ -99,6 +100,25 @@ describe('display RevealStage', () => {
     expect(document.querySelector('.reveal-flip')).toBeTruthy();
     expect(screen.getByTestId('reveal-gift-photo').getAttribute('src')).toBe(
       new URL('/media/gifts/e1/item.jpg?exp=10&sig=test', window.location.origin).href,
+    );
+  });
+
+  it('gives a neutral giver-only reveal if the projection omits the recipient', async () => {
+    const t = setup('/d');
+    t.snapshot('pub', {
+      eventState: ds,
+      scene: revealScene({
+        ...revealedNow(),
+        current: { ...revealedNow().current, recipient: null },
+        revealed: [{ ...pair('1', 'Zed', 'Ada'), recipient: null }],
+      }),
+    });
+    expect((await screen.findByTestId('reveal-giver')).textContent).toContain('Secret Santa: Zed');
+    expect(screen.getByTestId('reveal-giver').textContent).not.toContain('→');
+    expect(screen.getByTestId('reveal-strip').textContent).toContain('Secret Santa: Zed');
+    expect(screen.getByTestId('reveal-strip').textContent).not.toContain('→');
+    expect(screen.getByTestId('reveal-live').textContent).toBe(
+      'Revealed: Zed was the Secret Santa of Gift 1',
     );
   });
 
@@ -148,6 +168,7 @@ describe('participant personal reveal', () => {
     );
     expect(screen.queryByTestId('reveal-overlay')).toBeNull();
     expect(screen.queryByText(/Zed/)).toBeNull();
+    expect(screen.getByTestId('reveal-personal').textContent).not.toContain('Anna');
   });
 
   it('my gift revealed: overlay after suspense, dismiss persists per gift', async () => {
@@ -156,8 +177,11 @@ describe('participant personal reveal', () => {
     t.snapshot('pub', { scene: revealScene(revealedNow(person('p1', 'Anna'))) });
     const dlg = await screen.findByTestId('reveal-overlay');
     expect(dlg.textContent).toContain('Your Secret Santa was…');
+    expect(dlg.textContent).not.toContain('Anna');
+    expect(dlg.textContent).not.toContain('Zed');
     expect(await screen.findByTestId('reveal-overlay-giver', {}, { timeout: 3000 })).toBeTruthy();
-    expect(dlg.textContent).toContain('Zed');
+    expect(dlg.textContent).toContain('Zed → Anna');
+    expect(dlg.textContent).toContain('Revealed: Zed was Secret Santa of Anna');
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.queryByTestId('reveal-overlay')).toBeNull();
     expect(sessionStorage.getItem('reveal-dismissed:1')).toBe('1');
@@ -169,6 +193,26 @@ describe('participant personal reveal', () => {
     t.snapshot('p:p1', { eventState: pes });
     t.snapshot('pub', { scene: revealScene(revealedNow(person('p1', 'Anna'))) });
     expect(await screen.findByTestId('reveal-overlay-giver')).toBeTruthy();
+  });
+
+  it('keeps keyboard focus in the reveal and restores it on Escape', async () => {
+    usePrefs.setState({ reducedMotion: 'on' });
+    const t = setup('/e');
+    t.snapshot('p:p1', { eventState: pes });
+    await screen.findByRole('heading', { name: 'Participant app' });
+    const home = screen.getByRole('link', { name: 'Home' });
+    home.focus();
+    t.snapshot('pub', { scene: revealScene(revealedNow(person('p1', 'Anna'))) });
+    const end = await screen.findByRole('button', { name: 'Continue' });
+    expect(document.activeElement).toBe(end);
+    fireEvent.keyDown(end, { key: 'Tab' });
+    const first = screen.getByTestId('reveal-overlay-giver').querySelector('button')!;
+    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(end);
+    fireEvent.keyDown(end, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(home);
   });
 
   it('already dismissed gift: no overlay', async () => {
@@ -184,9 +228,9 @@ describe('participant personal reveal', () => {
     const t = setup('/e');
     t.snapshot('p:p1', { eventState: pes });
     t.snapshot('pub', { scene: revealScene(revealedNow(person('p7', 'Bea'))) });
-    expect((await screen.findByTestId('reveal-toast')).textContent).toBe(
-      "Bea's Secret Santa was Zed",
-    );
+    const toast = await screen.findByTestId('reveal-toast');
+    expect(toast.textContent).toContain('Zed → Bea');
+    expect(toast.textContent).toContain('Revealed: Zed was Secret Santa of Bea');
     expect(screen.queryByTestId('reveal-overlay')).toBeNull();
   });
 

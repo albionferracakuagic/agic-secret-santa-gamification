@@ -130,6 +130,7 @@ export default function Participant() {
           {scene?.scene === 'ceremony' && <CeremonyScene view={scene.ceremony} now={now} />}
           {active && scene?.scene === 'reveal' && (
             <RevealPersonal
+              key={`${es.eventId}:${shown.participantId}`}
               reveal={scene.reveal}
               myId={shown.participantId}
               sendReaction={(k) => rt?.sendReaction(k)}

@@ -282,7 +282,10 @@ test('autopilot show keeps giver private until display and personal reveal, then
       await organizer.context().request.post('/__e2e/jobs/advance', { data: { ms: 0 } }),
       'skip to reveal',
     );
-    await expect(displayPage.getByTestId('reveal-drumroll')).toBeVisible();
+    const drumroll = displayPage.getByTestId('reveal-drumroll');
+    await expect(drumroll).toBeVisible();
+    await expect(drumroll).not.toContainText('Marco');
+    await expect(displayPage.getByTestId('reveal-live')).not.toContainText('Marco');
     await expect(participant.getByTestId('my-drumroll')).toBeVisible();
     await expect(displayPage.getByText(/Giulia/)).toHaveCount(0);
     await expect(participant.getByText(/Giulia/)).toHaveCount(0);
@@ -292,8 +295,8 @@ test('autopilot show keeps giver private until display and personal reveal, then
       await organizer.context().request.post('/__e2e/jobs/advance', { data: { ms: 3_000 } }),
       'unveil first gift',
     );
-    await expect(displayPage.getByTestId('reveal-giver')).toContainText('Giulia');
-    await expect(participant.getByTestId('reveal-overlay-giver')).toContainText('Giulia');
+    await expect(displayPage.getByTestId('reveal-giver')).toContainText('Giulia → Marco');
+    await expect(participant.getByTestId('reveal-overlay-giver')).toContainText('Giulia → Marco');
     expect(await axeViolations(participant, '[data-testid="reveal-overlay"]')).toEqual([]);
     await participant.getByRole('button', { name: 'Continue' }).click();
 

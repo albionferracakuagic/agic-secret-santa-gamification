@@ -8,6 +8,7 @@ export interface ConsoleHeaderProps {
   name: string;
   phase: Phase;
   paused: boolean;
+  eventDetailsHref: string;
   /** Full display URL (/d…) once a display link was created this session; tokens are shown once. */
   displayUrl?: string | undefined;
   /** Where to go to create a display link when none is known (People tab). */
@@ -32,11 +33,15 @@ export function ConsoleHeader(p: ConsoleHeaderProps) {
       className="sticky top-0 z-30 -mx-4 space-y-2 border-b border-ink-900/20 bg-snow-50 px-4 py-2"
     >
       {p.banner}
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to="/o" className="underline">
-          {t('console.back')}
+      <nav aria-label={t('nav.organizer')}>
+        <Link
+          to={p.eventDetailsHref}
+          aria-current="page"
+          className="inline-flex min-h-11 items-center rounded px-2 font-semibold underline decoration-2 underline-offset-4"
+        >
+          {t('nav.eventDetails')}
         </Link>
-      </div>
+      </nav>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-2xl font-bold">{p.name}</h1>
         {p.paused && (

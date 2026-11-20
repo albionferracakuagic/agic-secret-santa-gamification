@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { normalizeShortCode } from '../lib/shortCode';
 import { ApiError } from '../api/client';
 import { useParticipantApi, type JoinResolve, type JoinTarget } from '../api/participant';
@@ -21,6 +21,12 @@ const errorKey = (e: unknown) =>
 
 /** /j[/:token] | /j?code=SHORT | /j/claim?token=… — enter code or QR landing -> pick name -> pending/approved. */
 export default function Join() {
+  const { pathname, search } = useLocation();
+  // Selecting Join from a claim/deep link starts a fresh code entry.
+  return <JoinFlow key={pathname + search} />;
+}
+
+function JoinFlow() {
   const { t } = useTranslation();
   const api = useParticipantApi();
   const nav = useNavigate();

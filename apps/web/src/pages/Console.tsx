@@ -80,6 +80,7 @@ function ConsoleInner() {
         phase={s.phase}
         paused={s.paused}
         displayUrl={displayUrl}
+        eventDetailsHref={`/o/events/${encodeURIComponent(eventId)}`}
         displaySetupHref={`/o/events/${eventId}?tab=people`}
         banner={<UnmaskBanner eventId={eventId} />}
         autopilotChip={<AutopilotChip state={autopilotOf(s)} />}

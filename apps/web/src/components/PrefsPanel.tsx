@@ -32,7 +32,7 @@ export function PrefsPanel() {
           id={panelId}
           role="group"
           aria-label={t('prefs.title')}
-          className="absolute right-0 z-40 mt-2 w-72 space-y-3 rounded bg-white p-4 text-ink-900 shadow-lg"
+          className="absolute right-0 z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] space-y-3 rounded bg-white p-4 text-ink-900 shadow-lg"
         >
           <label className="block">
             {t('prefs.language')}

@@ -96,6 +96,17 @@ describe('join flow /j', () => {
     );
   });
 
+  it('Join navigation clears a QR landing instead of keeping its roster on the code route', async () => {
+    setup(`/j/${'a'.repeat(22)}`);
+    expect(await screen.findByText('Welcome to Office Party!')).toBeTruthy();
+    const join = screen.getByRole('link', { name: 'Join event' });
+    expect(join.getAttribute('aria-current')).toBe('page');
+    fireEvent.click(join);
+    expect(await screen.findByLabelText('Event code')).toBeTruthy();
+    expect(screen.queryByText('Welcome to Office Party!')).toBeNull();
+    expect(screen.getByTestId('where').textContent).toBe('/j');
+  });
+
   it('email claim link claims straight away and lands on /e', async () => {
     const claim = vi.fn(async () => ({
       status: 'active' as const,

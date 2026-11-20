@@ -102,6 +102,56 @@ describe('gift registration', () => {
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:gift-preview'));
   });
 
+  it('provides an accessible drag-and-drop photo picker with replace and remove controls', async () => {
+    const t = setup('/e', {}, { getGift: async () => ({ gift: null, editable: true }) });
+    t.snapshot('p:p1', { eventState: es('gift_registration') });
+
+    const input = await screen.findByLabelText('Photo (optional)');
+    expect(input.getAttribute('accept')).toBe('image/*');
+    expect(screen.getByText('Choose photo')).toBeTruthy();
+    expect(screen.getByText('Drag and drop a photo here, or choose one.')).toBeTruthy();
+    expect(screen.getByText('Image file (JPG or PNG recommended), max 5 MB.')).toBeTruthy();
+
+    const first = new File([new Uint8Array(10)], 'first.jpg', { type: 'image/jpeg' });
+    fireEvent.drop(screen.getByTestId('gift-photo-dropzone'), {
+      dataTransfer: { files: [first] },
+    });
+    expect(await screen.findByTestId('gift-photo-preview')).toBeTruthy();
+    expect(screen.getByText('first.jpg selected')).toBeTruthy();
+    expect(screen.getByText('Replace photo')).toBeTruthy();
+
+    const second = new File([new Uint8Array(10)], 'second.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [second] } });
+    expect(await screen.findByText('second.png selected')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo' }));
+    await waitFor(() => expect(screen.queryByTestId('gift-photo-preview')).toBeNull());
+    expect(screen.getByText('Choose photo')).toBeTruthy();
+  });
+
+  it('removes an uploaded gift photo through the existing API', async () => {
+    const removePhoto = vi.fn<PlayApi['removePhoto']>(async () => ({
+      gift: { ...ownGift, photoUrl: null },
+      editable: true,
+    }));
+    const t = setup(
+      '/e',
+      {},
+      {
+        getGift: async () => ({
+          gift: { ...ownGift, photoUrl: '/uploads/mug.jpg' },
+          editable: true,
+        }),
+        removePhoto,
+      },
+    );
+    t.snapshot('p:p1', { eventState: es('gift_registration') });
+
+    expect(await screen.findByTestId('gift-photo')).toBeTruthy();
+    expect(screen.getByText('Replace photo')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo' }));
+    await waitFor(() => expect(removePhoto).toHaveBeenCalledTimes(1));
+  });
+
   it('does not render an image when no photo URL exists', async () => {
     const t = setup(
       '/e',

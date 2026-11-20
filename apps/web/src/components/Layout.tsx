@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { SiteNav } from './SiteNav';
 import { PrefsPanel } from './PrefsPanel';
 import { FxOverlay } from '../fx/Overlay';
 import { CookieNotice } from './CookieNotice';
@@ -34,11 +35,19 @@ export function Layout() {
         {t('a11y.skip')}
       </a>
       {!bare && (
-        <header className="flex items-center justify-between gap-2 bg-santa-600 px-4 py-3 text-white">
-          <Link to="/" className="text-lg font-bold">
-            {t('app.title')}
-          </Link>
-          <PrefsPanel />
+        <header className="bg-santa-600 text-white">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-3 sm:gap-4">
+            <Link
+              to="/"
+              className="inline-flex min-h-11 basis-full items-center rounded text-lg font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:basis-auto"
+            >
+              {t('app.title')}
+            </Link>
+            <SiteNav />
+            <div className="ml-auto">
+              <PrefsPanel />
+            </div>
+          </div>
         </header>
       )}
       <main

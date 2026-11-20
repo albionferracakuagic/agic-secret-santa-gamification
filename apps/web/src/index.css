@@ -140,6 +140,11 @@ h2 {
   outline-offset: 2px;
 }
 
+.photo-upload:has(input[type='file']:focus-visible) {
+  outline: 3px solid var(--color-pine-700);
+  outline-offset: 3px;
+}
+
 /* FX layer: purely decorative, never intercepts input (FR-038). */
 .fx-root {
   position: fixed;

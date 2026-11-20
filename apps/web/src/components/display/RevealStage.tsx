@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { RevealViewOutput } from '@santa/contracts';
 import { effectiveIntensity, usePrefs } from '../../prefs/store';
 import { useFxCap } from '../../fx/cap';
@@ -8,10 +9,17 @@ import { avatarGlyph } from '../../fx/avatars';
 import { RECAP_PATH } from '../../routes/recap';
 import { GiftPhoto } from '../GiftPhoto';
 
+function pairLabel(t: TFunction, pair: RevealViewOutput['revealed'][number]) {
+  const giver = pair.giver.displayName;
+  return pair.recipient
+    ? t('reveal.pair', { giver, recipient: pair.recipient.displayName })
+    : t('reveal.secretSanta', { name: giver });
+}
+
 /**
  * Display giver-reveal stage (1080p): drumroll -> card flip + giver zoom -> finale grid.
  * Server-driven (`countdownEndsAt` vs server clock). Only what the projection sent is rendered:
- * during the drumroll `giver` is null so no giver text can exist in the DOM.
+ * the current pair is withheld from both visible and live text until the server says revealed.
  * Reduced motion / intensity off: same content, no animation classes, no FX cue.
  */
 export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: () => number }) {
@@ -58,9 +66,7 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
             alias: current.alias,
           })
       : current
-        ? current.recipient
-          ? t('reveal.announceDrumroll', { name: current.recipient.displayName })
-          : t('reveal.announceDrumrollUnknown')
+        ? t('reveal.announceDrumroll')
         : '';
 
   return (
@@ -103,14 +109,14 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
         <div className="flex flex-1 items-center" data-testid={`reveal-${current.stage}`}>
           <div
             key={current.stage}
-            className={`flex items-center gap-16 rounded-[2rem] bg-white/15 px-16 py-10 ${
+            className={`flex max-w-[1680px] min-w-0 items-center gap-16 rounded-[2rem] bg-white/15 px-16 py-10 ${
               animate && current.stage === 'revealed' ? 'reveal-flip' : ''
             }`}
           >
             <GiftPhoto
               src={current.photoUrl}
               alt={current.giftName}
-              className="h-[400px] w-[400px] rounded-2xl object-cover"
+              className="h-[400px] w-[400px] shrink-0 rounded-2xl object-cover"
               testId="reveal-gift-photo"
               fallback={
                 <p aria-hidden="true" className="text-[12rem]">
@@ -118,16 +124,12 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
                 </p>
               }
             />
-            <div className="space-y-4 text-left">
+            <div className="min-w-0 space-y-4 text-left wrap-anywhere">
               <p className="text-5xl text-gold-400">{current.alias}</p>
               <p className="text-7xl font-bold">{current.giftName}</p>
-              <p className="text-5xl">
-                {current.recipient
-                  ? t('reveal.giftFor', { name: current.recipient.displayName })
-                  : t('reveal.giftForSomeone')}
-              </p>
               {current.stage === 'drumroll' ? (
                 <div className={animate ? 'reveal-pulse' : ''}>
+                  <p className="text-5xl">{t('reveal.giftForSomeone')}</p>
                   <p aria-hidden="true" className="text-6xl">
                     🥁 {t('reveal.drumroll')}
                   </p>
@@ -150,7 +152,7 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
                     {avatarGlyph(current.giver.avatar)}
                   </span>
                   <p className="text-7xl font-extrabold text-gold-400">
-                    {t('reveal.secretSanta', { name: current.giver.displayName })}
+                    {pairLabel(t, current)}
                   </p>
                 </div>
               )}
@@ -166,10 +168,7 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
             {recent.map((p) => (
               <li key={p.giftId} className="rounded-xl bg-white/15 px-5 py-2">
                 <span aria-hidden="true">{avatarGlyph(p.giver.avatar)}</span>{' '}
-                {t('reveal.pair', {
-                  giver: p.giver.displayName,
-                  recipient: p.recipient?.displayName ?? p.alias,
-                })}
+                {pairLabel(t, p)}
               </li>
             ))}
           </ul>
@@ -191,10 +190,7 @@ function Finale({ revealed }: { revealed: RevealViewOutput['revealed'] }) {
         {revealed.map((p) => (
           <li key={p.giftId} className="rounded-2xl bg-white/15 px-6 py-3 text-left">
             <span aria-hidden="true">{avatarGlyph(p.giver.avatar)}</span>{' '}
-            {t('reveal.pair', {
-              giver: p.giver.displayName,
-              recipient: p.recipient?.displayName ?? p.alias,
-            })}
+            {pairLabel(t, p)}
             <br />
             <span className="text-2xl opacity-80">🎁 {p.giftName}</span>
           </li>

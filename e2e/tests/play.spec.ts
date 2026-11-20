@@ -76,14 +76,29 @@ test.describe('participant gameplay (mocked API + realtime)', () => {
     await page.goto('/e');
     await expect(page.getByText('4 gifts registered so far')).toBeVisible();
     await page.getByLabel('Gift name').fill('Warm scarf');
+    const photoInput = page.getByLabel('Photo (optional)');
+    await expect(page.getByText('Choose photo')).toBeVisible();
+    await expect(
+      page.getByText('Drag and drop a photo here, or choose one.'),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Image file (JPG or PNG recommended), max 5 MB.'),
+    ).toBeVisible();
+    await photoInput.focus();
+    await expect(page.getByTestId('gift-photo-dropzone')).toHaveCSS('outline-style', 'solid');
     const png = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
       'base64',
     );
-    await page
-      .getByLabel('Photo (optional)')
-      .setInputFiles({ name: 'p.png', mimeType: 'image/png', buffer: png });
+    await photoInput.setInputFiles({ name: 'p.png', mimeType: 'image/png', buffer: png });
     await expect(page.getByTestId('gift-photo-preview')).toBeVisible();
+    await expect(page.getByText('Replace photo')).toBeVisible();
+    await expect(page.getByText('p.png selected')).toBeVisible();
+    await page.getByRole('button', { name: 'Remove photo' }).click();
+    await expect(page.getByTestId('gift-photo-preview')).toHaveCount(0);
+    await expect(page.getByText('Choose photo')).toBeVisible();
+    await photoInput.setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: png });
+    await expect(page.getByText('replacement.png selected')).toBeVisible();
     expect(await axe(page)).toEqual([]);
     await page.getByRole('button', { name: 'Register gift' }).click();
     await expect.poll(() => saved).toEqual({ name: 'Warm scarf', description: null });

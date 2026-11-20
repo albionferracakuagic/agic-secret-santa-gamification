@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type DragEvent, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GIFT_MAX_PHOTO_BYTES } from '@santa/contracts';
@@ -29,6 +29,9 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
   const [file, setFile] = useState<File>();
   const [fileErr, setFileErr] = useState<string>();
   const [saved, setSaved] = useState(false);
+  const [draggingPhoto, setDraggingPhoto] = useState(false);
+  const photoInputId = useId();
+  const photoHelpId = useId();
 
   const giftId = gift?.giftId;
   useEffect(() => {
@@ -62,6 +65,15 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
     if (!f.type.startsWith('image/')) return setFileErr('gift.error.invalid_image');
     if (f.size > GIFT_MAX_PHOTO_BYTES) return setFileErr('gift.error.file_too_large');
     setFile(f);
+  };
+  const dropPhoto = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDraggingPhoto(false);
+    pick(e.dataTransfer.files?.[0]);
+  };
+  const clearSelectedPhoto = () => {
+    setFile(undefined);
+    setFileErr(undefined);
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -101,43 +113,105 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
             />
           </label>
           {editable && (
-            <label className="block">
-              {t('gift.photo')}
-              <input
-                type="file"
-                accept="image/*"
-                className="mt-1 block min-h-12 w-full"
-                onChange={(e) => pick(e.target.files?.[0])}
-              />
-            </label>
+            <div className="space-y-2">
+              <p className="font-semibold">{t('gift.photo')}</p>
+              <div
+                role="group"
+                aria-label={t('gift.photoUpload')}
+                data-testid="gift-photo-dropzone"
+                className={`photo-upload rounded-2xl border-2 border-dashed p-4 transition-colors ${
+                  draggingPhoto
+                    ? 'border-pine-700 bg-pine-900/5'
+                    : 'border-ink-900/35 bg-white'
+                }`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDraggingPhoto(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDraggingPhoto(true);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                    setDraggingPhoto(false);
+                }}
+                onDrop={dropPhoto}
+              >
+                <input
+                  id={photoInputId}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  aria-label={t('gift.photo')}
+                  aria-describedby={photoHelpId}
+                  onClick={(e) => {
+                    e.currentTarget.value = '';
+                  }}
+                  onChange={(e) => pick(e.target.files?.[0])}
+                />
+                {(file || serverPhoto) && (
+                  <div className="mb-3">
+                    {file && (
+                      <GiftPhotoPreview
+                        file={file}
+                        alt={t('gift.photoAlt')}
+                        className="h-44 w-full rounded-xl object-cover"
+                      />
+                    )}
+                    {serverPhoto && (
+                      <GiftPhoto
+                        src={serverPhoto}
+                        alt={t('gift.photoAlt')}
+                        className="h-44 w-full rounded-xl object-cover"
+                        testId="gift-photo"
+                      />
+                    )}
+                    {file && (
+                      <p className="mt-2 break-words text-sm" role="status">
+                        {t('gift.selectedPhoto', { name: file.name })}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!file && !serverPhoto && (
+                  <div className="mb-3 text-center">
+                    <p className="font-semibold">{t('gift.photoDrop')}</p>
+                  </div>
+                )}
+                <p id={photoHelpId} className="mb-3 text-center text-sm">
+                  {t('gift.photoHelp', { size: 5 })}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                  <label
+                    htmlFor={photoInputId}
+                    className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg bg-santa-600 px-5 font-semibold text-white hover:bg-santa-700"
+                  >
+                    {t(file || serverPhoto ? 'gift.replacePhoto' : 'gift.choosePhoto')}
+                  </label>
+                  {(file || gift?.photoUrl) && (
+                    <button
+                      type="button"
+                      className="min-h-12 rounded-lg border border-ink-900 px-5 font-semibold"
+                      disabled={removePhoto.isPending}
+                      onClick={() => (file ? clearSelectedPhoto() : removePhoto.mutate())}
+                    >
+                      {t('gift.removePhoto')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
           {fileErr && <p role="alert">{t(fileErr)}</p>}
-          {(file || serverPhoto) && (
+          {!editable && serverPhoto && (
             <div className="space-y-2">
-              {file && (
-                <GiftPhotoPreview
-                  file={file}
-                  alt={t('gift.photoAlt')}
-                  className="h-40 rounded-xl object-cover"
-                />
-              )}
-              {serverPhoto && (
-                <GiftPhoto
-                  src={serverPhoto}
-                  alt={t('gift.photoAlt')}
-                  className="h-40 rounded-xl object-cover"
-                  testId="gift-photo"
-                />
-              )}
-              {editable && !file && gift?.photoUrl && (
-                <button
-                  type="button"
-                  className="min-h-12 rounded border border-ink-900 px-4"
-                  onClick={() => removePhoto.mutate()}
-                >
-                  {t('gift.removePhoto')}
-                </button>
-              )}
+              <GiftPhoto
+                src={serverPhoto}
+                alt={t('gift.photoAlt')}
+                className="h-40 rounded-xl object-cover"
+                testId="gift-photo"
+              />
             </div>
           )}
           {editable && (
