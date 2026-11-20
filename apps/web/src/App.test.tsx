@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import axe from 'axe-core';
@@ -35,6 +35,54 @@ const renderAt = (path: string) =>
   );
 
 const ME = { userId: 'u1', email: 'o@example.test', isPlatformAdmin: false };
+const participantState = {
+  role: 'participant',
+  eventId: 'e1',
+  name: 'Office Party',
+  description: null,
+  theme: 'xmas',
+  startsAt: '2026-12-20T18:00:00Z',
+  timezone: 'UTC',
+  phase: 'registration',
+  votingEndsAt: null,
+  paused: false,
+  counts: { participants: 1, giftsRegistered: 0 },
+  me: {
+    participantId: 'p1',
+    displayName: 'Anna',
+    avatar: 'santa',
+    status: 'active',
+    xp: { xp: 0, level: 1 },
+    votes: [],
+  },
+};
+const autopilotState = (
+  status: 'idle' | 'running' | 'held' | 'done',
+  stepEndsAt: string | null = null,
+) => ({
+  status,
+  step: status === 'idle' || status === 'done' ? null : 'opening',
+  seq: status === 'idle' ? 0 : 1,
+  stepEndsAt,
+  startedAt: status === 'idle' ? null : '2026-12-20T17:00:00.000Z',
+  heldAt: status === 'held' ? '2026-12-20T17:01:00.000Z' : null,
+  remainingMsAtHold: status === 'held' ? 10_000 : null,
+  timeline: stepEndsAt
+    ? [{ step: 'opening', plannedSeconds: 60, eta: stepEndsAt, status: 'active' }]
+    : [],
+  log: [],
+});
+const autopilotResponse = (state: ReturnType<typeof autopilotState>) => ({
+  settings: { preset: 'standard', includeExtras: true },
+  timings: {
+    openingGiftSeconds: 40,
+    votingMinutes: 5,
+    gamesMinutes: 10,
+    revealGiftSeconds: 20,
+    interludeSeconds: 10,
+  },
+  state,
+});
 const state = (over: Record<string, unknown> = {}, warnings: string[] = []) => ({
   role: 'organizer_masked',
   eventState: {
@@ -60,11 +108,79 @@ describe('routes', () => {
     ['/j', 'Join event'],
     ['/unknown', 'Join event'],
   ])('renders %s', async (path, heading) => {
-    mockApi(() => undefined);
+    mockApi((url) =>
+      path === '/e' && url === '/api/me/state' ? { body: participantState } : undefined,
+    );
     renderAt(path);
     // first render lazy-loads the page chunk (cold module transform in CI can exceed the 1s default)
     expect(await screen.findByRole('heading', { name: heading }, { timeout: 5000 })).toBeTruthy();
   });
+
+  it('home gives signed-out visitors public create/join actions, without dashboard links', async () => {
+    mockApi((url) => (url === '/api/organizer/me' ? { status: 401 } : undefined));
+    renderAt('/');
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    expect(within(nav).getByRole('link', { name: 'Home' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(within(nav).queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    const create = within(screen.getByRole('main')).getByRole('link', { name: 'Create event' });
+    expect(create.getAttribute('href')).toBe('/create');
+    fireEvent.click(create);
+    expect(await screen.findByRole('heading', { name: 'Organizer sign-in' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(calls.some(({ url }) => url === '/api/events')).toBe(false);
+  });
+
+  it('shows dashboard only with an organizer session and event details only for an accessible event', async () => {
+    mockApi((url) => {
+      if (url === '/api/organizer/me') return { body: ME };
+      if (url === '/api/events') {
+        return { body: { events: [{ id: 'e1', name: 'Office Party', phase: 'preparation' }] } };
+      }
+      if (url === '/api/events/e1/organizer-state') return { body: state() };
+      return undefined;
+    });
+    renderAt('/');
+    fireEvent.click(await screen.findByRole('link', { name: 'Dashboard' }));
+    expect(screen.getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    fireEvent.click(await screen.findByRole('link', { name: 'Open console' }));
+    const event = await screen.findByRole('link', { name: 'Event details' });
+    expect(event.getAttribute('aria-current')).toBe('page');
+    expect(event.getAttribute('href')).toBe('/o/events/e1');
+    expect(screen.getByRole('link', { name: 'Dashboard' }).hasAttribute('aria-current')).toBe(
+      false,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Join event' }));
+    expect(await screen.findByRole('heading', { name: 'Join event' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Event details' })).toBeNull();
+  });
+
+  it('does not advertise details for a forbidden event', async () => {
+    mockApi((url) =>
+      url === '/api/organizer/me'
+        ? { body: ME }
+        : { status: 403, body: { error: { code: 'forbidden' } } },
+    );
+    renderAt('/o/events/forbidden-event');
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Event details' })).toBeNull();
+    expect(document.querySelector('a[href*="forbidden-event"]')).toBeNull();
+  });
+
+  it.each(['/j', '/e', '/e/recap', '/link', '/d'])(
+    'does not request organizer identity on %s',
+    async (path) => {
+      mockApi((url) => (url === '/api/organizer/me' ? { body: ME } : undefined));
+      renderAt(path);
+      await screen.findByRole('main');
+      expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+      expect(calls.some(({ url }) => url === '/api/organizer/me')).toBe(false);
+    },
+  );
 
   it('shell: skip link first in tab order, single main landmark, lang follows locale', async () => {
     mockApi(() => undefined);
@@ -116,6 +232,134 @@ describe('organizer sign-in', () => {
 });
 
 describe('organizer dashboard + console', () => {
+  it('dashboard renders embedded autopilot states, phase, and a live next-step ETA', async () => {
+    const eta = new Date(Date.now() + 65_000).toISOString();
+    mockApi((url) => {
+      if (url === '/api/organizer/me') return { body: ME };
+      if (url === '/api/events')
+        return {
+          body: {
+            events: [
+              {
+                id: 'idle',
+                name: 'Idle event',
+                startsAt: eta,
+                phase: 'preparation',
+                autopilot: autopilotState('idle'),
+              },
+              {
+                id: 'running',
+                name: 'Running event',
+                startsAt: eta,
+                phase: 'gift_opening',
+                autopilot: autopilotState('running', eta),
+              },
+              {
+                id: 'held',
+                name: 'Held event',
+                startsAt: eta,
+                phase: 'voting',
+                autopilot: autopilotState('held'),
+              },
+              {
+                id: 'done',
+                name: 'Done event',
+                startsAt: eta,
+                phase: 'awards',
+                autopilot: autopilotState('done'),
+              },
+            ],
+          },
+        };
+    });
+    renderAt('/o');
+    expect(await screen.findByText('Idle')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy();
+    expect(screen.getByText('Held')).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
+    expect(screen.getByText('Gift opening')).toBeTruthy();
+    expect(screen.getByText(/Next step in 1m(?: 5s| 4s)/)).toBeTruthy();
+    expect(calls.filter((c) => c.url.endsWith('/autopilot'))).toHaveLength(0);
+  });
+
+  it('dashboard fetches autopilot only for show phases when list data is absent', async () => {
+    mockApi((url) => {
+      if (url === '/api/organizer/me') return { body: ME };
+      if (url === '/api/events')
+        return {
+          body: {
+            events: [
+              { id: 'prep', name: 'Prep', startsAt: '2026-12-20', phase: 'preparation' },
+              { id: 'registration', name: 'Registration', startsAt: '2026-12-20', phase: 'registration' },
+              { id: 'gift', name: 'Gifts', startsAt: '2026-12-20', phase: 'gift_registration' },
+              { id: 'show', name: 'Show', startsAt: '2026-12-20', phase: 'reveal' },
+              { id: 'complete', name: 'Complete', startsAt: '2026-12-20', phase: 'completed' },
+            ],
+          },
+        };
+      if (url === '/api/events/show/autopilot')
+        return { body: autopilotResponse(autopilotState('running')) };
+    });
+    renderAt('/o');
+    expect(await screen.findByText('Running')).toBeTruthy();
+    expect(screen.getAllByText('Manual')).toHaveLength(4);
+    expect(calls.filter((c) => c.url.endsWith('/autopilot')).map((c) => c.url)).toEqual([
+      '/api/events/show/autopilot',
+    ]);
+  });
+
+  it('dashboard hides failed and unauthorized autopilot API details', async () => {
+    mockApi((url) => {
+      if (url === '/api/organizer/me') return { body: ME };
+      if (url === '/api/events')
+        return {
+          body: {
+            events: [
+              { id: 'failed', name: 'Failed', startsAt: '2026-12-20', phase: 'gift_opening' },
+              { id: 'invalid', name: 'Invalid', startsAt: '2026-12-20', phase: 'awards' },
+            ],
+          },
+        };
+      if (url === '/api/events/failed/autopilot')
+        return { status: 500, body: { error: { code: 'secret_internal_failure' } } };
+      if (url === '/api/events/invalid/autopilot')
+        return {
+          body: {
+            ...autopilotResponse(autopilotState('running')),
+            unauthorizedProjection: 'private giver identity',
+          },
+        };
+    });
+    renderAt('/o');
+    await waitFor(() => expect(screen.getAllByText('Status unavailable')).toHaveLength(2));
+    expect(screen.queryByText(/secret_internal_failure/)).toBeNull();
+    expect(screen.queryByText(/private giver identity/)).toBeNull();
+  });
+
+  it('dashboard localizes autopilot status in Italian', async () => {
+    await i18n.changeLanguage('it');
+    mockApi((url) => {
+      if (url === '/api/organizer/me') return { body: ME };
+      if (url === '/api/events')
+        return {
+          body: {
+            events: [
+              {
+                id: 'held',
+                name: 'Festa',
+                startsAt: '2026-12-20',
+                phase: 'voting',
+                autopilot: autopilotState('held'),
+              },
+            ],
+          },
+        };
+    });
+    renderAt('/o');
+    expect(await screen.findByText('In pausa')).toBeTruthy();
+    expect(screen.getByText('Votazioni')).toBeTruthy();
+  });
+
   it('creates an event (cap 100, idempotency key, browser tz)', async () => {
     mockApi((url, init) => {
       if (url === '/api/organizer/me') return { body: ME };

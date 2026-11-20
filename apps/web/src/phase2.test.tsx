@@ -604,6 +604,7 @@ describe('organizer phase 2 console', () => {
   it('clue moderation: approve and reject, masked (alias + text only)', async () => {
     const decideClue = vi.fn<Phase2Api['decideClue']>(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'gift_opening',
       features: { guessSanta: true },
       p2: {
@@ -635,7 +636,13 @@ describe('organizer phase 2 console', () => {
       reason: 'insufficient_votes' as const,
       achievementsUnlocked: 0,
     }));
-    mountConsole({ phase: 'gift_opening', features: { guessSanta: true }, p2: { present } });
+    mountConsole({
+      tab: 'show',
+      phase: 'reveal',
+      displayConnected: true,
+      features: { guessSanta: true },
+      p2: { present },
+    });
     fireEvent.click(
       await screen.findByRole('button', { name: 'Show on display: Santa Detective' }),
     );
@@ -643,10 +650,50 @@ describe('organizer phase 2 console', () => {
     expect(await screen.findByText(/Reason: not enough guesses/)).toBeTruthy();
   });
 
+  it('presentations: disables unavailable phases without sending a request', async () => {
+    const present = vi.fn<Phase2Api['present']>();
+    mountConsole({
+      tab: 'show',
+      phase: 'gift_opening',
+      displayConnected: true,
+      features: { guessSanta: true },
+      p2: { present },
+    });
+
+    const buttons = await screen.findAllByRole('button', { name: /Show on display:/ });
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(buttons[0]?.getAttribute('title')).toBe('Available from the Reveal phase.');
+    expect(screen.getAllByText('Available from the Reveal phase.')).toHaveLength(2);
+    expect(screen.getByText('Available from the Games phase.')).toBeTruthy();
+    expect(present).not.toHaveBeenCalled();
+  });
+
+  it('presentations: uses connected display presence as authoritative', async () => {
+    const present = vi.fn<Phase2Api['present']>();
+    mountConsole({
+      tab: 'show',
+      phase: 'reveal',
+      displayConnected: false,
+      features: { guessSanta: true },
+      p2: { present },
+    });
+
+    const buttons = await screen.findAllByRole('button', { name: /Show on display:/ });
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(buttons[0]?.getAttribute('title')).toBe(
+      'Connect an open display before showing this presentation.',
+    );
+    expect(
+      screen.getAllByText('Connect an open display before showing this presentation.'),
+    ).toHaveLength(3);
+    expect(present).not.toHaveBeenCalled();
+  });
+
   it('missions: assign, verify/reject/reassign pending submissions', async () => {
     const assignMissions = vi.fn<Phase2Api['assignMissions']>(async () => ({ assigned: 3 }));
     const verifyMission = vi.fn<Phase2Api['verifyMission']>(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'gift_opening',
       features: { missions: true },
       p2: {
@@ -681,6 +728,7 @@ describe('organizer phase 2 console', () => {
     const gameAction = vi.fn<Phase2Api['gameAction']>(async () => undefined);
     const decideBingo = vi.fn<Phase2Api['decideBingo']>(async () => undefined);
     mountConsole({
+      tab: 'show',
       phase: 'games',
       p2: {
         organizerGames: async () => ({

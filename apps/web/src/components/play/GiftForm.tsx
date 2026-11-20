@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type DragEvent, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GIFT_MAX_PHOTO_BYTES } from '@santa/contracts';
@@ -6,58 +6,10 @@ import { hasApiCode } from '../../api/client';
 import { usePlayApi } from '../../api/play';
 import { avatarGlyph } from '../../fx/avatars';
 import { emitFx } from '../../fx/bus';
+import { GiftPhoto, GiftPhotoPreview, safePhotoUrl } from '../GiftPhoto';
 
 const field = 'mt-1 block min-h-12 w-full rounded border border-ink-900/40 bg-white px-3';
-/** Server-provided photo URL only (same-origin or https storage URL); never a DOM/user-derived value. */
-export const safePhotoUrl = (src: string | null | undefined): string | undefined => {
-  if (!src) return undefined;
-  try {
-    const u = new URL(src, window.location.origin);
-    if (u.protocol === 'https:' || u.origin === window.location.origin) return u.href;
-  } catch {
-    // unparsable: no photo
-  }
-  return undefined;
-};
-
-const PREVIEW_MAX = 320;
-
-/** Client-side preview drawn on a canvas: the chosen file never becomes a URL/DOM-text sink. */
-function PhotoPreview({ file, label }: { file: File; label: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    setReady(false);
-    if (typeof createImageBitmap !== 'function') return;
-    createImageBitmap(file)
-      .then((bmp) => {
-        const canvas = ref.current;
-        const ctx = canvas?.getContext('2d');
-        if (cancelled || !canvas || !ctx) return bmp.close?.();
-        const scale = Math.min(1, PREVIEW_MAX / Math.max(bmp.width, bmp.height));
-        canvas.width = Math.max(1, Math.round(bmp.width * scale));
-        canvas.height = Math.max(1, Math.round(bmp.height * scale));
-        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-        bmp.close?.();
-        setReady(true);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [file]);
-  return (
-    <canvas
-      ref={ref}
-      role="img"
-      aria-label={label}
-      hidden={!ready}
-      className="h-40 rounded-xl object-cover"
-      data-testid="gift-photo-preview"
-    />
-  );
-}
+export { safePhotoUrl } from '../GiftPhoto';
 const errKey = (e: unknown) => {
   for (const code of ['gift_locked', 'invalid_image', 'file_too_large'] as const)
     if (hasApiCode(e, code)) return `gift.error.${code}`;
@@ -77,6 +29,9 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
   const [file, setFile] = useState<File>();
   const [fileErr, setFileErr] = useState<string>();
   const [saved, setSaved] = useState(false);
+  const [draggingPhoto, setDraggingPhoto] = useState(false);
+  const photoInputId = useId();
+  const photoHelpId = useId();
 
   const giftId = gift?.giftId;
   useEffect(() => {
@@ -110,6 +65,15 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
     if (!f.type.startsWith('image/')) return setFileErr('gift.error.invalid_image');
     if (f.size > GIFT_MAX_PHOTO_BYTES) return setFileErr('gift.error.file_too_large');
     setFile(f);
+  };
+  const dropPhoto = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDraggingPhoto(false);
+    pick(e.dataTransfer.files?.[0]);
+  };
+  const clearSelectedPhoto = () => {
+    setFile(undefined);
+    setFileErr(undefined);
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -149,37 +113,105 @@ export function GiftForm({ canEdit }: { canEdit: boolean }) {
             />
           </label>
           {editable && (
-            <label className="block">
-              {t('gift.photo')}
-              <input
-                type="file"
-                accept="image/*"
-                className="mt-1 block min-h-12 w-full"
-                onChange={(e) => pick(e.target.files?.[0])}
-              />
-            </label>
+            <div className="space-y-2">
+              <p className="font-semibold">{t('gift.photo')}</p>
+              <div
+                role="group"
+                aria-label={t('gift.photoUpload')}
+                data-testid="gift-photo-dropzone"
+                className={`photo-upload rounded-2xl border-2 border-dashed p-4 transition-colors ${
+                  draggingPhoto
+                    ? 'border-pine-700 bg-pine-900/5'
+                    : 'border-ink-900/35 bg-white'
+                }`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDraggingPhoto(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDraggingPhoto(true);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                    setDraggingPhoto(false);
+                }}
+                onDrop={dropPhoto}
+              >
+                <input
+                  id={photoInputId}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  aria-label={t('gift.photo')}
+                  aria-describedby={photoHelpId}
+                  onClick={(e) => {
+                    e.currentTarget.value = '';
+                  }}
+                  onChange={(e) => pick(e.target.files?.[0])}
+                />
+                {(file || serverPhoto) && (
+                  <div className="mb-3">
+                    {file && (
+                      <GiftPhotoPreview
+                        file={file}
+                        alt={t('gift.photoAlt')}
+                        className="h-44 w-full rounded-xl object-cover"
+                      />
+                    )}
+                    {serverPhoto && (
+                      <GiftPhoto
+                        src={serverPhoto}
+                        alt={t('gift.photoAlt')}
+                        className="h-44 w-full rounded-xl object-cover"
+                        testId="gift-photo"
+                      />
+                    )}
+                    {file && (
+                      <p className="mt-2 break-words text-sm" role="status">
+                        {t('gift.selectedPhoto', { name: file.name })}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!file && !serverPhoto && (
+                  <div className="mb-3 text-center">
+                    <p className="font-semibold">{t('gift.photoDrop')}</p>
+                  </div>
+                )}
+                <p id={photoHelpId} className="mb-3 text-center text-sm">
+                  {t('gift.photoHelp', { size: 5 })}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                  <label
+                    htmlFor={photoInputId}
+                    className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg bg-santa-600 px-5 font-semibold text-white hover:bg-santa-700"
+                  >
+                    {t(file || serverPhoto ? 'gift.replacePhoto' : 'gift.choosePhoto')}
+                  </label>
+                  {(file || gift?.photoUrl) && (
+                    <button
+                      type="button"
+                      className="min-h-12 rounded-lg border border-ink-900 px-5 font-semibold"
+                      disabled={removePhoto.isPending}
+                      onClick={() => (file ? clearSelectedPhoto() : removePhoto.mutate())}
+                    >
+                      {t('gift.removePhoto')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
           {fileErr && <p role="alert">{t(fileErr)}</p>}
-          {(file || serverPhoto) && (
+          {!editable && serverPhoto && (
             <div className="space-y-2">
-              {file && <PhotoPreview file={file} label={t('gift.photoAlt')} />}
-              {serverPhoto && (
-                <img
-                  src={serverPhoto}
-                  alt={t('gift.photoAlt')}
-                  className="h-40 rounded-xl object-cover"
-                  data-testid="gift-photo"
-                />
-              )}
-              {editable && !file && gift?.photoUrl && (
-                <button
-                  type="button"
-                  className="min-h-12 rounded border border-ink-900 px-4"
-                  onClick={() => removePhoto.mutate()}
-                >
-                  {t('gift.removePhoto')}
-                </button>
-              )}
+              <GiftPhoto
+                src={serverPhoto}
+                alt={t('gift.photoAlt')}
+                className="h-40 rounded-xl object-cover"
+                testId="gift-photo"
+              />
             </div>
           )}
           {editable && (
@@ -209,16 +241,45 @@ export function AssignmentView() {
   if (hasApiCode(q.error, 'verification_required'))
     return <p role="status">{t('assignment.verify')}</p>;
   if (!q.data) return <p role="status">{t('assignment.none')}</p>;
-  const r = q.data.recipient;
+  return <RecipientReveal recipient={q.data.recipient} />;
+}
+
+type Recipient = { participantId: string; displayName: string; avatar: string | null };
+
+/** Recipient details stay out of the DOM until the participant explicitly chooses to reveal them. */
+export function RecipientReveal({
+  recipient,
+  pastTense = false,
+}: {
+  recipient: Recipient;
+  pastTense?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [revealed, setRevealed] = useState(false);
+  const detailsId = useId();
   return (
-    <section aria-labelledby="assign-title" className="space-y-1">
-      <h2 id="assign-title" className="font-semibold">
-        {t('assignment.title')}
-      </h2>
-      <p className="text-xl">
-        <span aria-hidden="true">{avatarGlyph(r.avatar)}</span> {r.displayName}
-      </p>
-      <p className="text-sm">{t('assignment.secret')}</p>
-    </section>
+    <div className="space-y-2">
+      <button
+        type="button"
+        className="min-h-12 rounded border border-ink-900 px-4 font-semibold"
+        aria-expanded={revealed}
+        aria-controls={revealed ? detailsId : undefined}
+        onClick={() => setRevealed((value) => !value)}
+      >
+        {t(revealed ? 'assignment.hide' : 'assignment.reveal')}
+      </button>
+      {revealed && (
+        <section id={detailsId} aria-live="polite" className="space-y-1">
+          <p className="font-semibold">
+            {t(pastTense ? 'recap.gaveTo' : 'assignment.title')}
+          </p>
+          <p className="text-xl">
+            <span aria-hidden="true">{avatarGlyph(recipient.avatar)}</span>{' '}
+            {recipient.displayName}
+          </p>
+          <p className="text-sm">{t('assignment.secret')}</p>
+        </section>
+      )}
+    </div>
   );
 }

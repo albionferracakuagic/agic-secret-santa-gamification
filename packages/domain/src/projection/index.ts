@@ -4,11 +4,13 @@ import {
   Phase3SettingsSchema,
 } from '@santa/contracts';
 import type {
+  AutopilotState,
   AuctionViewOutput,
   EventStateOutput,
   PublicGiftListOutput,
   PublicGiftOutput,
   PublicLeaderboardOutput,
+  RevealViewOutput,
   SceneOutput,
   CeremonyViewOutput,
   GameViewOutput,
@@ -30,6 +32,8 @@ import {
 import { levelFromXp } from '../xp.js';
 import { setupWarnings } from '../phases.js';
 
+export { projectReveal, type RevealInput } from './reveal.js';
+
 export interface EventStateInput {
   event: EventSource;
   participants: readonly ParticipantSource[];
@@ -38,6 +42,10 @@ export interface EventStateInput {
   votedCount?: number;
   /** Caller loads ONLY the viewer's own selections. */
   ownVotes: ReadonlyArray<{ categoryId: string; giftId: string }>;
+  /** Live authenticated display presence; organizer projections only. */
+  displayConnected?: boolean | undefined;
+  /** Show autopilot state: surfaced in organizer roles ONLY (display/participant never see it). */
+  autopilot?: AutopilotState | undefined;
 }
 
 function me(input: EventStateInput, participantId: string | null) {
@@ -99,6 +107,8 @@ export function projectEventState(
     features: e.features ?? { ...DEFAULT_EVENT_FEATURES },
     phase2: e.phase2 ?? Phase2SettingsSchema.parse({}),
     phase3: e.phase3 ?? Phase3SettingsSchema.parse({}),
+    displayConnected: input.displayConnected ?? false,
+    ...(input.autopilot ? { autopilot: input.autopilot } : {}),
   };
   if (viewer.role === 'organizer_masked') return { ...base, role: 'organizer_masked', organizer };
   const grant = assertActiveGrant(viewer, now);
@@ -251,6 +261,8 @@ export interface SceneInput {
   spotlight?: SpotlightOutput | null;
   /** Phase 3: the auction prize on stage. */
   auction?: AuctionViewOutput | null;
+  /** Giver reveal show (only set during the reveal phase). */
+  reveal?: RevealViewOutput | null;
 }
 
 /** What the display should show now. Public data only; identical for every role. */
@@ -259,9 +271,13 @@ export function projectScene(i: SceneInput): SceneOutput {
   if (i.ceremony && i.ceremony.status !== 'idle' && i.ceremony.status !== 'cancelled') {
     return { scene: 'ceremony', ceremony: i.ceremony };
   }
+  const reveal = e.phase === 'reveal' ? (i.reveal ?? null) : null;
+  // a running drumroll wins over side presentations; once unveiled they may borrow the screen
+  if (reveal?.current?.stage === 'drumroll') return { scene: 'reveal', reveal };
   if (i.game) return { scene: 'game', game: i.game };
   if (i.auction) return { scene: 'auction', auction: i.auction };
   if (i.spotlight) return { scene: 'spotlight', spotlight: i.spotlight };
+  if (reveal) return { scene: 'reveal', reveal };
   if (e.phase === 'preparation' || e.phase === 'registration' || e.phase === 'gift_registration') {
     return {
       scene: 'lobby',

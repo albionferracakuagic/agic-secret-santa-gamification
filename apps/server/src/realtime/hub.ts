@@ -73,10 +73,11 @@ type Sock = Socket & { data: SocketData };
 const roomFor = (eventId: string, stream: string) =>
   stream.startsWith('grant:') ? stream : `e:${eventId}:${stream}`;
 
-function roleFor(p: Principal, grant = false): Role {
-  if (p.kind === 'guest') return 'participant';
-  if (p.kind === 'display') return 'display';
-  return grant ? 'organizer_unmasked' : 'organizer_masked';
+function roleForStream(stream: string): Role {
+  if (stream === 'pub') return 'display';
+  if (stream === 'org') return 'organizer_masked';
+  if (stream.startsWith('p:')) return 'participant';
+  return 'organizer_unmasked';
 }
 
 /**
@@ -86,6 +87,7 @@ function roleFor(p: Principal, grant = false): Role {
 export class RealtimeHub {
   io!: Server;
   private readonly cursors = new Map<string, number>();
+  private readonly displaySockets = new Map<string, Set<string>>();
   private readonly clock: () => Date;
   private readonly rate: { messagesPerSec: number; reactionsPerSec: number };
   readonly reactions: ReactionService;
@@ -160,6 +162,7 @@ export class RealtimeHub {
       'subscribe',
       guarded((raw: unknown) => this.onSubscribe(socket, raw)),
     );
+    socket.on('disconnect', () => this.onDisconnect(socket));
     socket.on(
       'grant.subscribe',
       guarded((raw: unknown) => this.onGrantSubscribe(socket, raw)),
@@ -190,7 +193,16 @@ export class RealtimeHub {
   private async onSubscribe(socket: Sock, raw: unknown) {
     const m = ClientEvents.subscribe.safeParse(raw ?? {});
     if (!m.success) return void socket.emit('error', { code: 'bad_request' });
-    const { principal } = socket.data;
+    let { principal } = socket.data;
+    if (m.data.eventId) {
+      const requested = await this.o.principals.resolve(
+        socket.handshake.headers.cookie,
+        m.data.eventId,
+      );
+      if (!requested) return void socket.emit('error', { code: 'forbidden' });
+      principal = requested;
+      socket.data.principal = requested;
+    }
     let eventId: string;
     let streams: string[];
     if (principal.kind === 'organizer') {
@@ -209,8 +221,26 @@ export class RealtimeHub {
     socket.data.eventId = eventId;
     // Join rooms first so no delta is missed; snapshot carries the cursor to dedupe against.
     for (const stream of streams) await socket.join(roomFor(eventId, stream));
-    for (const stream of streams)
-      await this.sendSnapshot(socket, eventId, stream, roleFor(principal));
+    for (const stream of streams) await this.sendSnapshot(socket, eventId, stream);
+    if (principal.kind === 'display') await this.addDisplaySocket(socket, eventId);
+  }
+
+  private onDisconnect(socket: Sock) {
+    const { principal, eventId } = socket.data;
+    if (principal.kind !== 'display' || !eventId) return;
+    const sockets = this.displaySockets.get(eventId);
+    if (!sockets?.delete(socket.id)) return;
+    if (sockets.size > 0) return;
+    this.displaySockets.delete(eventId);
+    void this.publishDisplayPresence(eventId).catch(() => undefined);
+  }
+
+  private async addDisplaySocket(socket: Sock, eventId: string) {
+    const sockets = this.displaySockets.get(eventId) ?? new Set<string>();
+    const wasConnected = sockets.size > 0;
+    sockets.add(socket.id);
+    this.displaySockets.set(eventId, sockets);
+    if (!wasConnected) await this.publishDisplayPresence(eventId);
   }
 
   private async onGrantSubscribe(socket: Sock, raw: unknown) {
@@ -225,7 +255,7 @@ export class RealtimeHub {
     const stream = `grant:${m.data.grantId}`;
     await socket.join(stream);
     socket.data.grants.add(m.data.grantId);
-    await this.sendSnapshot(socket, eventId, stream, 'organizer_unmasked');
+    await this.sendSnapshot(socket, eventId, stream);
   }
 
   private async grantOk(p: Principal, eventId: string, grantId: string): Promise<boolean> {
@@ -243,9 +273,36 @@ export class RealtimeHub {
   currentCursor = (eventId: string, stream: string) =>
     this.cursors.get(this.cursorKey(eventId, stream)) ?? 0;
 
-  private guardSurfaces(role: Role, data: Record<string, unknown>): Record<string, unknown> {
+  private withDisplayPresence(
+    eventId: string,
+    stream: string,
+    data: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (stream !== 'org' && !stream.startsWith('grant:')) return data;
+    const eventState = data['eventState'];
+    if (!eventState || typeof eventState !== 'object') return data;
+    const organizer = (eventState as { organizer?: unknown }).organizer;
+    if (!organizer || typeof organizer !== 'object') return data;
+    return {
+      ...data,
+      eventState: {
+        ...eventState,
+        organizer: {
+          ...organizer,
+          displayConnected: (this.displaySockets.get(eventId)?.size ?? 0) > 0,
+        },
+      },
+    };
+  }
+
+  private guardSurfaces(
+    eventId: string,
+    stream: string,
+    role: Role,
+    data: Record<string, unknown>,
+  ): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(data)) {
+    for (const [k, v] of Object.entries(this.withDisplayPresence(eventId, stream, data))) {
       if (!(SURFACES as readonly string[]).includes(k)) throw new Error(`unknown surface ${k}`);
       out[k] = guardOutput(role, k as Surface, v, this.guardOpts);
     }
@@ -256,14 +313,41 @@ export class RealtimeHub {
     return { env: this.o.guardEnv, ...(this.o.alert ? { alert: this.o.alert } : {}) };
   }
 
-  private async sendSnapshot(socket: Sock, eventId: string, stream: string, role: Role) {
+  private async sendSnapshot(socket: Sock, eventId: string, stream: string) {
     // cursor BEFORE snapshot: a delta racing the load is re-applied idempotently, never lost
     const cursor = this.currentCursor(eventId, stream);
-    const data = this.guardSurfaces(
-      role,
-      await this.o.snapshots.snapshot(socket.data.principal, eventId, stream),
-    );
+    const data = await this.snapshot(socket.data.principal, eventId, stream);
     socket.emit('snapshot', { stream, cursor, data });
+  }
+
+  /** Guarded snapshot path shared by Socket.IO and organizer HTTP state. */
+  async snapshot(
+    principal: Principal,
+    eventId: string,
+    stream: string,
+  ): Promise<Record<string, unknown>> {
+    return this.guardSurfaces(
+      eventId,
+      stream,
+      roleForStream(stream),
+      await this.o.snapshots.snapshot(principal, eventId, stream),
+    );
+  }
+
+  private async publishDisplayPresence(eventId: string) {
+    const sockets = this.socketsInRoom(roomFor(eventId, 'org'));
+    if (sockets.length === 0) return;
+    const updates = await Promise.all(
+      sockets.map(async (socket) => {
+        const data = await this.snapshot(socket.data.principal, eventId, 'org');
+        return { socket, payload: data['eventState'] };
+      }),
+    );
+    const cursor = (this.cursors.get(this.cursorKey(eventId, 'org')) ?? 0) + 1;
+    this.cursors.set(this.cursorKey(eventId, 'org'), cursor);
+    for (const { socket, payload } of updates) {
+      socket.emit('delta', { stream: 'org', cursor, surface: 'eventState', payload });
+    }
   }
 
   /** Public + per-participant + organizer-masked streams. Role derives from the stream. */
@@ -275,7 +359,8 @@ export class RealtimeHub {
   ): number {
     const role: Role =
       stream === 'pub' ? 'display' : stream === 'org' ? 'organizer_masked' : 'participant';
-    const safe = guardOutput(role, surface, payload, this.guardOpts); // throws -> nothing is emitted
+    const presence = this.withDisplayPresence(eventId, stream, { [surface]: payload });
+    const safe = guardOutput(role, surface, presence[surface], this.guardOpts); // throws -> nothing is emitted
     const key = this.cursorKey(eventId, stream);
     const cursor = (this.cursors.get(key) ?? 0) + 1;
     this.cursors.set(key, cursor);
@@ -311,7 +396,13 @@ export class RealtimeHub {
 
   /** Unmasked data: authz is re-checked per socket before EVERY send; failure => forced disconnect. */
   async publishToGrant(grantId: string, surface: Surface, payload: unknown): Promise<number> {
-    const safe = guardOutput('organizer_unmasked', surface, payload, this.guardOpts);
+    const guardedByEvent = [...this.socketsInRoom(`grant:${grantId}`)]
+      .map((socket) => socket.data.eventId)
+      .find((eventId): eventId is string => !!eventId);
+    const projected = guardedByEvent
+      ? this.withDisplayPresence(guardedByEvent, `grant:${grantId}`, { [surface]: payload })
+      : { [surface]: payload };
+    const safe = guardOutput('organizer_unmasked', surface, projected[surface], this.guardOpts);
     const stream = `grant:${grantId}`;
     const cursor = (this.cursors.get(stream) ?? 0) + 1;
     this.cursors.set(stream, cursor);

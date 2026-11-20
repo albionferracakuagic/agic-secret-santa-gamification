@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+> Aggiornata al: 19/11/2026 — **v1.1.0**
+
 Format: MADR-lite (Status, Context, Decision, Consequences). Scope source: `../Secret_Santa_Games_Functional_Requirements.md`.
 
 | # | Title | Status |
@@ -12,5 +14,6 @@ Format: MADR-lite (Status, Context, Decision, Consequences). Scope source: `../S
 | [0006](0006-performance-targets.md) | Performance targets (TR-003) | Accepted |
 | [0007](0007-phase2-privacy-and-games.md) | Phase 2: guesses, missions, mini-games, presentations, certificates | Accepted |
 | [0008](0008-phase3-coins-auction-history-scale.md) | Phase 3: coins, auction, history, editor, scale-out prep | Accepted |
+| [0009](ADR-0009-autopilot.md) | Durable Show Autopilot and server-driven reveal | Accepted |
 
 New ADR: next number; never rewrite accepted ones — supersede.

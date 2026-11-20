@@ -124,7 +124,7 @@ test.describe('AC1 invites', () => {
         ),
       );
     });
-    await page.goto('/o/events/e1');
+    await page.goto('/o/events/e1?tab=people');
     await page.getByRole('button', { name: 'Create join link and QR' }).click();
     const join = page.getByTestId('join-link');
     await expect(join).toContainText('ABCDE-FGHJK');
@@ -247,7 +247,11 @@ test.describe('AC7/AC13 privacy: nothing beyond the projection, nothing cached',
     await mockRealtime(page, [
       { stream: 'p:p1', data: { eventState: participantState('voting', meOf('p1', 'Anna')) } },
     ]);
-    await page.route('**/api/me/**', (r) => r.fulfill(json({ gift: null, editable: false })));
+    await page.route('**/api/me/**', (r) =>
+      new URL(r.request().url()).pathname === '/api/me/state'
+        ? r.fallback()
+        : r.fulfill(json({ gift: null, editable: false })),
+    );
     await page.goto('/e');
     await expect(page.getByText('Office Party')).toBeVisible();
     const keys = await page.evaluate(() => Object.keys(localStorage));

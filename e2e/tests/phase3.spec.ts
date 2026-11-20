@@ -209,7 +209,7 @@ test.describe('feature flags panel (organizer)', () => {
       patch = r.request().postDataJSON();
       return r.fulfill(json({ features: {}, phase2: {}, phase3: {} }));
     });
-    await page.goto('/o/events/e1');
+    await page.goto('/o/events/e1?tab=setup');
     await expect(page.getByTestId('features-panel')).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Mystery auction' })).toBeDisabled();
     await expect(page.getByText(/Needs Santa Coins/)).toBeVisible();

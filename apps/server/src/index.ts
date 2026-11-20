@@ -12,8 +12,11 @@ import { registerVotingJobs } from './realtime/votingJobs.js';
 import { registerCeremonyJobs } from './realtime/ceremonyEvents.js';
 import { registerPhase2Jobs } from './realtime/phase2.js';
 import { registerAuctionJobs } from './realtime/phase3.js';
+import { registerRevealJobs } from './realtime/reveal.js';
+import { registerAutopilotJobs } from './realtime/autopilot.js';
 import { ensureDailyRetention, registerRetentionJob } from './realtime/retentionJob.js';
 import { AzureBlobStorage } from './storage/azure.js';
+import { trustedOrigins } from './http/origins.js';
 
 const env = loadEnv();
 
@@ -37,6 +40,18 @@ const email = createEmailTransport(env);
 const auth = createAuth({
   db,
   baseURL: env.BETTER_AUTH_URL,
+  // dev: browser talks to Vite/tunnel origins (proxying /api), which differ from the server port
+  ...(env.NODE_ENV === 'production'
+    ? {}
+    : {
+        trustedOrigins: (request?: Request) =>
+          trustedOrigins(
+            request,
+            env.BETTER_AUTH_URL,
+            ['http://localhost:5173'],
+            env.NODE_ENV,
+          ),
+      }),
   secret: env.BETTER_AUTH_SECRET ?? 'dev-only-secret-dev-only-secret-0000',
   email,
   ...social,
@@ -44,6 +59,9 @@ const auth = createAuth({
 const app = buildApp({
   db,
   baseUrl: env.BETTER_AUTH_URL,
+  ...(env.NODE_ENV === 'production'
+    ? {}
+    : { allowedOrigins: ['http://localhost:5173'] }),
   trustProxyHops: env.TRUST_PROXY_HOPS,
   platformAdminEmails: (env.PLATFORM_ADMIN_EMAILS ?? '')
     .split(',')
@@ -77,6 +95,8 @@ registerVotingJobs(runner, app.hub!, db);
 registerCeremonyJobs(runner, app.hub!, db);
 registerPhase2Jobs(runner, app.hub!, db);
 registerAuctionJobs(runner, app.hub!, db);
+registerRevealJobs(runner, app.hub!, db);
+registerAutopilotJobs(runner, app.hub!, db);
 registerRetentionJob(runner, db, app.hub!.ctx.storage);
 await ensureDailyRetention(db);
 

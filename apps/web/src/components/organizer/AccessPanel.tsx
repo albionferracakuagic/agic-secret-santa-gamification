@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 import { useOrganizerApi, type AccessLink } from '../../api/organizer';
+import { publicJoinUrl } from '../../lib/joinUrl';
 import { formatShortCode } from '../../lib/shortCode';
 import { Qr } from '../Qr';
 import { errorKey } from '../../pages/Dashboard';
@@ -9,15 +10,28 @@ import { errorKey } from '../../pages/Dashboard';
 const btn = 'min-h-12 rounded border border-ink-900 px-4 font-semibold disabled:opacity-50';
 
 /** Invitations: a join link + short code + QR, and a display link. Tokens are shown once (only their hash is stored). */
-export function AccessPanel({ eventId }: { eventId: string }) {
+export function AccessPanel({
+  eventId,
+  onLink,
+}: {
+  eventId: string;
+  /** Notified with each created link (the console header shows the display link). */
+  onLink?: ((l: AccessLink) => void) | undefined;
+}) {
   const { t } = useTranslation();
   const api = useOrganizerApi();
   const [links, setLinks] = useState<Partial<Record<'join' | 'display', AccessLink>>>({});
   const create = useMutation({
     mutationFn: (kind: 'join' | 'display') => api.createAccess(eventId, kind),
-    onSuccess: (l) => setLinks((s) => ({ ...s, [l.kind]: l })),
+    onSuccess: (l) => {
+      setLinks((s) => ({ ...s, [l.kind]: l }));
+      onLink?.(l);
+    },
   });
-  const url = (l: AccessLink) => new URL(l.path, location.origin).toString();
+  const url = (l: AccessLink) =>
+    l.kind === 'join'
+      ? publicJoinUrl(l.path, l.shortCode, location.origin)
+      : new URL(l.path, location.origin).toString();
   return (
     <section aria-labelledby="access-title" className="space-y-3">
       <h2 id="access-title" className="text-xl font-semibold">

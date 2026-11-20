@@ -95,6 +95,20 @@ export function setup(
     }),
     claim: async () => ({ status: 'pending', participantId: 'p1', verified: false }),
     me: async () => ({ ...MY, status: 'pending' }),
+    state: async () => ({
+      role: 'participant',
+      eventId: 'e1',
+      name: 'Office Party',
+      description: null,
+      theme: 'xmas',
+      startsAt: '2026-12-20T18:00:00Z',
+      timezone: 'UTC',
+      phase: 'registration',
+      votingEndsAt: null,
+      paused: false,
+      counts: { participants: 1, giftsRegistered: 0 },
+      me: ME,
+    }),
     updateProfile: async (p) => ({
       ...MY,
       displayName: p.displayName ?? MY.displayName,
@@ -294,6 +308,9 @@ export function mountConsole(opts: {
   p2?: Partial<Phase2Api>;
   p3?: Partial<Phase3Api>;
   features?: Partial<EventFeatures>;
+  displayConnected?: boolean;
+  /** Console tab (`?tab=`); omitted = default (live). */
+  tab?: string;
 }) {
   vi.stubGlobal(
     'fetch',
@@ -313,6 +330,7 @@ export function mountConsole(opts: {
                   warnings: [],
                   reactionsEnabled: true,
                   features: { ...DEFAULT_EVENT_FEATURES, ...opts.features },
+                  displayConnected: opts.displayConnected ?? false,
                   phase2: Phase2SettingsSchema.parse({}),
                   phase3: Phase3SettingsSchema.parse({}),
                 },
@@ -331,7 +349,9 @@ export function mountConsole(opts: {
           <AdminApiProvider value={fakeAdminApi(opts.admin)}>
             <Phase2ApiProvider value={fakePhase2Api(opts.p2)}>
               <Phase3ApiProvider value={fakePhase3Api(opts.p3)}>
-                <MemoryRouter initialEntries={['/o/events/e1']}>
+                <MemoryRouter
+                  initialEntries={[`/o/events/e1${opts.tab ? `?tab=${opts.tab}` : ''}`]}
+                >
                   <App />
                 </MemoryRouter>
               </Phase3ApiProvider>

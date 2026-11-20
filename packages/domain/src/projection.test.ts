@@ -254,6 +254,45 @@ describe('contract: every role x phase x surface validates and leaks nothing', (
     expect(scanForbidden(disp, { keys: ['xp', 'me'] })).toEqual([]);
   });
 
+  it('projects display presence only for organizer roles', () => {
+    const input = {
+      event: event('voting'),
+      participants: people,
+      giftsRegistered: 3,
+      ownVotes: [],
+      displayConnected: true,
+    };
+    const organizer = projectEventState(
+      { role: 'organizer_masked', participantId: null },
+      input,
+    );
+    expect(
+      organizer.role === 'organizer_masked' && organizer.organizer.displayConnected,
+    ).toBe(true);
+
+    const display = projectEventState(viewers.display, input);
+    const participant = projectEventState(viewers.participant, input);
+    expect(display).not.toHaveProperty('displayConnected');
+    expect(display).not.toHaveProperty('organizer.displayConnected');
+    expect(participant).not.toHaveProperty('displayConnected');
+    expect(participant).not.toHaveProperty('organizer.displayConnected');
+    for (const [role, payload] of [
+      ['display', display],
+      ['participant', participant],
+    ] as const) {
+      expect(() =>
+        guardOutput(role, 'eventState', { ...payload, displayConnected: true }, { env: 'test' }),
+      ).toThrow();
+      const safe = guardOutput(
+        role,
+        'eventState',
+        { ...payload, organizer: { displayConnected: true } },
+        { env: 'production' },
+      );
+      expect(JSON.stringify(safe)).not.toContain('displayConnected');
+    }
+  });
+
   it('hidden board projects no entries even if lastPublished exists', () => {
     expect(projectLeaderboard(board('hidden')).entries).toEqual([]);
   });

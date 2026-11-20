@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 import type {
   EventStateOutput,
   PublicGiftListOutput,
@@ -15,6 +16,7 @@ import { VotingPanel } from '../components/play/Voting';
 import { OpeningStage } from '../components/OpeningStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
+import { RevealPersonal } from '../components/play/RevealPersonal';
 import { AchievementUnlock, MyAchievements } from '../components/play/Achievements';
 import { GuessPanel } from '../components/play/GuessPanel';
 import { MissionsPanel } from '../components/play/MissionsPanel';
@@ -24,6 +26,7 @@ import { HistoryPanel } from '../components/play/HistoryPanel';
 import { Certificates } from '../components/play/Certificates';
 import { DeleteMyData } from '../components/play/DeleteMyData';
 import { Link } from 'react-router-dom';
+import { RECAP_PATH, isRecapPhase } from '../routes/recap';
 import { AVATAR_GLYPH, avatarGlyph } from '../fx/avatars';
 import { surfaceOf, useRealtime } from '../realtime/react';
 import { ReactionBar } from '../components/ReactionBar';
@@ -34,9 +37,22 @@ type Me = PState['me'];
 type Saved = Pick<Me, 'displayName' | 'avatar'>;
 
 export default function Participant() {
+  const api = useParticipantApi();
+  const { t } = useTranslation();
+  const session = useQuery({
+    queryKey: ['participant-session'],
+    queryFn: () => api.state(),
+    retry: false,
+  });
+  if (session.isPending) return <p role="status">{t('participant.connecting')}</p>;
+  if (session.isError) return <Navigate to="/j" replace />;
+  return <ParticipantSession initial={session.data} />;
+}
+
+function ParticipantSession({ initial }: { initial: PState }) {
   const { t } = useTranslation();
   const { rt, state } = useRealtime();
-  const es = surfaceOf<PState>(state, 'participant', 'eventState');
+  const es = surfaceOf<PState>(state, 'participant', 'eventState') ?? initial;
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
   const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'participant', 'announcement');
@@ -78,6 +94,15 @@ export default function Participant() {
             {shown.status === 'pending' && <p role="status">{t('join.pending')}</p>}
             <p>{t('participant.xp', { xp: shown.xp.xp, level: shown.xp.level })}</p>
           </header>
+          {isRecapPhase(phase) && (
+            <Link
+              to={RECAP_PATH}
+              data-testid="recap-link"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gold-400 px-4 py-3 text-lg font-bold text-ink-900"
+            >
+              <span aria-hidden="true">🎄</span> {t('recap.open')}
+            </Link>
+          )}
           {active && phase === 'gift_registration' && <GiftForm canEdit />}
           {active && phase !== 'preparation' && phase !== 'registration' && <AssignmentView />}
           {active && phase === 'gift_opening' && (
@@ -117,6 +142,14 @@ export default function Participant() {
             <RevealList gifts={gifts} />
           )}
           {scene?.scene === 'ceremony' && <CeremonyScene view={scene.ceremony} now={now} />}
+          {active && scene?.scene === 'reveal' && (
+            <RevealPersonal
+              key={`${es.eventId}:${shown.participantId}`}
+              reveal={scene.reveal}
+              myId={shown.participantId}
+              sendReaction={(k) => rt?.sendReaction(k)}
+            />
+          )}
           <AchievementUnlock announcement={announcement} ready={!!es} />
           <Standing boards={boards} />
           {active && <MyAchievements />}

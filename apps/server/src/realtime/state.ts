@@ -12,6 +12,7 @@ import {
   loadParticipantSources,
   loadPublishedVotedCount,
   pairings,
+  revealStage,
   votingCategories,
   type Db,
 } from '@santa/db';
@@ -23,6 +24,7 @@ import {
   type AuctionViewOutput,
   type CeremonyViewOutput,
   type GameViewOutput,
+  type RevealViewOutput,
   type SpotlightOutput,
 } from '@santa/contracts';
 import {
@@ -30,6 +32,7 @@ import {
   type BoardSource,
   type EventSource,
   type GiftSource,
+  projectReveal,
   type ParticipantSource,
   type PublishResult,
 } from '@santa/domain';
@@ -123,6 +126,8 @@ export interface EventContext {
   game: GameViewOutput | null;
   spotlight: SpotlightOutput | null;
   auction: AuctionViewOutput | null;
+  /** Giver reveal show (reveal phase only; public, giver only once revealed). */
+  reveal: RevealViewOutput | null;
 }
 
 export async function loadEventContext(
@@ -143,6 +148,7 @@ export async function loadEventContext(
     game,
     spotlight,
     auction,
+    stage,
   ] = await Promise.all([
     loadEventSource(db, eventId),
     loadParticipantSources(db, eventId),
@@ -179,6 +185,7 @@ export async function loadEventContext(
     gameView(db, eventId, now),
     spotlightView(db, eventId),
     auctionView(db, eventId),
+    revealStage(db, eventId),
   ]);
   const code = access[0]?.shortCode ?? null;
   return {
@@ -196,6 +203,14 @@ export async function loadEventContext(
     game,
     spotlight,
     auction,
+    reveal: stage
+      ? projectReveal({
+          gifts: giftRows,
+          people,
+          currentGiftId: stage.giftId,
+          countdownEndsAt: stage.countdownEndsAt?.toISOString() ?? null,
+        })
+      : null,
     boards: boardRows.map((b) => ({
       boardKey: b.boardKey,
       name:

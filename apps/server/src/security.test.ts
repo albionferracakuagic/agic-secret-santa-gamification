@@ -235,16 +235,58 @@ describe('production email transport', () => {
 });
 
 describe('socket handshake origin check', () => {
-  it('allowedOrigin: same origin and configured extras only; localhost only outside production', () => {
+  it('allowedOrigin: exact origins; ngrok suffixes only outside production', () => {
     const base = 'https://santa.example';
     expect(allowedOrigin('https://santa.example', base, [], 'production')).toBe(true);
     expect(allowedOrigin('https://evil.example', base, [], 'production')).toBe(false);
     expect(allowedOrigin('http://localhost:5173', base, [], 'production')).toBe(false);
-    expect(allowedOrigin('http://localhost:5173', base, [], 'development')).toBe(true);
+    expect(allowedOrigin('http://localhost:5173', base, [], 'development')).toBe(false);
+    expect(
+      allowedOrigin(
+        'http://localhost:5173',
+        base,
+        ['http://localhost:5173'],
+        'development',
+      ),
+    ).toBe(true);
     expect(
       allowedOrigin('https://admin.example', base, ['https://admin.example'], 'production'),
     ).toBe(true);
     expect(allowedOrigin('https://santa.example.evil.example', base, [], 'production')).toBe(false);
+    expect(allowedOrigin('https://demo-123.ngrok-free.app', base, [], 'development')).toBe(
+      true,
+    );
+    expect(allowedOrigin('https://demo-123.ngrok.io', base, [], 'test')).toBe(true);
+    expect(allowedOrigin('http://demo-123.ngrok-free.app', base, [], 'development')).toBe(false);
+    expect(allowedOrigin('https://ngrok-free.app.evil.example', base, [], 'development')).toBe(
+      false,
+    );
+    expect(allowedOrigin('https://evilngrok-free.app', base, [], 'development')).toBe(false);
+    expect(allowedOrigin('https://demo-123.ngrok-free.app', base, [], 'production')).toBe(false);
+    expect(allowedOrigin('*', base, ['*'], 'development')).toBe(false);
+  });
+
+  it('Fastify CORS uses the same safe origin policy and never emits wildcard ACAO', async () => {
+    const app = buildApp({ baseUrl: 'https://santa.example' });
+    try {
+      const allowed = await app.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { origin: 'https://demo-123.ngrok-free.app' },
+      });
+      expect(allowed.headers['access-control-allow-origin']).toBe(
+        'https://demo-123.ngrok-free.app',
+      );
+      expect(allowed.headers['access-control-allow-credentials']).toBe('true');
+      const rejected = await app.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { origin: 'https://ngrok-free.app.evil.example' },
+      });
+      expect(rejected.headers['access-control-allow-origin']).toBeUndefined();
+    } finally {
+      await app.close();
+    }
   });
 
   it('a cross-site page cannot open a socket with the victim cookies; same-origin and non-browser clients can', async () => {

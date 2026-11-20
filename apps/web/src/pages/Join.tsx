@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { normalizeShortCode } from '../lib/shortCode';
 import { ApiError } from '../api/client';
 import { useParticipantApi, type JoinResolve, type JoinTarget } from '../api/participant';
@@ -19,8 +19,14 @@ const errorKey = (e: unknown) =>
     ? `join.error.${e.code}`
     : 'join.error.generic';
 
-/** /j[/:token] | /j?code=SHORT | /j/claim?token=… — enter code or QR landing -> pick name -> pending/approved. */
+/** /j[/:token] | /j?code=SHORT | /j/claim?token=… — enter/prefill code or QR token -> pick name -> pending/approved. */
 export default function Join() {
+  const { pathname, search } = useLocation();
+  // Selecting Join from a claim/deep link starts a fresh code entry.
+  return <JoinFlow key={pathname + search} />;
+}
+
+function JoinFlow() {
   const { t } = useTranslation();
   const api = useParticipantApi();
   const nav = useNavigate();
@@ -30,7 +36,7 @@ export default function Join() {
   const joinToken = tail && tail !== 'claim' ? tail : undefined;
   const presetCode = normalizeShortCode(params.get('code') ?? '');
   const [step, setStep] = useState<Step>({ kind: 'code' });
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(presetCode ?? '');
   const [err, setErr] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -56,8 +62,7 @@ export default function Join() {
         nav('/e', { replace: true });
       });
     } else if (joinToken) void lookup({ joinToken });
-    else if (presetCode) void lookup({ shortCode: presetCode });
-  }, [claimToken, joinToken, presetCode]);
+  }, [claimToken, joinToken]);
 
   const pick = (target: JoinTarget, participantId: string) =>
     run(async () => {

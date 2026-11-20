@@ -5,6 +5,7 @@ import { effectiveIntensity, usePrefs } from '../prefs/store';
 import { useFxCap } from '../fx/cap';
 import { emitFx } from '../fx/bus';
 import { avatarGlyph } from '../fx/avatars';
+import { GiftPhoto } from './GiftPhoto';
 
 /**
  * Gift-opening stage shared by the display and participant app: animated box -> server countdown -> reveal.
@@ -80,13 +81,12 @@ export function OpeningStage({
           {current.description && (
             <p className={big ? 'text-4xl' : 'text-lg'}>{current.description}</p>
           )}
-          {current.photoUrl && (
-            <img
-              src={current.photoUrl}
-              alt={current.name}
-              className={`mx-auto rounded-xl object-cover ${big ? 'h-[420px]' : 'h-48'}`}
-            />
-          )}
+          <GiftPhoto
+            src={current.photoUrl}
+            alt={current.name}
+            className={`mx-auto rounded-xl object-cover ${big ? 'h-[420px]' : 'h-48'}`}
+            testId="opening-gift-photo"
+          />
           {current.status === 'revealed' && (
             <p className={big ? 'text-5xl' : 'text-xl'}>
               {t('reveal.from')} <span aria-hidden="true">{avatarGlyph(current.giver.avatar)}</span>{' '}

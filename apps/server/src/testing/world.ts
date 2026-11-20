@@ -45,7 +45,7 @@ export interface World {
   displayCookie(): Promise<string>;
   organizerCookie(userId?: string, sessionId?: string): string;
   grant(opts?: { expiresInMs?: number; userId?: string }): Promise<string>;
-  client(cookie: string): Socket;
+  client(cookie: string, origin?: string): Socket;
   close(): Promise<void>;
 }
 
@@ -108,10 +108,10 @@ export async function createWorld(
         .returning({ id: unmaskGrants.id });
       return g!.id;
     },
-    client(cookie) {
+    client(cookie, origin) {
       const c = connectClient(`http://127.0.0.1:${port}`, {
         transports: ['websocket'],
-        extraHeaders: { cookie },
+        extraHeaders: { cookie, ...(origin ? { origin } : {}) },
         reconnection: false,
         forceNew: true,
       });
@@ -153,7 +153,7 @@ export async function addOrganizer(db: Db, eventId: string, userId: string) {
   await db.insert(eventOrganizers).values({ eventId, userId, role: 'co' });
 }
 
-export async function insertSecondEvent(db: Db) {
+export async function insertSecondEvent(db: Db, token = 'outsider') {
   const [e] = await db
     .insert(events)
     .values({
@@ -171,8 +171,8 @@ export async function insertSecondEvent(db: Db) {
       displayName: 'Outsider',
       status: 'active',
       source: 'join',
-      sessionTokenHash: hashToken('outsider'),
+      sessionTokenHash: hashToken(token),
     })
     .returning();
-  return { eventId: e!.id, participantId: p!.id, cookie: `${GUEST_COOKIE}=outsider` };
+  return { eventId: e!.id, participantId: p!.id, cookie: `${GUEST_COOKIE}=${token}` };
 }

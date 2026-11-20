@@ -1,4 +1,5 @@
 import type { Page, WebSocketRoute } from '@playwright/test';
+import { json } from './fixtures';
 
 type Snap = { stream: string; data: Record<string, unknown> };
 
@@ -12,6 +13,15 @@ export async function mockRealtime(page: Page, initial: Snap[]) {
   const sockets: WebSocketRoute[] = [];
   const cursors = new Map<string, number>();
   let connections = 0;
+  // The participant page now bootstraps over HTTP before consuming realtime state.
+  if (initial.some((s) => s.stream.startsWith('p:') && s.data.eventState)) {
+    await page.route('**/api/me/state', (route) => {
+      const state = snapshots.find((s) => s.stream.startsWith('p:') && s.data.eventState);
+      return state
+        ? route.fulfill(json(state.data.eventState))
+        : route.fulfill(json({ error: { code: 'unauthenticated' } }, 401));
+    });
+  }
   await page.routeWebSocket(/socket\.io/, (ws) => {
     sockets.push(ws);
     connections++;

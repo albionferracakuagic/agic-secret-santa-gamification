@@ -4,6 +4,8 @@ import {
   ClaimResponseSchema,
   JoinResolveResponseSchema,
   MeResponseSchema,
+  ParticipantEventStateSchema,
+  type EventStateOutput,
   type ProfileUpdateRequestSchema,
 } from '@santa/contracts';
 import type { z } from 'zod';
@@ -21,6 +23,7 @@ export interface ParticipantApi {
   resolve(target: JoinTarget): Promise<JoinResolve>;
   claim(req: ClaimRequest): Promise<ClaimResponse>;
   me(): Promise<MeResponse>;
+  state(): Promise<Extract<EventStateOutput, { role: 'participant' }>>;
   updateProfile(patch: ProfilePatch): Promise<MeResponse>;
   exchangeDisplayToken(token: string): Promise<void>;
 }
@@ -35,6 +38,8 @@ export const httpParticipantApi: ParticipantApi = {
       await api('/api/join/claim', { method: 'POST', body: ClaimRequestSchema.parse(req) }),
     ),
   me: async () => MeResponseSchema.parse(await api('/api/me')),
+  state: async () =>
+    ParticipantEventStateSchema.parse(await api<unknown>('/api/me/state')),
   updateProfile: async (patch) =>
     MeResponseSchema.parse(await api('/api/me/profile', { method: 'PATCH', body: patch })),
   exchangeDisplayToken: async (token) => {

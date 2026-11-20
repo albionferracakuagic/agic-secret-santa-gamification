@@ -1,0 +1,17 @@
+1. Gift name: The Mysteriously Squishy Parcel
+   Description: Soft outside, sweet within. Contains nuts; keep sealed.
+
+2. Gift name: The Surprisingly Heavy Box
+   Description: Small but mighty. Handle gently; fragile contents.
+
+3. Gift name: The Crinkly Christmas Tube
+   Description: A cozy mystery in a festive cylinder. Do not crush.
+
+4. Gift name: The Tiny Jingle Bundle
+   Description: Stealth is not its strength. Keep dry; small parts inside.
+
+5. Gift name: The Flat-but-Festive Envelope
+   Description: Slim packaging with a bright surprise. Do not bend.
+
+6. Gift name: The Winter-Scented Cube
+   Description: A whiff of holiday magic. May contain fragrance allergens.

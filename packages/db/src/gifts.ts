@@ -6,6 +6,8 @@ import * as s from './schema.js';
 import { writeAudit } from './audit.js';
 import { awardXp } from './xp.js';
 import { EventError } from './events.js';
+import { cancelJobs } from './jobs.js';
+import { REVEAL_UNVEIL_JOB } from './reveal.js';
 
 type Event = typeof s.events.$inferSelect;
 
@@ -409,7 +411,7 @@ export async function revealGift(
   p: { eventId: string; giftId: string; actor: string; now: Date },
 ): Promise<{ giftId: string; revealedAt: Date; changed: boolean }> {
   return db.transaction(async (tx) => {
-    await requireRevealStarted(tx, p.eventId);
+    const e = await requireRevealStarted(tx, p.eventId);
     const [g] = await tx
       .select()
       .from(s.gifts)
@@ -424,6 +426,13 @@ export async function revealGift(
       .update(s.gifts)
       .set({ status: 'revealed', giverRevealedAt: p.now })
       .where(eq(s.gifts.id, g.id));
+    // instant reveal (no drumroll): the gift goes on the display stage already revealed
+    if (e.phase === 'reveal') {
+      await tx
+        .update(s.events)
+        .set({ currentGiftId: g.id, updatedAt: p.now })
+        .where(eq(s.events.id, p.eventId));
+    }
     await writeAudit(tx, {
       eventId: p.eventId,
       actor: p.actor,
@@ -453,6 +462,12 @@ export async function revealAllGifts(
         ),
       )
       .returning({ id: s.gifts.id });
+    // finale: clear the reveal stage, drop pending drumrolls (their gifts are revealed now)
+    await tx
+      .update(s.events)
+      .set({ currentGiftId: null, updatedAt: p.now })
+      .where(eq(s.events.id, p.eventId));
+    await cancelJobs(tx, p.eventId, [REVEAL_UNVEIL_JOB]);
     await writeAudit(tx, {
       eventId: p.eventId,
       actor: p.actor,

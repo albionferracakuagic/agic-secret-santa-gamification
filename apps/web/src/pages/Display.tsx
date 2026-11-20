@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import type {
   AnyAnnouncementOutput,
   EventStateOutput,
@@ -20,6 +20,7 @@ import {
   useAchievementName,
 } from '../components/play/Achievements';
 import { OpeningStage } from '../components/OpeningStage';
+import { RevealStage } from '../components/display/RevealStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
 import { AuctionScene, GameScene, SpotlightScene } from '../components/GameScenes';
@@ -27,6 +28,7 @@ import { emitFx } from '../fx/bus';
 import { useLocalized } from '../lib/localized';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
+import { publicJoinUrl } from '../lib/joinUrl';
 
 type DState = Extract<EventStateOutput, { role: 'display' }>;
 
@@ -59,14 +61,30 @@ function usePrevEffect<T>(v: T | undefined, fn: (prev: T, next: T | undefined) =
 
 /** /d[/<token>] — exchanges the display token for its cookie first, and only then opens the realtime stream. */
 export default function Display() {
+  const { t } = useTranslation();
   const api = useParticipantApi();
-  const nav = useNavigate();
   const token = useParams()['*']?.split('/')[0];
+  const [exchange, setExchange] = useState<{
+    token: string;
+    status: 'pending' | 'success' | 'failed';
+  }>();
   useEffect(() => {
     if (!token) return;
-    void api.exchangeDisplayToken(token).finally(() => nav('/d', { replace: true }));
-  }, [token, api, nav]);
-  return token ? null : <DisplayStage />;
+    let active = true;
+    setExchange({ token, status: 'pending' });
+    void api.exchangeDisplayToken(token).then(
+      () => active && setExchange({ token, status: 'success' }),
+      () => active && setExchange({ token, status: 'failed' }),
+    );
+    return () => {
+      active = false;
+    };
+  }, [token, api]);
+  if (!token) return <DisplayStage />;
+  if (exchange?.token !== token || exchange.status === 'pending') return null;
+  if (exchange.status === 'failed')
+    return <p role="alert">{t('join.error.invalid_claim')}</p>;
+  return <DisplayStage />;
 }
 
 /** Renders only the display projection (scene, event state, gift list, leaderboard, announcement). */
@@ -74,14 +92,22 @@ function DisplayStage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const { rt, state } = useRealtime();
-  const es = surfaceOf<DState>(state, 'pub', 'eventState');
+  const projected = state.surfaces.pub?.eventState;
+  const es =
+    typeof projected === 'object' &&
+    projected !== null &&
+    'role' in projected &&
+    projected.role === 'display' &&
+    'eventId' in projected &&
+    typeof projected.eventId === 'string'
+      ? (projected as DState)
+      : undefined;
   const scene = surfaceOf<SceneOutput>(state, 'pub', 'scene');
   const gifts = surfaceOf<PublicGiftListOutput>(state, 'pub', 'giftList');
   const boards = surfaceOf<BoardsOutput>(state, 'pub', 'leaderboards');
   const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'pub', 'announcement');
   const scale = useStageScale();
   const now = () => rt?.serverNow() ?? Date.now();
-
   usePrevEffect(
     es?.counts.participants,
     (p, n) => n !== undefined && p < n && emitFx('participant_joined'),
@@ -116,7 +142,11 @@ function DisplayStage() {
       <LobbyScene
         name={es.name}
         participants={scene.participants}
-        joinUrl={scene.joinUrl ?? joinUrl ?? `${location.origin}/j`}
+        joinUrl={publicJoinUrl(
+          scene.joinUrl ?? joinUrl,
+          scene.shortCode ?? shortCode,
+          window.location.origin,
+        )}
         code={scene.shortCode ?? shortCode}
       />
     );
@@ -146,6 +176,7 @@ function DisplayStage() {
   else if (scene.scene === 'game') body = <GameScene game={scene.game} now={now} />;
   else if (scene.scene === 'spotlight') body = <SpotlightScene spotlight={scene.spotlight} />;
   else if (scene.scene === 'auction') body = <AuctionScene auction={scene.auction} now={now} />;
+  else if (scene.scene === 'reveal') body = <RevealStage reveal={scene.reveal} now={now} />;
   else if (scene.phase === 'gift_registration')
     body = (
       <Scene title={t('display.registrationTitle')}>

@@ -15,6 +15,7 @@ import {
   JoinResolveResponseSchema,
   MeResponseSchema,
   MuteParticipantRequestSchema,
+  ParticipantEventStateSchema,
   ProfileUpdateRequestSchema,
   ReactionSettingsRequestSchema,
   OrganizerParticipantsResponseSchema,
@@ -85,12 +86,18 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
   const targetOf = (t: { joinToken: string } | { shortCode: string }): JoinTarget =>
     'joinToken' in t ? { tokenHash: hashToken(t.joinToken) } : { shortCode: t.shortCode };
 
-  const setGuestCookie = (reply: FastifyReply, token: string) =>
+  const secure = (req: FastifyRequest) => d.secureCookies || req.protocol === 'https';
+  const roleCookieOptions = (req: FastifyRequest) => ({
+    httpOnly: true,
+    secure: secure(req),
+    sameSite: 'lax' as const,
+    path: '/',
+  });
+  const clearRoleCookie = (req: FastifyRequest, reply: FastifyReply, name: string) =>
+    reply.clearCookie(name, roleCookieOptions(req));
+  const setGuestCookie = (req: FastifyRequest, reply: FastifyReply, token: string) =>
     reply.setCookie(GUEST_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: d.secureCookies,
-      sameSite: 'lax',
-      path: '/',
+      ...roleCookieOptions(req),
       maxAge: COOKIE_MAX_AGE,
     });
 
@@ -161,7 +168,8 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
         autoApprove,
       });
       if (r.replacedSession) d.hub.dropParticipant(participantId, 'session'); // old device is dead
-      setGuestCookie(reply, session);
+      clearRoleCookie(req, reply, DISPLAY_COOKIE_NAME);
+      setGuestCookie(req, reply, session);
       await broadcastEventState(d.hub, d.db, eventId);
       return ClaimResponseSchema.parse({
         status: r.status,
@@ -188,6 +196,24 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
       verified: me.claimVerifiedAt !== null,
       locale: me.locale === 'it' ? 'it' : 'en',
     });
+  });
+
+  /** Strict participant projection for reload/bootstrap; never accepts display or organizer cookies. */
+  app.get('/api/me/state', async (req, reply) => {
+    const me = await myself(req);
+    if (!me) return fail(reply, 401, 'unauthenticated');
+    const token = parseCookies(req.headers.cookie)[GUEST_COOKIE_NAME]!;
+    const data = await d.hub.snapshot(
+      {
+        kind: 'guest',
+        eventId: me.eventId,
+        participantId: me.id,
+        sessionId: hashToken(token),
+      },
+      me.eventId,
+      `p:${me.id}`,
+    );
+    return ParticipantEventStateSchema.parse(data['eventState']);
   });
 
   app.patch('/api/me/profile', async (req, reply) => {
@@ -219,11 +245,9 @@ export function registerJoinRoutes(app: FastifyInstance, d: JoinRouteDeps) {
     const maxAge = row.expiresAt
       ? Math.max(1, Math.floor((row.expiresAt.getTime() - d.clock().getTime()) / 1000))
       : COOKIE_MAX_AGE;
+    clearRoleCookie(req, reply, GUEST_COOKIE_NAME);
     reply.setCookie(DISPLAY_COOKIE_NAME, b.token, {
-      httpOnly: true,
-      secure: d.secureCookies,
-      sameSite: 'lax',
-      path: '/',
+      ...roleCookieOptions(req),
       maxAge,
     });
     return { ok: true };

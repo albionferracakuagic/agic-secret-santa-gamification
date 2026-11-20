@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { participants, unmaskGrants } from '@santa/db';
+import { events, participants, unmaskGrants } from '@santa/db';
+import { scanForbidden } from '@santa/contracts';
 import { hashToken } from '../tokens.js';
 import {
+  addOrganizer,
   collect,
   connected,
   createWorld,
@@ -17,6 +19,28 @@ interface Snap {
   cursor: number;
   data: Record<string, { mode?: string; role?: string; me?: { xp: { xp: number } } }>;
 }
+
+const latestPresence = (deltas: unknown[]) => {
+  for (let i = deltas.length - 1; i >= 0; i--) {
+    const delta = deltas[i] as {
+      stream?: string;
+      surface?: string;
+      payload?: { organizer?: { displayConnected?: boolean } };
+    };
+    if (delta.stream === 'org' && delta.surface === 'eventState') {
+      return delta.payload?.organizer?.displayConnected;
+    }
+  }
+  return undefined;
+};
+
+const waitForCondition = async (condition: () => boolean, label: string) => {
+  for (let i = 0; i < 100; i++) {
+    if (condition()) return;
+    await sleep(20);
+  }
+  throw new Error(`timeout waiting for ${label}`);
+};
 
 const subscribeAll = async (s: ReturnType<World['client']>, payload: unknown, n: number) => {
   const snaps: Snap[] = [];
@@ -33,6 +57,115 @@ describe('realtime core', () => {
       clock: () => new Date('2026-12-24T20:00:00Z'),
       rate: { messagesPerSec: 50, reactionsPerSec: 3 },
     });
+  }, 60_000);
+
+  it('selects display and organizer roles from one cookie jar, tracks readiness, and broadcasts a presentation', async () => {
+    const world = await createWorld({
+      clock: () => new Date('2026-12-24T20:00:00Z'),
+      rate: { messagesPerSec: 50, reactionsPerSec: 3 },
+    });
+    try {
+      await world.db.update(events).set({ phase: 'reveal' }).where(eq(events.id, world.eventId));
+      const owner = world.organizerCookie('demo-owner', 'shared-browser-owner');
+      const access = await world.app.inject({
+        method: 'POST',
+        url: `/api/events/${world.eventId}/access`,
+        headers: {
+          cookie: owner,
+          'idempotency-key': 'display-runtime-access-xxxx',
+        },
+        payload: { kind: 'display', expiresInHours: 12 },
+      });
+      expect(access.statusCode).toBe(201);
+      const { token } = access.json() as { token: string };
+      const exchange = await world.app.inject({
+        method: 'POST',
+        url: '/api/join/display',
+        headers: { 'idempotency-key': 'display-runtime-exchange-xx' },
+        payload: { token },
+      });
+      expect(exchange.statusCode).toBe(200);
+      const displayToken = exchange.cookies.find((c) => c.name === 'sg_d')?.value;
+      expect(displayToken).toBe(token);
+      const staleGuest = await world.guestCookie(0, 'still-valid-stale-guest');
+      const sharedCookies = `${owner}; ${staleGuest}; sg_d=${displayToken}`;
+      const tunnelOrigin = 'https://shared-browser.ngrok-free.app';
+
+      const org = world.client(sharedCookies, tunnelOrigin);
+      const display = world.client(sharedCookies, tunnelOrigin);
+      const orgDeltas = collect(org, 'delta');
+      const displayDeltas = collect(display, 'delta');
+      await Promise.all([connected(org), connected(display)]);
+
+      const [orgSnapshots] = await Promise.all([subscribeAll(org, { eventId: world.eventId }, 2)]);
+      expect(orgSnapshots.find((s) => s.stream === 'org')?.data['eventState']).toMatchObject({
+        organizer: { displayConnected: false },
+      });
+      expect(
+        scanForbidden(orgSnapshots, {
+          keys: ['token', 'sessionId', 'giverId', 'recipientId', 'voterId', 'score', 'pairings'],
+        }),
+      ).toEqual([]);
+
+      const displaySnapshots = await subscribeAll(display, {}, 1);
+      const pub = displaySnapshots[0]!;
+      expect(pub.stream).toBe('pub');
+      expect(pub.data['eventState']).toMatchObject({
+        role: 'display',
+        eventId: world.eventId,
+      });
+      expect(JSON.stringify(pub.data)).not.toContain(token);
+      await waitForCondition(
+        () =>
+          latestPresence(orgDeltas) === true &&
+          orgDeltas.some(
+            (m) =>
+              (m as { payload?: { organizer?: { displayConnected?: boolean } } }).payload?.organizer
+                ?.displayConnected === true,
+          ),
+        'same-browser organizer display presence',
+      );
+      expect(
+        scanForbidden(displaySnapshots, {
+          keys: ['token', 'sessionId', 'giverId', 'recipientId', 'voterId', 'score', 'pairings'],
+        }),
+      ).toEqual([]);
+
+      const presented = await world.app.inject({
+        method: 'POST',
+        url: `/api/events/${world.eventId}/presentations`,
+        headers: {
+          cookie: owner,
+          'idempotency-key': 'display-runtime-present-xxxx',
+        },
+        payload: { kind: 'santa_detective' },
+      });
+      expect(presented.statusCode).toBe(200);
+      await waitForCondition(
+        () =>
+          displayDeltas.some(
+            (m) =>
+              (m as { surface?: string; payload?: { scene?: string } }).surface === 'scene' &&
+              (m as { payload?: { scene?: string } }).payload?.scene === 'spotlight',
+          ),
+        'display presentation scene',
+      );
+      const latestScene = [...displayDeltas]
+        .reverse()
+        .find((m) => (m as { surface?: string }).surface === 'scene') as
+        { payload?: { scene?: string; spotlight?: { kind?: string } } } | undefined;
+      expect(latestScene?.payload).toMatchObject({
+        scene: 'spotlight',
+        spotlight: { kind: 'santa_detective' },
+      });
+      expect(
+        scanForbidden([displaySnapshots, displayDeltas], {
+          keys: ['token', 'sessionId', 'giverId', 'recipientId', 'voterId', 'score', 'pairings'],
+        }),
+      ).toEqual([]);
+    } finally {
+      await world.close();
+    }
   }, 60_000);
   afterAll(async () => {
     await w.close();
@@ -52,11 +185,13 @@ describe('realtime core', () => {
     const own = snaps.find((s) => s.stream.startsWith('p:'))!;
     expect(own.data['eventState']?.me?.xp.xp).toBe(10); // self-only XP
     expect(snaps.find((s) => s.stream === 'pub')!.data['giftList']?.mode).toBe('count_only');
+    expect(JSON.stringify(snaps)).not.toContain('displayConnected');
 
     const display = w.client(await w.displayCookie());
     await connected(display);
     const dsnaps = await subscribeAll(display, {}, 1);
     expect(dsnaps.map((s) => s.stream)).toEqual(['pub']);
+    expect(JSON.stringify(dsnaps)).not.toContain('displayConnected');
 
     const org = w.client(w.organizerCookie());
     await connected(org);
@@ -64,7 +199,59 @@ describe('realtime core', () => {
     expect(osnaps.map((s) => s.stream).sort()).toEqual(['org', 'pub']);
     expect(osnaps.find((s) => s.stream === 'org')!.data['eventState']).toMatchObject({
       role: 'organizer_masked',
+      organizer: { displayConnected: true },
     });
+    const displayGone = waitFor(display, 'disconnect');
+    display.disconnect();
+    await displayGone;
+  });
+
+  it('tracks authenticated display presence per event and preserves it until the last disconnect', async () => {
+    const other = await insertSecondEvent(w.db, 'presence-outsider');
+    await addOrganizer(w.db, other.eventId, 'stranger');
+    const org = w.client(w.organizerCookie('demo-owner', 'presence-observer'));
+    const otherOrg = w.client(w.organizerCookie('stranger', 'other-observer'));
+    await Promise.all([connected(org), connected(otherOrg)]);
+    const [orgSnaps, otherSnaps] = await Promise.all([
+      subscribeAll(org, { eventId: w.eventId }, 2),
+      subscribeAll(otherOrg, { eventId: other.eventId }, 2),
+    ]);
+    expect(orgSnaps.find((s) => s.stream === 'org')!.data['eventState']).toMatchObject({
+      organizer: { displayConnected: false },
+    });
+    expect(otherSnaps.find((s) => s.stream === 'org')!.data['eventState']).toMatchObject({
+      organizer: { displayConnected: false },
+    });
+    const orgDeltas = collect(org, 'delta');
+    const otherDeltas = collect(otherOrg, 'delta');
+
+    const d1 = w.client(await w.displayCookie());
+    const d2 = w.client(await w.displayCookie());
+    await connected(d1);
+    await connected(d2);
+    const d1Snaps = subscribeAll(d1, {}, 1);
+    const d2Snaps = subscribeAll(d2, {}, 1);
+    await Promise.all([d1Snaps, d2Snaps]);
+    await waitForCondition(
+      () => latestPresence(orgDeltas) === true,
+      'organizer presence connected delta',
+    );
+    expect(latestPresence(otherDeltas)).toBeUndefined();
+
+    const gone1 = waitFor(d1, 'disconnect');
+    d1.disconnect();
+    await gone1;
+    await sleep(50);
+    expect(latestPresence(orgDeltas)).toBe(true);
+
+    const gone2 = waitFor(d2, 'disconnect');
+    d2.disconnect();
+    await gone2;
+    await waitForCondition(
+      () => latestPresence(orgDeltas) === false,
+      'organizer presence disconnected delta',
+    );
+    expect(latestPresence(otherDeltas)).toBeUndefined();
   });
 
   it('organizer must be a member of the named event', async () => {

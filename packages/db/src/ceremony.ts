@@ -304,7 +304,7 @@ async function begin(
       .update(s.awards)
       .set({
         tieInfo: { ...tieOf(a), nominees },
-        confirmedBy: a.publishable ? actor : a.confirmedBy,
+        confirmedBy: a.publishable && actor !== 'system' ? actor : a.confirmedBy, // 'system' (autopilot) is not a user row
       })
       .where(eq(s.awards.id, a.id));
   }

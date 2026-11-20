@@ -105,7 +105,7 @@ function fakeApi(over: Partial<OrganizerApi> = {}): OrganizerApi {
   };
 }
 
-function mount(org: OrganizerApi, phase = 'registration') {
+function mount(org: OrganizerApi, phase = 'registration', tab = 'setup') {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -137,7 +137,7 @@ function mount(org: OrganizerApi, phase = 'registration') {
       <ParticipantApiProvider value={noop}>
         <RealtimeProvider factory={() => rt}>
           <OrganizerApiProvider value={org}>
-            <MemoryRouter initialEntries={['/o/events/e1']}>
+            <MemoryRouter initialEntries={[`/o/events/e1?tab=${tab}`]}>
               <App />
             </MemoryRouter>
           </OrganizerApiProvider>
@@ -212,7 +212,7 @@ describe('organizer console: pairing wizard', () => {
 describe('organizer console: approvals and reactions', () => {
   it('approves pending, exports codes once and emails links', async () => {
     const org = fakeApi();
-    mount(org);
+    mount(org, 'registration', 'people');
     fireEvent.click(await screen.findByRole('button', { name: 'Approve Anna' }));
     await waitFor(() => expect(org.approve).toHaveBeenCalledWith('e1', 'p1'));
     fireEvent.click(screen.getByRole('button', { name: 'Create claim codes' }));
@@ -245,7 +245,7 @@ describe('organizer console: approvals and reactions', () => {
 describe('organizer console: opening, voting, reveal', () => {
   it('opening: next gift, progress, manual order saved as a permutation of unopened gifts', async () => {
     const org = fakeApi();
-    mount(org, 'gift_opening');
+    mount(org, 'gift_opening', 'show');
     expect(await screen.findByText('0 of 3 gifts opened')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Open next gift' }));
     await waitFor(() => expect(org.openingNext).toHaveBeenCalledWith('e1'));
@@ -259,7 +259,7 @@ describe('organizer console: opening, voting, reveal', () => {
 
   it('voting: opens with a timer from the opening phase', async () => {
     const org = fakeApi();
-    mount(org, 'gift_opening');
+    mount(org, 'gift_opening', 'show');
     fireEvent.change(await screen.findByLabelText('Voting time (minutes)'), {
       target: { value: '15' },
     });
@@ -269,14 +269,14 @@ describe('organizer console: opening, voting, reveal', () => {
 
   it('voting: closes and reports locked/publishable categories', async () => {
     const org = fakeApi();
-    mount(org, 'voting');
+    mount(org, 'voting', 'show');
     fireEvent.click(await screen.findByRole('button', { name: 'Close voting' }));
     expect(await screen.findByText('2 categories locked, 1 can be published.')).toBeTruthy();
   });
 
   it('reveal: per gift and all at once, aliases only', async () => {
     const org = fakeApi();
-    mount(org, 'reveal');
+    mount(org, 'reveal', 'show');
     fireEvent.click(await screen.findByRole('button', { name: 'Reveal giver Gift 1' }));
     await waitFor(() => expect(org.revealGift).toHaveBeenCalledWith('e1', 'g1'));
     fireEvent.click(screen.getByRole('button', { name: 'Reveal all givers' }));

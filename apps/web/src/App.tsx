@@ -2,12 +2,15 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Layout } from './components/Layout';
+import Home from './pages/Home';
+import { RECAP_PATH } from './routes/recap';
 
 const SignIn = lazy(() => import('./pages/SignIn'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Console = lazy(() => import('./pages/Console'));
 const Join = lazy(() => import('./pages/Join'));
 const Participant = lazy(() => import('./pages/Participant'));
+const Recap = lazy(() => import('./pages/Recap'));
 const Display = lazy(() => import('./pages/Display'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const Legal = lazy(() => import('./pages/Legal'));
@@ -20,6 +23,8 @@ export function App() {
     <Suspense fallback={<p>{t('a11y.loading')}</p>}>
       <Routes>
         <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="/create" element={<Navigate to="/o" replace />} />
           <Route path="/o" element={<Dashboard />} />
           <Route path="/o/signin" element={<SignIn />} />
           <Route path="/o/events/:eventId" element={<Console />} />
@@ -27,6 +32,7 @@ export function App() {
           <Route path="/legal/:doc" element={<Legal />} />
           <Route path="/credits" element={<Credits />} />
           <Route path="/link" element={<LinkConfirm />} />
+          <Route path={RECAP_PATH} element={<Recap />} />
           <Route path="/e/*" element={<Participant />} />
           <Route path="/d/*" element={<Display />} />
           <Route path="/j/*" element={<Join />} />

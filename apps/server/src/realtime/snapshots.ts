@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { eventOrganizers, unmaskGrants, votes, type Db } from '@santa/db';
+import { eventOrganizers, loadAutopilotState, unmaskGrants, votes, type Db } from '@santa/db';
 import {
   projectEventState,
   projectGiftList,
@@ -26,6 +26,7 @@ const sceneOf = (c: EventContext) =>
     game: c.game,
     spotlight: c.spotlight,
     auction: c.auction,
+    reveal: c.reveal,
   });
 
 /** Public (display-role) projections shared by the pub stream: gifts, board, scene. */
@@ -56,14 +57,19 @@ export class DbSnapshotProvider implements SnapshotProvider {
 
   async snapshot(p: Principal, eventId: string, stream: string): Promise<Record<string, unknown>> {
     const c = await loadEventContext(this.db, eventId, this.ctx);
-    if (stream === 'pub') return publicSurfaces(c);
-
     const base = {
       event: c.event,
       participants: c.people,
       giftsRegistered: c.gifts.length,
       ...(c.votedCount === null ? {} : { votedCount: c.votedCount }),
     };
+
+    if (stream === 'pub') {
+      return {
+        ...publicSurfaces(c),
+        eventState: projectEventState({ role: 'display' }, { ...base, ownVotes: [] }),
+      };
+    }
 
     if (stream.startsWith('p:') && p.kind === 'guest') {
       const own = await this.db
@@ -86,11 +92,13 @@ export class DbSnapshotProvider implements SnapshotProvider {
             .from(votes)
             .where(and(eq(votes.eventId, eventId), eq(votes.voterId, participantId)))
         : [];
+      // organizer-only surface: never computed for pub / participant streams
+      const autopilot = await loadAutopilotState(this.db, eventId);
       if (stream === 'org') {
         return {
           eventState: projectEventState(
             { role: 'organizer_masked', participantId },
-            { ...base, ownVotes: own },
+            { ...base, ownVotes: own, autopilot },
           ),
         };
       }
@@ -104,7 +112,7 @@ export class DbSnapshotProvider implements SnapshotProvider {
           grant: { grantId, expiresAt: g.expiresAt.toISOString() },
         };
         return {
-          eventState: projectEventState(viewer, { ...base, ownVotes: own }),
+          eventState: projectEventState(viewer, { ...base, ownVotes: own, autopilot }),
           giftList: projectGiftList(viewer, c.event.phase, c.gifts, c.people),
         };
       }

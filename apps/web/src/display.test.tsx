@@ -1,10 +1,11 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SceneSchema, AnnouncementSchema } from '@santa/contracts';
+import { DisplayEventStateSchema, SceneSchema, AnnouncementSchema } from '@santa/contracts';
 import i18n from './i18n';
 import { usePrefs } from './prefs/store';
 import { setup } from './test-utils';
+import { publicJoinUrl } from './lib/joinUrl';
 
 const ds = (phase: string, over: Record<string, unknown> = {}) => ({
   role: 'display',
@@ -34,16 +35,47 @@ const gift = (id: string, name: string, status: 'opened' | 'revealed' = 'opened'
 const scene = (s: unknown) => SceneSchema.parse(s); // fixtures must satisfy the real contract
 
 beforeEach(async () => {
+  localStorage.clear();
   await i18n.changeLanguage('en');
   usePrefs.setState({ sound: false, music: false, intensity: 'normal', reducedMotion: 'off' });
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  localStorage.clear();
+  vi.useRealTimers();
+});
 
 describe('display scenes (SceneSchema)', () => {
+  it('bare /d renders only after a display event projection arrives', async () => {
+    const t = setup('/d');
+    expect(await screen.findByTestId('display-stage')).toBeTruthy();
+    expect(screen.queryByText(/Welcome to Office Party/)).toBeNull();
+
+    t.snapshot('pub', {
+      eventState: ds('registration'),
+      scene: scene({
+        scene: 'lobby',
+        participants: 12,
+        joinUrl: null,
+        shortCode: null,
+      }),
+    });
+
+    expect(await screen.findByText(/Welcome to Office Party/)).toBeTruthy();
+  });
+
+  it('a non-display projection is not rendered as display state', () => {
+    const t = setup('/d');
+    t.snapshot('pub', {
+      eventState: { ...ds('registration'), role: 'participant' },
+      scene: scene({ scene: 'lobby', participants: 12, joinUrl: null, shortCode: null }),
+    });
+    expect(screen.queryByText(/Welcome to Office Party/)).toBeNull();
+  });
+
   it('lobby: QR from scene joinUrl, short code and joined counter; sound overlay is non-modal', async () => {
     const t = setup('/d');
     t.snapshot('pub', {
-      eventState: ds('registration'),
+      eventState: DisplayEventStateSchema.parse(ds('registration')),
       scene: scene({
         scene: 'lobby',
         participants: 12,
@@ -51,12 +83,46 @@ describe('display scenes (SceneSchema)', () => {
         shortCode: 'ABCDEFGHJK',
       }),
     });
-    expect(await screen.findByRole('img', { name: 'QR code to join the event' })).toBeTruthy();
+    const qr = await screen.findByRole('img', { name: 'QR code to join the event' });
+    expect(qr.getAttribute('data-qr-value')).toBe(
+      `${window.location.origin}/j?code=ABCDEFGHJK`,
+    );
     expect(screen.getByTestId('big-count').textContent).toBe('12');
     expect(screen.getByText('ABCDE-FGHJK')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep silent' }));
     expect(screen.queryByRole('region', { name: 'Sound' })).toBeNull();
     expect(usePrefs.getState().sound).toBe(false);
+  });
+
+  it('public join URL keeps the canonical route on an ngrok origin', () => {
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/j?code=ABCDEFGHJK',
+        'ABCDEFGHJK',
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j?code=ABCDEFGHJK');
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/j/a-join-token',
+        'ABCDEFGHJK',
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j?code=ABCDEFGHJK');
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/j/a-join-token',
+        null,
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j/a-join-token');
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/d/display-token',
+        'ABCDEFGHJK',
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j?code=ABCDEFGHJK');
   });
 
   it('voting: countdown from the server endsAt (server clock) and the published voted counter', async () => {
@@ -107,13 +173,18 @@ describe('display scenes (SceneSchema)', () => {
         total: 12,
         countdownSeconds: 3,
         countdownEndsAt: new Date(Date.now() + 3000).toISOString(),
-        current: gift('7', 'Warm scarf'),
+        current: {
+          ...gift('7', 'Warm scarf'),
+          photoUrl:
+            'https://account.blob.core.windows.net/gifts/e1/scarf.jpg?sv=1&se=2026-12-20&sig=signed',
+        },
       }),
     });
     expect(screen.getByText('3 of 12 gifts opened')).toBeTruthy();
     expect(screen.queryByTestId('opening-revealed')).toBeNull();
     act(() => void vi.advanceTimersByTime(3100));
     expect(screen.getByTestId('opening-revealed').textContent).toContain('Warm scarf');
+    expect(screen.getByTestId('opening-gift-photo').getAttribute('src')).toContain('sig=signed');
     vi.useRealTimers();
 
     usePrefs.setState({ reducedMotion: 'on' });

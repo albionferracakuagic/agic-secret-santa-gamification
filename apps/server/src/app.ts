@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
+import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -22,6 +23,7 @@ import { registerJoinRoutes } from './routes/join.js';
 import { registerGiftRoutes } from './routes/gifts.js';
 import { registerVotingRoutes } from './routes/voting.js';
 import { registerShowRoutes } from './routes/show.js';
+import { registerAutopilotRoutes } from './routes/autopilot.js';
 import { registerPhase2Routes } from './routes/phase2.js';
 import { registerPhase3Routes } from './routes/phase3.js';
 import type { FanoutBus } from './scale/bus.js';
@@ -35,6 +37,9 @@ import type { StorageAdapter } from './storage/adapter.js';
 import { randomBytes } from 'node:crypto';
 import { dbReactionPolicy } from './realtime/reactions.js';
 import { MemoryEmailTransport, type EmailTransport } from './auth/email.js';
+import { allowedOrigin } from './http/origins.js';
+
+export { allowedOrigin } from './http/origins.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -87,17 +92,6 @@ const NO_ORGANIZERS: OrganizerSessions = {
   isCurrent: async () => false,
 };
 
-/** Same-origin (plus configured extras); any localhost origin outside production for the Vite dev server. */
-export function allowedOrigin(
-  origin: string,
-  baseUrl: string,
-  extra: string[] = [],
-  env: GuardEnv = 'development',
-): boolean {
-  if (origin === new URL(baseUrl).origin || extra.includes(origin)) return true;
-  return env !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-}
-
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: !opts.logging
@@ -108,7 +102,13 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
   const guardEnv: GuardEnv =
     opts.guardEnv ?? (process.env['NODE_ENV'] === 'production' ? 'production' : 'development');
+  const baseUrl = opts.baseUrl ?? 'http://localhost:3000';
 
+  void app.register(cors, {
+    credentials: true,
+    origin: (origin, callback) =>
+      callback(null, !origin || allowedOrigin(origin, baseUrl, opts.allowedOrigins, guardEnv)),
+  });
   void app.register(helmet, {
     contentSecurityPolicy: {
       directives: cspDirectives(
@@ -177,7 +177,6 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       opts.auth?.organizerSessions ?? opts.organizerSessions ?? NO_ORGANIZERS,
       opts.clock,
     );
-    const baseUrl = opts.baseUrl ?? 'http://localhost:3000';
     const storage: StorageAdapter =
       opts.storage ??
       new LocalFsStorage(
@@ -233,6 +232,13 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
         clock,
       });
       registerShowRoutes(app, {
+        db,
+        sessions: sessions ?? NO_ORGANIZERS,
+        principals,
+        hub,
+        clock,
+      });
+      registerAutopilotRoutes(app, {
         db,
         sessions: sessions ?? NO_ORGANIZERS,
         principals,

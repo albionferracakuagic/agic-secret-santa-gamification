@@ -64,6 +64,13 @@
       "when": 1794918281387,
       "tag": "0008_phase3_coins_auction_history_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795088606779,
+      "tag": "0009_autopilot_state",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AutopilotSettingsSchema } from './autopilot.js';
 
 /** Phase 2 rules/rewards. XP granted from these is non-qualifying (cannot leak guess/game results into Christmas Champion). */
 export const Phase2SettingsSchema = z.strictObject({
@@ -168,6 +169,8 @@ export const EventSettingsSchema = z.strictObject({
   ceremonyCountdownSeconds: z.number().int().min(3).max(30).default(5),
   phase2: Phase2SettingsSchema.prefault({}),
   phase3: Phase3SettingsSchema.prefault({}),
+  /** Show autopilot timings (preset + per-step overrides). Absent on older events: defaults apply. */
+  autopilot: AutopilotSettingsSchema.prefault({}),
 });
 export type EventSettings = z.infer<typeof EventSettingsSchema>;
 
