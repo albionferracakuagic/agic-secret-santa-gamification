@@ -19,7 +19,7 @@ const errorKey = (e: unknown) =>
     ? `join.error.${e.code}`
     : 'join.error.generic';
 
-/** /j[/:token] | /j?code=SHORT | /j/claim?token=… — enter code or QR landing -> pick name -> pending/approved. */
+/** /j[/:token] | /j?code=SHORT | /j/claim?token=… — enter/prefill code or QR token -> pick name -> pending/approved. */
 export default function Join() {
   const { pathname, search } = useLocation();
   // Selecting Join from a claim/deep link starts a fresh code entry.
@@ -36,7 +36,7 @@ function JoinFlow() {
   const joinToken = tail && tail !== 'claim' ? tail : undefined;
   const presetCode = normalizeShortCode(params.get('code') ?? '');
   const [step, setStep] = useState<Step>({ kind: 'code' });
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(presetCode ?? '');
   const [err, setErr] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -62,8 +62,7 @@ function JoinFlow() {
         nav('/e', { replace: true });
       });
     } else if (joinToken) void lookup({ joinToken });
-    else if (presetCode) void lookup({ shortCode: presetCode });
-  }, [claimToken, joinToken, presetCode]);
+  }, [claimToken, joinToken]);
 
   const pick = (target: JoinTarget, participantId: string) =>
     run(async () => {

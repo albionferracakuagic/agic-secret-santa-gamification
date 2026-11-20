@@ -28,6 +28,7 @@ import { emitFx } from '../fx/bus';
 import { useLocalized } from '../lib/localized';
 import { isAudioUnlocked, unlockAudio } from '../fx/audio';
 import { usePrefs } from '../prefs/store';
+import { publicJoinUrl } from '../lib/joinUrl';
 
 type DState = Extract<EventStateOutput, { role: 'display' }>;
 
@@ -141,7 +142,11 @@ function DisplayStage() {
       <LobbyScene
         name={es.name}
         participants={scene.participants}
-        joinUrl={scene.joinUrl ?? joinUrl ?? `${location.origin}/j`}
+        joinUrl={publicJoinUrl(
+          scene.joinUrl ?? joinUrl,
+          scene.shortCode ?? shortCode,
+          window.location.origin,
+        )}
         code={scene.shortCode ?? shortCode}
       />
     );

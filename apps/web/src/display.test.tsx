@@ -5,6 +5,7 @@ import { SceneSchema, AnnouncementSchema } from '@santa/contracts';
 import i18n from './i18n';
 import { usePrefs } from './prefs/store';
 import { setup } from './test-utils';
+import { publicJoinUrl } from './lib/joinUrl';
 
 const ds = (phase: string, over: Record<string, unknown> = {}) => ({
   role: 'display',
@@ -82,12 +83,39 @@ describe('display scenes (SceneSchema)', () => {
         shortCode: 'ABCDEFGHJK',
       }),
     });
-    expect(await screen.findByRole('img', { name: 'QR code to join the event' })).toBeTruthy();
+    const qr = await screen.findByRole('img', { name: 'QR code to join the event' });
+    expect(qr.getAttribute('data-qr-value')).toBe(
+      `${window.location.origin}/j?code=ABCDEFGHJK`,
+    );
     expect(screen.getByTestId('big-count').textContent).toBe('12');
     expect(screen.getByText('ABCDE-FGHJK')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep silent' }));
     expect(screen.queryByRole('region', { name: 'Sound' })).toBeNull();
     expect(usePrefs.getState().sound).toBe(false);
+  });
+
+  it('public join URL keeps the canonical route on an ngrok origin', () => {
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/j?code=ABCDEFGHJK',
+        'ABCDEFGHJK',
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j?code=ABCDEFGHJK');
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/j/a-join-token',
+        null,
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j/a-join-token');
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/d/display-token',
+        'ABCDEFGHJK',
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j?code=ABCDEFGHJK');
   });
 
   it('voting: countdown from the server endsAt (server clock) and the published voted counter', async () => {

@@ -15,6 +15,7 @@ export function Qr({ value, label }: { value: string; label: string }) {
     <svg
       role="img"
       aria-label={label}
+      data-qr-value={value}
       viewBox={`${-m} ${-m} ${rows.n + 2 * m} ${rows.n + 2 * m}`}
       className="h-full w-full bg-white"
       shapeRendering="crispEdges"

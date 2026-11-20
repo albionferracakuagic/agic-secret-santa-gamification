@@ -64,6 +64,24 @@ describe('join flow /j', () => {
     expect(go.disabled).toBe(false);
   });
 
+  it('scanned join code is prefilled and submitted from the join route', async () => {
+    const resolve = vi.fn(async () => ({
+      event: {
+        name: 'Office Party',
+        startsAt: '2026-12-20T18:00:00Z',
+        defaultLocale: 'en' as const,
+        joinOpen: true,
+      },
+      unclaimed: [{ participantId: 'p1', displayName: 'Anna' }],
+    }));
+    setup('/j?code=abcde-fghjk', { resolve });
+    const input = await screen.findByLabelText('Event code');
+    expect((input as HTMLInputElement).value).toBe('ABCDEFGHJK');
+    expect(resolve).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(resolve).toHaveBeenCalledWith({ shortCode: 'ABCDEFGHJK' }));
+  });
+
   it('QR landing token skips the code step; personal code claim uses the join target', async () => {
     const token = 'a'.repeat(22);
     const claim = vi.fn(async () => ({
