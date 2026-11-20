@@ -42,14 +42,27 @@ export function registerAutopilotRoutes(app: FastifyInstance, d: AutopilotRouteD
     return g.run(reply, async () => {
       const eventId = g.eventParams(req);
       const p = { eventId, actor: req.org!.userId, now: d.clock(), fromSeq: b.fromSeq };
-      const cmd = {
-        start: startAutopilot,
-        hold: holdAutopilot,
-        resume: resumeAutopilot,
-        stop: stopAutopilot,
-        skip: skipAutopilotStep,
-      }[b.action];
-      await cmd(d.db, p);
+
+      switch (b.action) {
+        case 'start':
+          await startAutopilot(d.db, p);
+          break;
+        case 'hold':
+          await holdAutopilot(d.db, p);
+          break;
+        case 'resume':
+          await resumeAutopilot(d.db, p);
+          break;
+        case 'stop':
+          await stopAutopilot(d.db, p);
+          break;
+        case 'skip':
+          await skipAutopilotStep(d.db, p);
+          break;
+        default:
+          return reply.status(400).send({ error: { code: 'bad_request', message: 'Unsupported action' } });
+      }
+
       await broadcastAutopilot(d.hub, d.db, eventId);
       return view(eventId);
     });
