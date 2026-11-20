@@ -14,7 +14,11 @@ export function publicJoinUrl(
     try {
       const projected = new URL(projectedUrl, publicOrigin);
       if (projected.pathname === '/j' || /^\/j\/[^/]+\/?$/.test(projected.pathname)) {
-        if (projected.pathname === '/j' && code) projected.searchParams.set('code', code);
+        if (code) {
+          const url = new URL('/j', publicOrigin);
+          url.searchParams.set('code', code);
+          return url.toString();
+        }
         return new URL(
           `${projected.pathname}${projected.search}${projected.hash}`,
           publicOrigin,

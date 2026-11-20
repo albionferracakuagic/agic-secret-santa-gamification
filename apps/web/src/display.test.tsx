@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SceneSchema, AnnouncementSchema } from '@santa/contracts';
+import { DisplayEventStateSchema, SceneSchema, AnnouncementSchema } from '@santa/contracts';
 import i18n from './i18n';
 import { usePrefs } from './prefs/store';
 import { setup } from './test-utils';
@@ -75,7 +75,7 @@ describe('display scenes (SceneSchema)', () => {
   it('lobby: QR from scene joinUrl, short code and joined counter; sound overlay is non-modal', async () => {
     const t = setup('/d');
     t.snapshot('pub', {
-      eventState: ds('registration'),
+      eventState: DisplayEventStateSchema.parse(ds('registration')),
       scene: scene({
         scene: 'lobby',
         participants: 12,
@@ -98,6 +98,13 @@ describe('display scenes (SceneSchema)', () => {
     expect(
       publicJoinUrl(
         'http://localhost:4173/j?code=ABCDEFGHJK',
+        'ABCDEFGHJK',
+        'https://party.ngrok-free.app',
+      ),
+    ).toBe('https://party.ngrok-free.app/j?code=ABCDEFGHJK');
+    expect(
+      publicJoinUrl(
+        'http://localhost:4173/j/a-join-token',
         'ABCDEFGHJK',
         'https://party.ngrok-free.app',
       ),

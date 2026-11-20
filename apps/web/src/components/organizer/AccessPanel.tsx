@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 import { useOrganizerApi, type AccessLink } from '../../api/organizer';
+import { publicJoinUrl } from '../../lib/joinUrl';
 import { formatShortCode } from '../../lib/shortCode';
 import { Qr } from '../Qr';
 import { errorKey } from '../../pages/Dashboard';
@@ -27,7 +28,10 @@ export function AccessPanel({
       onLink?.(l);
     },
   });
-  const url = (l: AccessLink) => new URL(l.path, location.origin).toString();
+  const url = (l: AccessLink) =>
+    l.kind === 'join'
+      ? publicJoinUrl(l.path, l.shortCode, location.origin)
+      : new URL(l.path, location.origin).toString();
   return (
     <section aria-labelledby="access-title" className="space-y-3">
       <h2 id="access-title" className="text-xl font-semibold">

@@ -189,7 +189,10 @@ describe('invitations', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Create join link and QR' }));
     const join = await screen.findByTestId('join-link');
     expect(join.textContent).toContain('ABCDE-FGHJK');
-    expect(within(join).getByRole('img', { name: 'QR code to join the event' })).toBeTruthy();
+    const qr = within(join).getByRole('img', { name: 'QR code to join the event' });
+    expect(qr.getAttribute('data-qr-value')).toBe(
+      `${window.location.origin}/j?code=ABCDEFGHJK`,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create display link' }));
     expect((await screen.findByTestId('display-link')).textContent).toContain('/d/');
     expect(createAccess).toHaveBeenCalledWith('e1', 'display');
