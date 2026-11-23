@@ -12,6 +12,7 @@ import {
   loadParticipantSources,
   loadPublishedVotedCount,
   pairings,
+  revealShowState,
   revealStage,
   votingCategories,
   type Db,
@@ -187,6 +188,8 @@ export async function loadEventContext(
     auctionView(db, eventId),
     revealStage(db, eventId),
   ]);
+  // reveal-show extras (totals/outcome only); loaded only while the reveal scene can exist
+  const show = stage ? await revealShowState(db, eventId) : null;
   const code = access[0]?.shortCode ?? null;
   return {
     event,
@@ -209,6 +212,7 @@ export async function loadEventContext(
           people,
           currentGiftId: stage.giftId,
           countdownEndsAt: stage.countdownEndsAt?.toISOString() ?? null,
+          ...(show ? { show } : {}),
         })
       : null,
     boards: boardRows.map((b) => ({

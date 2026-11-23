@@ -16,6 +16,8 @@ export const FX_EVENTS = [
   'auction_won',
   'grand_winner',
   'reaction_received',
+  'show_snowstorm',
+  'show_sleigh_bells',
 ] as const;
 export type FxEvent = (typeof FX_EVENTS)[number];
 
@@ -95,6 +97,11 @@ export const FX_CATALOG = {
     sfx: 'chime',
   },
   reaction: { id: 'reaction', visual: { kind: 'emoji', glyph: '❤️', count: 1, durationMs: 2000 } },
+  show_snowstorm: {
+    id: 'show_snowstorm',
+    visual: { kind: 'emoji', glyph: '❄️', count: 12, durationMs: 3000 },
+    sfx: 'whoosh',
+  },
 } as const satisfies Record<string, FxCue>;
 
 export type FxCueId = keyof typeof FX_CATALOG;
@@ -113,6 +120,8 @@ export const EVENT_TO_CUE: Record<FxEvent, FxCueId> = {
   auction_won: 'mystery_box',
   grand_winner: 'trophy_fireworks',
   reaction_received: 'reaction',
+  show_snowstorm: 'show_snowstorm',
+  show_sleigh_bells: 'bells',
 };
 
 /** Ambient scene (not event-driven): snowfall + lights. */

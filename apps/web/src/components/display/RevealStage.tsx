@@ -8,6 +8,8 @@ import { emitFx } from '../../fx/bus';
 import { avatarGlyph } from '../../fx/avatars';
 import { RECAP_PATH } from '../../routes/recap';
 import { GiftPhoto } from '../GiftPhoto';
+import { RevealChoice } from '../RevealChoice';
+import { RevealTree } from './RevealTree';
 
 function pairLabel(t: TFunction, pair: RevealViewOutput['revealed'][number]) {
   const giver = pair.giver.displayName;
@@ -22,7 +24,15 @@ function pairLabel(t: TFunction, pair: RevealViewOutput['revealed'][number]) {
  * the current pair is withheld from both visible and live text until the server says revealed.
  * Reduced motion / intensity off: same content, no animation classes, no FX cue.
  */
-export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: () => number }) {
+export function RevealStage({
+  reveal,
+  now,
+  snapshot,
+}: {
+  reveal: RevealViewOutput;
+  now: () => number;
+  snapshot: number;
+}) {
   const { t } = useTranslation();
   const prefs = usePrefs();
   const cap = useFxCap((s) => s.cap);
@@ -75,31 +85,41 @@ export function RevealStage({ reveal, now }: { reveal: RevealViewOutput; now: ()
       data-testid="reveal-stage"
       className="flex h-full w-full flex-col items-center gap-8 p-16 text-center"
     >
-      <h2 className="text-7xl font-bold">
-        {finale ? t('reveal.finaleTitle') : t('display.revealTitle')}
-      </h2>
       <p role="status" className="sr-only" data-testid="reveal-live">
         {announce}
       </p>
-
-      <div
-        role="progressbar"
-        aria-label={t('reveal.progressLabel')}
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={revealedCount}
-        aria-valuetext={t('reveal.progress', { revealed: revealedCount, total })}
-        className="w-full max-w-[1500px]"
-        data-testid="reveal-progress"
-      >
-        <div className="h-5 overflow-hidden rounded-full bg-white/20">
-          <div
-            className="h-full rounded-full bg-gold-400"
-            style={{ width: `${total > 0 ? Math.min(100, (revealedCount / total) * 100) : 0}%` }}
-          />
+      <header className="grid w-full grid-cols-[1fr_2.8fr_1fr] items-center gap-8">
+        <div className="space-y-2 text-3xl">
+          <RevealChoice choice={reveal.choice} now={now} />
         </div>
-        <p className="mt-2 text-4xl">{t('reveal.progress', { revealed: revealedCount, total })}</p>
-      </div>
+        <div className="space-y-5">
+          <h2 className="text-7xl font-bold">
+            {finale ? t('reveal.finaleTitle') : t('display.revealTitle')}
+          </h2>
+          <div
+            role="progressbar"
+            aria-label={t('reveal.progressLabel')}
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={revealedCount}
+            aria-valuetext={t('reveal.progress', { revealed: revealedCount, total })}
+            data-testid="reveal-progress"
+          >
+            <div className="h-5 overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-gold-400"
+                style={{ width: `${total > 0 ? Math.min(100, (revealedCount / total) * 100) : 0}%` }}
+              />
+            </div>
+            <p className="mt-2 text-4xl">{t('reveal.progress', { revealed: revealedCount, total })}</p>
+          </div>
+        </div>
+        <div className="text-3xl">
+          {reveal.lights !== undefined && (
+            <RevealTree lights={reveal.lights} animate={animate} snapshot={snapshot} />
+          )}
+        </div>
+      </header>
 
       {finale ? (
         <Finale revealed={revealed} />

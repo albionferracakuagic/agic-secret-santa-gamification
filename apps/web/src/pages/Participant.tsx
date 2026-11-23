@@ -17,6 +17,7 @@ import { OpeningStage } from '../components/OpeningStage';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
 import { RevealPersonal } from '../components/play/RevealPersonal';
+import { useRevealChoiceFx } from '../components/RevealChoice';
 import { AchievementUnlock, MyAchievements } from '../components/play/Achievements';
 import { GuessPanel } from '../components/play/GuessPanel';
 import { MissionsPanel } from '../components/play/MissionsPanel';
@@ -70,6 +71,13 @@ function ParticipantSession({ initial }: { initial: PState }) {
 
   const phase = es?.phase;
   const active = shown?.status === 'active';
+  const sceneSnapshot = state.sceneSnapshots.pub ?? 0;
+  useRevealChoiceFx(
+    active && scene?.scene === 'reveal' ? scene.reveal.choice : undefined,
+    state.status === 'live',
+    sceneSnapshot,
+    es?.eventId,
+  );
   const reached = (p: (typeof PHASES)[number]) =>
     !!phase && PHASES.indexOf(phase) >= PHASES.indexOf(p);
   return (
@@ -94,6 +102,18 @@ function ParticipantSession({ initial }: { initial: PState }) {
             {shown.status === 'pending' && <p role="status">{t('join.pending')}</p>}
             <p>{t('participant.xp', { xp: shown.xp.xp, level: shown.xp.level })}</p>
           </header>
+          {active && scene?.scene === 'reveal' && (
+            <RevealPersonal
+              key={`${es.eventId}:${shown.participantId}`}
+              reveal={scene.reveal}
+              myId={shown.participantId}
+              sendReaction={(k) => rt?.sendReaction(k)}
+              eventId={es.eventId}
+              eligible={state.status === 'live' && phase === 'reveal'}
+              snapshot={sceneSnapshot}
+              now={now}
+            />
+          )}
           {isRecapPhase(phase) && (
             <Link
               to={RECAP_PATH}
@@ -142,14 +162,6 @@ function ParticipantSession({ initial }: { initial: PState }) {
             <RevealList gifts={gifts} />
           )}
           {scene?.scene === 'ceremony' && <CeremonyScene view={scene.ceremony} now={now} />}
-          {active && scene?.scene === 'reveal' && (
-            <RevealPersonal
-              key={`${es.eventId}:${shown.participantId}`}
-              reveal={scene.reveal}
-              myId={shown.participantId}
-              sendReaction={(k) => rt?.sendReaction(k)}
-            />
-          )}
           <AchievementUnlock announcement={announcement} ready={!!es} />
           <Standing boards={boards} />
           {active && <MyAchievements />}

@@ -1,4 +1,4 @@
-import type { RevealViewOutput } from '@santa/contracts';
+import type { RevealViewOutput, ShowChoiceViewOutput, ShowChoiceOption } from '@santa/contracts';
 import type { GiftSource, ParticipantSource } from './sources.js';
 
 export interface RevealInput {
@@ -8,6 +8,15 @@ export interface RevealInput {
   currentGiftId: string | null;
   /** Drumroll deadline of the staged gift (server time). */
   countdownEndsAt: string | null;
+  /**
+   * Reveal-show extras (already public-safe: totals/outcomes only). When given, they are copied verbatim; the
+   * caller (server) always passes them. Never pass ballots or tap rows here.
+   */
+  show?: {
+    lights: number;
+    choice: ShowChoiceViewOutput | null;
+    effect: ShowChoiceOption | null;
+  };
 }
 
 const person = (people: readonly ParticipantSource[], id: string) => {
@@ -49,5 +58,14 @@ export function projectReveal(i: RevealInput): RevealViewOutput {
     revealedCount: real.filter((g) => g.status === 'revealed').length,
     total: real.length,
     revealed,
+    ...(i.show
+      ? {
+          lights: i.show.lights,
+          // an open round never carries a result, whatever the caller passed
+          choice:
+            i.show.choice?.status === 'open' ? { ...i.show.choice, result: null } : i.show.choice,
+          effect: i.show.effect,
+        }
+      : {}),
   };
 }

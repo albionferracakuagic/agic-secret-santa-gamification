@@ -13,3 +13,4 @@ export * from './games.js';
 export * from './phase2.js';
 export * from './coins.js';
 export * from './autopilot.js';
+export * from './showChoice.js';

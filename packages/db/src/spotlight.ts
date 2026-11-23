@@ -9,6 +9,7 @@ import { unlockAchievement } from './achievements.js';
 import { invisibleSantaResult, santaDetectiveResult } from './guess.js';
 import { missionMasterResult } from './missions.js';
 import { loadEventRow, publishedPeople } from './phase2.js';
+import { assertNoOpenShowChoice } from './showChoiceGuard.js';
 import type { CeremonyAnnouncement } from './ceremony.js';
 
 interface StoredSpotlight {
@@ -45,6 +46,9 @@ export async function presentSpotlight(
         : await missionMasterResult(db, e);
   const announcements: CeremonyAnnouncement[] = [];
   await db.transaction(async (tx) => {
+    // same event lock as startShowChoice: a spotlight would take the screen from an open choice round
+    await loadEventRow(tx, p.eventId, true);
+    await assertNoOpenShowChoice(tx, p.eventId);
     const stored: StoredSpotlight = { kind: p.kind, result };
     await tx
       .insert(s.eventSpotlights)

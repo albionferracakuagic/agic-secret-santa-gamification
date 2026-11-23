@@ -30,6 +30,7 @@ const EMPTY: RealtimeState = {
   status: 'idle',
   cursors: {},
   surfaces: {},
+  sceneSnapshots: {},
   revokedGrants: [],
   clockOffsetMs: 0,
   reactions: [],

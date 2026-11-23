@@ -26,6 +26,10 @@ Cadence:
 - Winners locked at voting close; achievements unlock only at the ceremony step. Reopen voting = explicit tx (invalidate locked awards, bump `votingRound`, cancel jobs, audit).
 - Christmas Champion uses qualifying XP = participation only (excludes achievement XP) so XP cannot leak vote results. XP self-only.
 
+## Clarification (23/11/2026) — Reveal pilot scene choice
+- Production gifting ballots still obey `canPublish()` unchanged; the floors above are not modified.
+- For the Reveal pilot's two-option scene choice (neither option identifies a gift or a person), the final policy publishes a single effect only after the same voter floor is met. It never publishes tallies, identities, or rankings. Ties and below-floor rounds have the same neutral outcome. `privacy-reveal-show.test.ts` checks that the result plus one's own vote cannot uniquely identify another ballot in cohorts of 5–12.
+
 ## Risks (documented, accepted)
 - **FR-013 deduction risk**: a participant who knows their own ballot plus published projections may infer others' ballots in small cohorts. Mitigation: floors + cadence + coarse top-N projection. Validation: **brute-force test** enumerating all ballot assignments consistent with the published projection sequence, for cohorts 5..12; assert no other voter's ballot is uniquely determined given the attacker's own ballot. **Owner decision (2026-11-16)**: if the deduction test fails for 5–12 voters, recalibrate the ≥5-voter floor and `hiddenMin = 2` (raise only, never lower); record new values here. A failing test blocks release (report to owner; never weaken tests).
 - **Residual timing correlation**: someone who sees a board change at cadence T right after a known person votes (or watches the final vote) can correlate change ↔ voter. Mitigated, not eliminated: quantization to T, batched changes, no per-person indicators, <10-voter default-off. **Owner-accepted for MVP (2026-11-16)**; organizer warned at setup; live boards can be disabled.

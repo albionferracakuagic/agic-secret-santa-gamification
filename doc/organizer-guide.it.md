@@ -1,6 +1,6 @@
 # Guida per l'organizzatore
 
-> Aggiornata al: 19/11/2026 — **v1.1.0**
+> Aggiornata al: 23/11/2026 — **v1.2.0**
 
 ## 1. Console organizzatore
 
@@ -106,6 +106,15 @@ Passi guidati dalla console organizzatore e replicati sul display: candidati →
 - `/d`: la rivelazione pubblica mette un regalo alla volta sul palco. Il rullo mostra destinatario e countdown, mai il donatore. Solo il job durevole di unveil rende visibile il donatore, poi arriva la griglia finale e il richiamo al riepilogo.
 - `/e`: il destinatario vede un banner di rullo personalizzato e, dopo la rivelazione server-side, una schermata personale a tutto schermo con reazioni positive. Per gli altri appare solo una notifica discreta. La chiusura dell'overlay è ricordata nella sessione browser.
 - `/e/recap`: il riepilogo è disponibile da premi a completato; prima resta bloccato. Riutilizza solo dati pubblicati (vincitori, donatori già rivelati, dati personali e archivio pubblico), mai voti nascosti o identità non svelate.
+
+### Light the Tree e scelta dell'effetto di scena (pilota Rivelazione)
+
+Due piccole aggiunte facoltative alla fase di rivelazione. Il voto sui regali esistente resta invariato.
+
+- **Light the Tree**: per il regalo attualmente rivelato, ogni partecipante verificato può toccare una sola volta, se vuole. Pubblicamente compare solo un risultato **cumulativo**: nessun nome e nessuna affluenza per regalo.
+- **Scelta dell'effetto**: in un momento di pausa durante la rivelazione, l'organizzatore avvia **Tempesta di neve o campanelli?** da **Live** o **Show**. I partecipanti hanno **10 secondi** per toccare un'opzione o passare. L'organizzatore può **annullare** il turno. Non vengono mostrati **conteggi in diretta né identità dei votanti**.
+- **Soglia privacy**: l'esito è pubblicato solo con almeno **5 votanti**, o con la soglia propria dell'evento se più alta. In caso di **parità** o **bassa partecipazione** il risultato è neutro.
+- **Risultato**: l'effetto vincente parte brevemente, **una sola volta**, sul display pubblico, rispettando le normali preferenze di movimento e audio. L'autopilota aspetta l'esito prima di proseguire.
 
 ## 8. Audit unmask
 

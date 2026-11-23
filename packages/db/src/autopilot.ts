@@ -36,6 +36,7 @@ import * as s from './schema.js';
 import { writeAudit } from './audit.js';
 import { EventError } from './events.js';
 import { cancelJobs, enqueueJob } from './jobs.js';
+import { showChoiceHoldUntil } from './showChoiceGuard.js';
 import { ceremonyBlockers, pendingDecisions } from './ceremony.js';
 import { ACTIVE_GAME_STATUSES } from './games.js';
 import { auctionEnabled } from './auction.js';
@@ -480,7 +481,10 @@ export async function resolveTiesShared(
 /* ---------- tick core ---------- */
 
 export type AutopilotTickOutcome =
-  | { ran: false; reason: 'stale' | 'ahead' | 'not_running' | 'claimed' | 'noop' | 'frozen_held' }
+  | {
+      ran: false;
+      reason: 'stale' | 'ahead' | 'not_running' | 'claimed' | 'noop' | 'frozen_held' | 'choice_hold';
+    }
   | { ran: true; action: AutopilotAction['type']; state: AutopilotState; retry?: boolean };
 
 /**
@@ -508,6 +512,15 @@ export async function runAutopilotTick(
       // event freeze: stop the timeline; the organizer resumes explicitly after unfreezing
       await persist(tx, p.eventId, holdState(st, p.now, { reason: 'frozen_held' }), p.now, null);
       return { stop: { ran: false, reason: 'frozen_held' } as AutopilotTickOutcome };
+    }
+    // Snowstorm vs Sleigh Bells: the open round, then its result (authoritative closedAt + window), own the
+    // stage. Defer this SAME seq (no claim, no state change) so the timeline resumes unchanged afterwards; the
+    // close is its own durable job, never swallowed. Services re-check under the event lock (choice_open).
+    const holdUntil = await showChoiceHoldUntil(tx, p.eventId, p.now);
+    if (holdUntil) {
+      await cancelJobs(tx, p.eventId, [AUTOPILOT_TICK_JOB]);
+      await enqueueTick(tx, p.eventId, st.seq, holdUntil);
+      return { stop: { ran: false, reason: 'choice_hold' } as AutopilotTickOutcome };
     }
     const fresh =
       row?.claimSeq === st.seq &&

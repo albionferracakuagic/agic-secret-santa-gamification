@@ -3,6 +3,7 @@ import type { Db } from './types.js';
 import * as s from './schema.js';
 import { writeAudit } from './audit.js';
 import { EventError } from './events.js';
+import { assertNoOpenShowChoice } from './showChoiceGuard.js';
 import { enqueueJob } from './jobs.js';
 
 /**
@@ -104,6 +105,8 @@ export async function revealNextGift(
     if (!e.revealStartedAt) throw new EventError('reveal_not_started');
     if (e.phase !== 'reveal') throw new EventError('invalid_step');
     if (e.paused) throw new EventError('paused');
+    // an open Snowstorm vs Sleigh Bells round owns the stage: no new gift / drumroll until it closes
+    await assertNoOpenShowChoice(tx, p.eventId);
 
     let unveiledGiftId: string | null = null;
     if (e.currentGiftId) {

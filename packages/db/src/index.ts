@@ -9,6 +9,8 @@ export * from './pairing.js';
 export * from './join.js';
 export * from './gifts.js';
 export * from './reveal.js';
+export * from './revealShow.js';
+export * from './showChoiceGuard.js';
 export * from './voting.js';
 export * from './boards.js';
 export * from './achievements.js';

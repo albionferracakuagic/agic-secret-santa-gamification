@@ -8,6 +8,7 @@ import {
 import { transition, type Milestones, type TransitionError } from '@santa/domain';
 import type { Db } from './types.js';
 import * as s from './schema.js';
+import { assertNoOpenShowChoice } from './showChoiceGuard.js';
 import { writeAudit } from './audit.js';
 import { cancelJobs } from './jobs.js';
 
@@ -161,6 +162,8 @@ export async function changePhase(
   return db.transaction(async (tx) => {
     const [e] = await tx.select().from(s.events).where(eq(s.events.id, p.eventId)).for('update');
     if (!e) throw new EventError('not_found');
+    // leaving the reveal show while a choice round is open would swallow its outcome
+    if (e.phase === 'reveal' && p.to !== 'reveal') await assertNoOpenShowChoice(tx, p.eventId);
     const [ready] = await tx
       .select({ id: s.pairingImports.id })
       .from(s.pairingImports)

@@ -64,6 +64,9 @@ export const API_ERROR_CODES = [
   'nothing_to_open',
   'invalid_order',
   'reveal_not_started',
+  // reveal show extras (Light the Tree, Snowstorm vs Sleigh Bells)
+  'gift_not_revealed',
+  'choice_open',
   // boards / ceremony
   'small_cohort_ack_required',
   'board_hidden',

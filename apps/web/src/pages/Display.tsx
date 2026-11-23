@@ -21,6 +21,7 @@ import {
 } from '../components/play/Achievements';
 import { OpeningStage } from '../components/OpeningStage';
 import { RevealStage } from '../components/display/RevealStage';
+import { useRevealChoiceFx } from '../components/RevealChoice';
 import { BoardsView, type BoardsOutput } from '../components/Podium';
 import { CeremonyScene } from '../components/CeremonyScene';
 import { AuctionScene, GameScene, SpotlightScene } from '../components/GameScenes';
@@ -108,6 +109,13 @@ function DisplayStage() {
   const announcement = surfaceOf<AnyAnnouncementOutput>(state, 'pub', 'announcement');
   const scale = useStageScale();
   const now = () => rt?.serverNow() ?? Date.now();
+  const sceneSnapshot = state.sceneSnapshots.pub ?? 0;
+  useRevealChoiceFx(
+    scene?.scene === 'reveal' ? scene.reveal.choice : undefined,
+    state.status === 'live',
+    sceneSnapshot,
+    es?.eventId,
+  );
   usePrevEffect(
     es?.counts.participants,
     (p, n) => n !== undefined && p < n && emitFx('participant_joined'),
@@ -176,7 +184,9 @@ function DisplayStage() {
   else if (scene.scene === 'game') body = <GameScene game={scene.game} now={now} />;
   else if (scene.scene === 'spotlight') body = <SpotlightScene spotlight={scene.spotlight} />;
   else if (scene.scene === 'auction') body = <AuctionScene auction={scene.auction} now={now} />;
-  else if (scene.scene === 'reveal') body = <RevealStage reveal={scene.reveal} now={now} />;
+  else if (scene.scene === 'reveal') {
+    body = <RevealStage reveal={scene.reveal} now={now} snapshot={sceneSnapshot} />;
+  }
   else if (scene.phase === 'gift_registration')
     body = (
       <Scene title={t('display.registrationTitle')}>
