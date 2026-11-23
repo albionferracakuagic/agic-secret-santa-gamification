@@ -21,6 +21,7 @@ import {
   MysteryRevealAnnouncementSchema,
 } from './auction.js';
 import { AutopilotStateSchema } from './autopilot.js';
+import { RevealShowExtrasShape } from './reveal-show.js';
 
 const Count = z.number().int().min(0);
 
@@ -257,6 +258,13 @@ export const RevealViewSchema = z.strictObject({
   total: Count,
   /** Only already-revealed pairs, sorted by alias number (never by pairing/registration order). */
   revealed: z.array(RevealedPairSchema),
+  /**
+   * Light the Tree + Snowstorm vs Sleigh Bells (reveal-show.ts). Always sent by the server; optional only so older
+   * fixtures/clients keep parsing. Never tallies, per-gift counts or voters.
+   */
+  lights: RevealShowExtrasShape.lights.optional(),
+  choice: RevealShowExtrasShape.choice.optional(),
+  effect: RevealShowExtrasShape.effect.optional(),
 });
 export type RevealViewOutput = z.infer<typeof RevealViewSchema>;
 

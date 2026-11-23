@@ -110,7 +110,16 @@ describe('reveal show over the wire: drumroll -> durable unveil -> finale', () =
     await sleep(300);
     expect(lastScene(displayMsgs)).toEqual({
       scene: 'reveal',
-      reveal: { current: null, countdownEndsAt: null, revealedCount: 0, total: 8, revealed: [] },
+      reveal: {
+        current: null,
+        countdownEndsAt: null,
+        revealedCount: 0,
+        total: 8,
+        revealed: [],
+        lights: 0,
+        choice: null,
+        effect: null,
+      },
     });
   });
 

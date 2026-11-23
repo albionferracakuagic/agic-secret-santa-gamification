@@ -25,6 +25,8 @@ export interface RealtimeState {
   cursors: Record<string, number>;
   /** stream -> surface -> latest projected payload */
   surfaces: Record<string, Record<string, unknown>>;
+  /** Scene snapshot generations, including recovery; newer snapshots never replay scene FX. */
+  sceneSnapshots: Record<string, number>;
   revokedGrants: string[];
   /** serverNow = Date.now() + clockOffsetMs */
   clockOffsetMs: number;
@@ -42,6 +44,7 @@ export function createRealtimeStore(opts: { eventId?: string; now?: () => number
     status: 'idle',
     cursors: {},
     surfaces: {},
+    sceneSnapshots: {},
     revokedGrants: [],
     clockOffsetMs: 0,
     reactions: [],
@@ -69,6 +72,10 @@ export function createRealtimeStore(opts: { eventId?: string; now?: () => number
       status: 'live',
       cursors: { ...s.cursors, [m.stream]: m.cursor },
       surfaces: { ...s.surfaces, [m.stream]: { ...m.data } },
+      sceneSnapshots:
+        'scene' in m.data
+          ? { ...s.sceneSnapshots, [m.stream]: (s.sceneSnapshots[m.stream] ?? 0) + 1 }
+          : s.sceneSnapshots,
     }));
     const pending = (buffers.get(m.stream) ?? [])
       .filter((d) => d.cursor > m.cursor)

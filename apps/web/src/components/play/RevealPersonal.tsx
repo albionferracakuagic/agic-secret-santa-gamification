@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { REACTION_KINDS, type ReactionKind, type RevealViewOutput } from '@santa/contracts';
@@ -8,6 +8,7 @@ import { avatarGlyph } from '../../fx/avatars';
 import { RECAP_PATH } from '../../routes/recap';
 import { REACTION_GLYPH, floatReaction } from '../../fx/reactions';
 import { createReactionThrottle } from '../reactionThrottle';
+import { useRevealShowActions } from './RevealShowActions';
 
 const SUSPENSE_MS = 1500;
 const storeKey = (giftId: string) => `reveal-dismissed:${giftId}`;
@@ -46,10 +47,18 @@ export function RevealPersonal({
   reveal,
   myId,
   sendReaction,
+  eventId,
+  eligible,
+  snapshot,
+  now,
 }: {
   reveal: RevealViewOutput;
   myId: string;
   sendReaction: (k: ReactionKind) => void;
+  eventId: string;
+  eligible: boolean;
+  snapshot: number;
+  now: () => number;
 }) {
   const { t } = useTranslation();
   const { current, revealedCount, total } = reveal;
@@ -73,6 +82,8 @@ export function RevealPersonal({
   const myDrumroll = current?.stage === 'drumroll' && current.recipient?.participantId === myId;
   const other =
     current?.stage === 'revealed' && current.recipient?.participantId !== myId ? current : null;
+  const show = useRevealShowActions({ reveal, myId, eventId, eligible, snapshot, now });
+  const showingMyGift = mine && !closed.has(mine.giftId);
 
   return (
     <section aria-label={t('reveal.title')} className="space-y-2" data-testid="reveal-personal">
@@ -92,6 +103,7 @@ export function RevealPersonal({
         )}
         {finale && <p className="font-semibold">{t('reveal.finaleAnnounce')}</p>}
       </div>
+      {!showingMyGift && show}
       {finale && (
         <Link
           to={RECAP_PATH}
@@ -101,8 +113,13 @@ export function RevealPersonal({
           <span aria-hidden="true">🎄</span>&nbsp;{t('reveal.personal.recap')}
         </Link>
       )}
-      {mine && !closed.has(mine.giftId) && (
-        <Overlay pair={mine} onDismiss={() => dismiss(mine.giftId)} sendReaction={sendReaction} />
+      {showingMyGift && (
+        <Overlay
+          pair={mine}
+          onDismiss={() => dismiss(mine.giftId)}
+          sendReaction={sendReaction}
+          show={show}
+        />
       )}
     </section>
   );
@@ -112,10 +129,12 @@ function Overlay({
   pair,
   onDismiss,
   sendReaction,
+  show,
 }: {
   pair: Pair;
   onDismiss: () => void;
   sendReaction: (k: ReactionKind) => void;
+  show: ReactNode;
 }) {
   const { t } = useTranslation();
   const prefs = usePrefs();
@@ -159,7 +178,7 @@ function Overlay({
       aria-modal="true"
       aria-label={t('reveal.personal.dialog')}
       data-testid="reveal-overlay"
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-y-auto bg-pine-900 p-6 text-center text-white"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center-safe gap-6 overflow-y-auto bg-pine-900 p-6 text-center text-white"
     >
       <h2 className="text-3xl font-bold">{t('reveal.personal.title')}</h2>
       <div className="space-y-3" data-testid={suspense ? undefined : 'reveal-overlay-giver'}>
@@ -206,6 +225,7 @@ function Overlay({
           </div>
         )}
       </div>
+      {show && <div className="w-full max-w-sm">{show}</div>}
       <button
         ref={btn}
         type="button"

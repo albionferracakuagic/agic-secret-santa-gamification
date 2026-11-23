@@ -273,7 +273,9 @@ export function projectScene(i: SceneInput): SceneOutput {
   }
   const reveal = e.phase === 'reveal' ? (i.reveal ?? null) : null;
   // a running drumroll wins over side presentations; once unveiled they may borrow the screen
-  if (reveal?.current?.stage === 'drumroll') return { scene: 'reveal', reveal };
+  // ... and so does an open Snowstorm vs Sleigh Bells round (10 s, participants must see it to vote)
+  if (reveal?.current?.stage === 'drumroll' || reveal?.choice?.status === 'open')
+    return { scene: 'reveal', reveal };
   if (i.game) return { scene: 'game', game: i.game };
   if (i.auction) return { scene: 'auction', auction: i.auction };
   if (i.spotlight) return { scene: 'spotlight', spotlight: i.spotlight };

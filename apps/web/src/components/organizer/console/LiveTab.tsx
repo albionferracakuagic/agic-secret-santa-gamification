@@ -7,6 +7,7 @@ import { useOrganizerApi } from '../../../api/organizer';
 import { errorKey } from '../../../pages/Dashboard';
 import { nextPhase, prevPhase, type OrganizerEventState } from './types';
 import { useAutopilot } from './useAutopilot';
+import { RevealChoiceControls } from '../RevealChoiceControls';
 
 export interface PhaseActions {
   go: (to: Phase) => void;
@@ -187,6 +188,9 @@ function AutopilotPanel({ state }: { state: OrganizerEventState }) {
       className="space-y-4 rounded border border-pine-900/30 bg-white p-4"
       data-testid="autopilot-panel"
     >
+      {state.phase === 'reveal' && !!eventId && (
+        <RevealChoiceControls eventId={eventId} paused={state.paused} scene={autopilot.scene} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide">
