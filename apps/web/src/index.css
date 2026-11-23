@@ -140,6 +140,44 @@ h2 {
   outline-offset: 2px;
 }
 
+.pairing-file-input {
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid var(--color-ink-900);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--color-ink-900);
+  font: inherit;
+}
+
+.pairing-file-input::file-selector-button {
+  min-height: 3rem;
+  margin-right: 0.75rem;
+  cursor: pointer;
+  border: 0;
+  background: var(--color-pine-900);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  padding: 0 1rem;
+  transition: background-color 150ms ease;
+}
+
+.pairing-file-input:hover::file-selector-button {
+  background: var(--color-pine-700);
+}
+
+.pairing-file-input:focus-visible {
+  outline: 3px solid var(--color-pine-700);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pairing-file-input::file-selector-button {
+    transition: none;
+  }
+}
+
 .photo-upload:has(input[type='file']:focus-visible) {
   outline: 3px solid var(--color-pine-700);
   outline-offset: 3px;

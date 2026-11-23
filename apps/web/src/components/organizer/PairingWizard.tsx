@@ -69,12 +69,12 @@ export function PairingWizard({ eventId }: { eventId: string }) {
       {reimportBlocked ? (
         <p role="status">{t('pairing.locked')}</p>
       ) : (
-        <label className="block">
+        <label className="block font-semibold text-ink-900">
           {t('pairing.file')}
           <input
             type="file"
             accept=".csv,.xlsx,text/csv"
-            className="mt-1 block min-h-12 w-full"
+            className="pairing-file-input mt-1 block min-h-12 w-full"
             onChange={onFile}
           />
         </label>
