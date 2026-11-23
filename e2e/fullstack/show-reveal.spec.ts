@@ -300,6 +300,18 @@ test('autopilot show keeps giver private until display and personal reveal, then
     expect(await axeViolations(participant, '[data-testid="reveal-overlay"]')).toEqual([]);
     await participant.getByRole('button', { name: 'Continue' }).click();
 
+    await participant.getByRole('button', { name: 'Light the tree' }).click();
+    await expect(participant.getByTestId('reveal-light-status')).toHaveText(
+      'Your light is on the tree!',
+    );
+    await expect(displayPage.getByTestId('reveal-tree-count')).toHaveText('1 light lit');
+    expect(
+      await ok(
+        await post(marco.context.request, `/api/me/reveal/gifts/${targetGift}/light`),
+        'retry tree tap',
+      ),
+    ).toEqual({ giftId: targetGift, lit: true, lights: 1 });
+
     for (let i = 1; i < NAMES.length; i++) {
       await ok(
         await organizer.context().request.post('/__e2e/jobs/advance', { data: { ms: 2_000 } }),
@@ -316,6 +328,40 @@ test('autopilot show keeps giver private until display and personal reveal, then
     );
     expect(revealDone.done).toBe(true);
     await expect(displayPage.getByTestId('reveal-finale-grid')).toBeVisible();
+
+    await organizer.getByTestId('reveal-choice-start').click();
+    await expect(organizer.getByTestId('reveal-choice-cancel')).toBeVisible();
+    const show = await ok<{ choice: { round: number; status: string } }>(
+      await organizer.context().request.get(eventApi(eventId, '/reveal/show')),
+      'get open effect choice',
+    );
+    expect(show.choice.status).toBe('open');
+    await participant.getByRole('button', { name: 'Snowstorm' }).click();
+    await expect(participant.getByTestId('reveal-choice-feedback')).toHaveText('Vote recorded!');
+    for (const guest of guests.filter((guest) => guest !== marco)) {
+      await ok(
+        await post(guest.context.request, '/api/me/reveal/choice', {
+          round: show.choice.round,
+          choice: 'snowstorm',
+        }),
+        `effect choice ${guest.name}`,
+      );
+    }
+    await ok(
+      await organizer.context().request.post('/__e2e/jobs/advance', { data: { ms: 10_000 } }),
+      'effect choice deadline',
+    );
+    expect(
+      await ok(
+        await organizer.context().request.get(eventApi(eventId, '/reveal/show')),
+        'get closed effect choice',
+      ),
+    ).toMatchObject({
+      lights: 1,
+      choice: { status: 'closed', round: show.choice.round, result: 'snowstorm' },
+    });
+    await expect(displayPage.getByTestId('reveal-choice-result')).toHaveText('Snowstorm wins!');
+
     await participant.getByTestId('reveal-recap-link').click();
     await expect(participant).toHaveURL(/\/e\/recap$/);
     await expect(participant.getByTestId('recap-locked')).toBeVisible();

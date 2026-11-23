@@ -34,6 +34,7 @@ import {
   FeaturesPanel,
 } from '../Phase3Controls';
 import { OpeningControls, RevealControls, VotingControls } from '../GameControls';
+import { RevealChoiceShowPanel } from '../RevealChoiceControls';
 import { atOrPast, type OrganizerEventState } from './types';
 import { autopilotOf } from './LiveTab';
 import { useAutopilot } from './useAutopilot';
@@ -271,7 +272,12 @@ export function showPanels(eventId: string, s: OrganizerEventState): ShowPanel[]
     s.phase === 'reveal' && {
       key: 'reveal',
       primary: ['reveal'],
-      node: <RevealControls eventId={eventId} />,
+      node: (
+        <div className="space-y-4">
+          <RevealChoiceShowPanel eventId={eventId} paused={s.paused} />
+          <RevealControls eventId={eventId} />
+        </div>
+      ),
     },
     f.missions &&
       at('gift_registration') && {

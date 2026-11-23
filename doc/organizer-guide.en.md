@@ -1,6 +1,6 @@
 # Organizer guide
 
-> Updated: 19/11/2026 — **v1.1.0**
+> Updated: 23/11/2026 — **v1.2.0**
 
 ## 1. Organizer console
 
@@ -106,6 +106,15 @@ Scripted steps run from the organizer console and mirror on the display: nominee
 - `/d`: the public dramatic reveal stages one gift at a time. A drumroll shows the recipient and countdown, never the giver. Only the durable server unveil makes the giver visible, followed by a finale grid and a recap prompt.
 - `/e`: the recipient gets a personal drumroll banner and, once the giver is revealed server-side, a personal full-screen reveal with positive reactions. Other participants see only a normal reveal toast. Dismissing the personal overlay is remembered for the current browser session.
 - `/e/recap`: participants can open the recap from awards through completed; before then it remains locked. It reuses only published event data (winners, already-revealed givers, the participant's own data and public archive), never hidden votes or unrevealed identities.
+
+### Light the Tree and the scene-effect choice (Reveal pilot)
+
+Two small, optional additions to the reveal stage. Existing gift voting is unchanged.
+
+- **Light the Tree**: for the gift currently being revealed, each verified participant may tap once, optionally. Publicly only a **cumulative** result is shown: no names and no per-gift turnout.
+- **Effect choice**: at a break in the reveal stage, the host opens **Snowstorm vs Sleigh Bells** from **Live** or **Show**. Participants have **10 seconds** to tap one option or sit it out. The host can **cancel** the round. There are **no live tallies and no voter identities**.
+- **Privacy floor**: the outcome is published only with at least **5 voters**, or the event's own floor if higher. A **tie** or **low participation** gives a neutral result.
+- **Result**: the winning effect plays briefly, **once**, on the public display, following the normal motion/sound preferences. Autopilot waits for the result before moving on.
 
 ## 8. Audit unmask
 

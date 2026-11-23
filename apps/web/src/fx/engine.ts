@@ -39,13 +39,13 @@ export function createFxEngine(d: FxEngineDeps) {
   const level = () => effectiveIntensity(d.getPrefs(), d.getCap(), d.systemReduce?.());
 
   return {
-    emit(event: FxEvent, opts: { glyph?: string } = {}) {
+    emit(event: FxEvent, opts: { glyph?: string; announce?: boolean } = {}) {
       const cue = FX_CATALOG[EVENT_TO_CUE[event]];
       const t = now();
       if (t - (lastAt.get(cue.id) ?? -Infinity) < gap) return;
       lastAt.set(cue.id, t);
 
-      d.host.announce(d.translate(`fx.${cue.id}`)); // text equivalent for every cue
+      if (opts.announce !== false) d.host.announce(d.translate(`fx.${cue.id}`));
 
       const lv = level();
       if (lv === 'off') return; // reduced motion / user off: no visuals, no motion

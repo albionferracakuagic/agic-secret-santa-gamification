@@ -63,6 +63,8 @@ export const STATUS: Record<string, number> = {
   opening_not_available: 409,
   nothing_to_open: 409,
   reveal_not_started: 409,
+  gift_not_revealed: 409,
+  choice_open: 409,
   gift_not_opened: 409,
   voting_not_open: 409,
   voting_closed: 409,

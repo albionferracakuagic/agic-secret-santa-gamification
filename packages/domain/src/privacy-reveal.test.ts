@@ -82,8 +82,11 @@ const base = (phase: EventSource['phase'] = 'reveal') => ({
 describe('giver reveal scene (FR-046 rule 6: no giver before the reveal)', () => {
   it('exact key allowlists', () => {
     expect(keys(RevealViewSchema)).toEqual([
+      'choice', // reveal-show extras: latest round (outcome only), see privacy-reveal-show.test.ts
       'countdownEndsAt',
       'current',
+      'effect',
+      'lights', // event-wide total only
       'revealed',
       'revealedCount',
       'total',

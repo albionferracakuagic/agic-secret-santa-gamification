@@ -15,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { AutopilotState, EventSettings } from '@santa/contracts';
+import type { AutopilotState, EventSettings, ShowChoiceOption, ShowChoiceResult } from '@santa/contracts';
 import { PHASES } from '@santa/contracts';
 
 const id = () => uuid('id').primaryKey().defaultRandom();
@@ -951,4 +951,81 @@ export const outboxEvents = pgTable(
     attempts: integer('attempts').notNull().default(0),
   },
   (t) => [index('outbox_pending_idx').on(t.dispatchedAt, t.createdAt)],
+);
+/* ---------- reveal show extras (Light the Tree, Snowstorm vs Sleigh Bells) ---------- */
+
+/**
+ * Light the Tree: one optional tap per participant per revealed gift. Only the event-wide COUNT is ever projected
+ * (the display total); rows never leave the server. The PK makes repeat taps no-ops.
+ */
+export const showTreeLights = pgTable(
+  'show_tree_lights',
+  {
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    giftId: uuid('gift_id')
+      .notNull()
+      .references(() => gifts.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    litAt: ts('lit_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'show_tree_lights_pk', columns: [t.giftId, t.participantId] }),
+    index('show_tree_lights_event_idx').on(t.eventId),
+  ],
+);
+
+/**
+ * Snowstorm vs Sleigh Bells rounds (organizer-triggered, fixed 10 s). Closed by the durable `reveal.choice.close`
+ * job; only the outcome (`result`) is kept and projected. At most one open round per event.
+ */
+export const showChoiceRounds = pgTable(
+  'show_choice_rounds',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    roundNo: integer('round_no').notNull(),
+    status: text('status').$type<'open' | 'closed'>().notNull().default('open'),
+    openedAt: ts('opened_at').notNull(),
+    endsAt: ts('ends_at').notNull(),
+    closedAt: ts('closed_at'),
+    result: text('result').$type<ShowChoiceResult>(),
+  },
+  (t) => [
+    unique('show_choice_rounds_event_round_uq').on(t.eventId, t.roundNo),
+    uniqueIndex('show_choice_rounds_one_open_uq')
+      .on(t.eventId)
+      .where(sql`${t.status} = 'open'`),
+    check(
+      'show_choice_rounds_result_consistent',
+      sql`(${t.status} = 'closed') = (${t.result} is not null)`,
+    ),
+  ],
+);
+
+/**
+ * One ballot per participant per round. Deleted when the round closes (data minimisation: no voter identity or
+ * tally survives the round; only the outcome does). Never projected.
+ */
+export const showChoiceBallots = pgTable(
+  'show_choice_ballots',
+  {
+    roundId: uuid('round_id')
+      .notNull()
+      .references(() => showChoiceRounds.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    choice: text('choice').$type<ShowChoiceOption>().notNull(),
+    votedAt: ts('voted_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'show_choice_ballots_pk', columns: [t.roundId, t.participantId] }),
+    check('show_choice_ballots_choice_ck', sql`${t.choice} in ('snowstorm','sleigh_bells')`),
+  ],
 );

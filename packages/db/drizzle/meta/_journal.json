@@ -71,6 +71,13 @@
       "when": 1795088606779,
       "tag": "0009_autopilot_state",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795451171761,
+      "tag": "0010_reveal_show_extras",
+      "breakpoints": true
     }
   ]
 }

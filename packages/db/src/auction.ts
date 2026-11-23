@@ -4,6 +4,7 @@ import { antiSnipe, bidHoldKey, bidReleaseKey, minNextBid } from '@santa/domain'
 import type { Db } from './types.js';
 import * as s from './schema.js';
 import { EventError } from './events.js';
+import { assertNoOpenShowChoice } from './showChoiceGuard.js';
 import { writeAudit } from './audit.js';
 import { cancelJobs, enqueueJob } from './jobs.js';
 import { coinBalance, coinsEnabled, creditCoins } from './coins.js';
@@ -195,6 +196,7 @@ export async function prizeAction(
       case 'open': {
         if (prize.status !== 'draft') throw new EventError('invalid_prize_state');
         if (e.paused) throw new EventError('paused');
+        await assertNoOpenShowChoice(tx, p.eventId);
         const [busy] = await tx
           .select({ id: s.auctionPrizes.id })
           .from(s.auctionPrizes)

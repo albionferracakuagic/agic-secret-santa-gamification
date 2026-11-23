@@ -5,9 +5,10 @@ import type {
   AutopilotResponse,
   AutopilotSettingsPatch,
   AutopilotState,
+  SceneOutput,
 } from '@santa/contracts';
 import { useAutopilotApi } from '../../../api/autopilot';
-import { useRealtime } from '../../../realtime/react';
+import { surfaceOf, useRealtime } from '../../../realtime/react';
 import { useDisplayPresence } from '../../../realtime/displayPresence';
 
 export const autopilotQueryKey = (eventId: string) => ['autopilot', eventId] as const;
@@ -63,6 +64,7 @@ export function useAutopilot(eventId: string, projected?: AutopilotState | undef
     patch,
     realtimeStatus: realtime.status,
     displayConnected,
+    scene: surfaceOf<SceneOutput>(realtime, 'pub', 'scene'),
     serverNow: () => rt?.serverNow() ?? Date.now(),
   };
 }
