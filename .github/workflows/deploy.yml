@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}-plan
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -58,7 +58,7 @@ jobs:
     # Required reviewers on this environment gate every Azure write below.
     environment: ${{ inputs.environment }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
