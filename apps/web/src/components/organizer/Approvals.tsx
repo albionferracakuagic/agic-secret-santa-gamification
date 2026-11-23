@@ -5,6 +5,9 @@ import { useOrganizerApi, type ClaimCodes } from '../../api/organizer';
 import { errorKey } from '../../pages/Dashboard';
 
 const btn = 'min-h-12 rounded border border-ink-900 px-4 font-semibold disabled:opacity-50';
+// Selected (pine-900/white 9:1+) and muted (ink-900/white 17:1) states; a check mark backs up colour.
+const btnOn = 'border-pine-900 bg-pine-900 text-white';
+const btnMuted = 'border-ink-900 bg-ink-900 text-white';
 
 const toCsv = (c: ClaimCodes) =>
   'name,code\n' + c.codes.map((r) => `"${r.displayName.replace(/"/g, '""')}",${r.code}`).join('\n');
@@ -148,10 +151,22 @@ export function ReactionSettings({
         {t('reactionSettings.title')}
       </h2>
       <div className="flex gap-2">
-        <button type="button" className={btn} onClick={() => toggle.mutate(true)}>
+        <button
+          type="button"
+          className={`${btn} ${enabled === true ? btnOn : ''}`}
+          aria-pressed={enabled === true}
+          onClick={() => toggle.mutate(true)}
+        >
+          {enabled === true && <span aria-hidden="true">✓ </span>}
           {t('reactionSettings.enable')}
         </button>
-        <button type="button" className={btn} onClick={() => toggle.mutate(false)}>
+        <button
+          type="button"
+          className={`${btn} ${enabled === false ? btnOn : ''}`}
+          aria-pressed={enabled === false}
+          onClick={() => toggle.mutate(false)}
+        >
+          {enabled === false && <span aria-hidden="true">✓ </span>}
           {t('reactionSettings.disable')}
         </button>
       </div>
@@ -167,7 +182,7 @@ export function ReactionSettings({
               <span>{p.displayName}</span>
               <button
                 type="button"
-                className={btn}
+                className={`${btn} ${p.reactionsMuted ? btnMuted : ''}`}
                 aria-pressed={p.reactionsMuted}
                 aria-label={`${t(p.reactionsMuted ? 'reactionSettings.unmute' : 'reactionSettings.mute')} ${p.displayName}`}
 

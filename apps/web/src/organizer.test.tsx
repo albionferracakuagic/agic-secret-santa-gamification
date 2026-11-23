@@ -226,6 +226,8 @@ describe('organizer console: approvals and reactions', () => {
     mount(org);
     fireEvent.click(await screen.findByRole('button', { name: 'Turn reactions off' }));
     expect(await screen.findByText('Reactions are off.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Turn reactions off' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Turn reactions on' }).getAttribute('aria-pressed')).toBe('false');
     expect(org.setReactionsEnabled).toHaveBeenCalledWith('e1', false);
     const row = (await screen.findAllByText('Carla', { selector: 'li > span' }))[0]!.closest('li')!;
     fireEvent.click(within(row).getByRole('button'));

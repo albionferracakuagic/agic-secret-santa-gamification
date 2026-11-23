@@ -480,7 +480,8 @@ export function EditorConsole({ eventId }: { eventId: string }) {
             </span>
             <button
               type="button"
-              className={btn}
+              className={`${btn} ${c.enabled ? '' : 'border-ink-900 bg-ink-900 text-white'}`}
+              aria-pressed={!c.enabled}
               disabled={!editable || toggle.isPending}
               aria-label={`${c.enabled ? t('editor.disable') : t('editor.enable')}: ${loc(c.name)}`}
               onClick={() => toggle.mutate({ id: c.categoryId, enabled: !c.enabled })}
